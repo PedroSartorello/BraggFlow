@@ -1,0 +1,92 @@
+import numpy as np
+from typing import Callable, Tuple, List
+from .io.reader import read_asc
+from .processing.filters import apply_savgol_filter
+from .processing.delimiting import slice_time_window
+
+class OpticalPipeline:
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+
+        # Initialize attributes to hold time and signal data
+        self.time_array = None
+        self.signals_array = None
+        self.channels: List[str] = None
+        self.__is_loaded: bool = False
+
+    def load_data(self) -> 'OpticalPipeline':
+        """
+        Loads the data from the specified file path and initializes the time and signal arrays.
+        
+        Returns:
+        - self: The instance of the OpticalPipeline with loaded data.
+        """
+        self.time_array, self.signals_array, self.channels = read_asc(self.file_path)
+        self.__is_loaded = True
+        return self
+    
+    def delimit_time_window(self, start_time: float, end_time: float) -> 'OpticalPipeline':
+        """
+        Delimits the time and signal data based on the specified start and end times.
+        
+        Parameters:
+        - start_time: float, the starting time for delimiting.
+        - end_time: float, the ending time for delimiting.
+        
+        Returns:
+        - self: The instance of the OpticalPipeline with delimited data.
+        """
+        if not self.__is_loaded:
+            raise RuntimeError("Data must be loaded before delimiting.")
+        
+        self.time_array, self.signals_array = slice_time_window(self.time_array, self.signals_array, start_time, end_time)
+        return self
+    
+    def apply_filter(self, filter_func: Callable, **kwargs) -> 'OpticalPipeline':
+        """
+        Applies the specified filter function to the signal data.
+        
+        Parameters:
+        - filter_func: A callable that takes a 2D numpy array and returns a filtered 2D numpy array.
+        
+        Returns:
+        - self: The instance of the OpticalPipeline with filtered data.
+        """
+        if not self.__is_loaded:
+            raise RuntimeError("Data must be loaded before applying filters.")
+        
+        for key, value in kwargs.items():
+            if isinstance(value, str) and value in self.channels:
+                kwargs[key] = self.channels.index(value)
+
+        self.signals_array = filter_func(self.signals_array, **kwargs)
+        return self
+    
+    def get_data(self) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+        """
+        Returns the time array, signals array, and channel names.
+        """
+        if not self.__is_loaded:
+            raise RuntimeError("Data must be loaded before accessing it.")
+        
+        return self.time_array, self.signals_array, self.channels
+    
+    def save_processed_data(self, output_path: str) -> None:
+        """
+        Saves the processed data to the specified output path.
+        
+        Parameters:
+        - output_path: str, the file path where the processed data will be saved.
+        """
+        if not self.__is_loaded:
+            raise RuntimeError("Data must be loaded before saving.")
+        
+        # Add time array as the first column to the signals array
+        data_matrix = np.hstack((self.time_array.reshape(-1, 1), self.signals_array))
+        # Save the data matrix to a CSV file with channel names as headers
+        header = "Time," + ",".join(self.channels)
+        np.savetxt(output_path, data_matrix, delimiter=",", header=header, comments='')
+        
+        return self
+        
+        

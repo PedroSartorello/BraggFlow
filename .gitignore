@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+*.egg
+.python-version
+
+# Virtual environments
+.env
+
+# IDE and editor
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and reports
+*.log
+*.csv
+*.dat
+
+# Data and model artifacts
+*.h5
+*.ckpt
+*.pt
+*.pth
+*.npy
+*.npz
+
+# Data
+/data/processed/*
+/data/raw/*
