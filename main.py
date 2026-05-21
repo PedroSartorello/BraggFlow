@@ -1,8 +1,14 @@
+import argparse
+from pathlib import Path
 from src import OpticalPipeline
 from src.processing import apply_savgol_filter, to_delta_lambda, temperature_compensation
 from src.visualization import plot_signals
 
-pipeline = OpticalPipeline("C:\\Users\\pedro\\Desktop\\Mestrado\\opticalPipeline\\data\\raw\\13_05_26_cloro_teste1a7.ASC")
+parser = argparse.ArgumentParser(description="Processamento de dados ópticos")
+parser.add_argument('file', type=Path)
+args = parser.parse_args()
+
+pipeline = OpticalPipeline(args.file)
 
 # Processamento fluído e declarativo
 (pipeline.load_data()
