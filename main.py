@@ -1,4 +1,4 @@
-from src.pipeline import OpticalPipeline
+from src import OpticalPipeline
 from src.processing import apply_savgol_filter, to_delta_lambda, temperature_compensation
 from src.visualization import plot_signals
 
@@ -20,5 +20,6 @@ print("Time array shape:", t.shape)
 print("Signals array shape:", sig.shape)
 print("Channels:", ch)
 
-plot_signals(t, sig, ch, title="Sinal do Canal 1")
-
+plot_signals(t, sig, ch, 
+             selected_channels=['CH_1 Sensor_1 [nm]', 'CH_2 Sensor_1 [nm]'], 
+             title="Sinal do Canal 1 e Canal 2")
