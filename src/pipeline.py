@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Callable, Tuple, List
+from typing import Callable, Tuple, List, Optional
 from .io.reader import read_asc
 from .processing.filters import apply_savgol_filter
 from .processing.delimiting import slice_time_window
@@ -11,9 +11,13 @@ class OpticalPipeline:
         # Initialize attributes to hold time and signal data
         self.time_array = None
         self.signals_array = None
-        self.channels: List[str] = None
+        self.channels: Optional[List[str]] = None
         self.__is_loaded: bool = False
 
+    def _check_loaded(self):
+        if not self.__is_loaded:
+            raise RuntimeError("Data must be loaded before performing this operation.")
+        
     def load_data(self) -> 'OpticalPipeline':
         """
         Loads the data from the specified file path and initializes the time and signal arrays.
@@ -36,9 +40,7 @@ class OpticalPipeline:
         Returns:
         - self: The instance of the OpticalPipeline with delimited data.
         """
-        if not self.__is_loaded:
-            raise RuntimeError("Data must be loaded before delimiting.")
-        
+        self._check_loaded()
         self.time_array, self.signals_array = slice_time_window(self.time_array, self.signals_array, start_time, end_time)
         return self
     
@@ -52,9 +54,8 @@ class OpticalPipeline:
         Returns:
         - self: The instance of the OpticalPipeline with filtered data.
         """
-        if not self.__is_loaded:
-            raise RuntimeError("Data must be loaded before applying filters.")
-        
+        self._check_loaded()
+
         for key, value in kwargs.items():
             if isinstance(value, str) and value in self.channels:
                 kwargs[key] = self.channels.index(value)
@@ -66,21 +67,18 @@ class OpticalPipeline:
         """
         Returns the time array, signals array, and channel names.
         """
-        if not self.__is_loaded:
-            raise RuntimeError("Data must be loaded before accessing it.")
-        
+        self._check_loaded()
         return self.time_array, self.signals_array, self.channels
     
-    def save_processed_data(self, output_path: str) -> None:
+    def save_processed_data(self, output_path: str) -> 'OpticalPipeline':
         """
         Saves the processed data to the specified output path.
         
         Parameters:
         - output_path: str, the file path where the processed data will be saved.
         """
-        if not self.__is_loaded:
-            raise RuntimeError("Data must be loaded before saving.")
-        
+        self._check_loaded()
+
         # Add time array as the first column to the signals array
         data_matrix = np.hstack((self.time_array.reshape(-1, 1), self.signals_array))
         # Save the data matrix to a CSV file with channel names as headers

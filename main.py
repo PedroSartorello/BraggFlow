@@ -3,8 +3,10 @@ from pathlib import Path
 from src import OpticalPipeline
 from src.processing import apply_savgol_filter, to_delta_lambda, temperature_compensation
 from src.visualization import plot_signals
+from src.visualization import interactive_plot
 
-parser = argparse.ArgumentParser(description="Processamento de dados ópticos")
+# python main data/raw/arquivo.ASC
+parser = argparse.ArgumentParser()
 parser.add_argument('file', type=Path)
 args = parser.parse_args()
 
@@ -27,5 +29,9 @@ print("Signals array shape:", sig.shape)
 print("Channels:", ch)
 
 plot_signals(t, sig, ch, 
+             selected_channels=['CH_1 Sensor_1 [nm]', 'CH_2 Sensor_1 [nm]'], 
+             title="Sinal do Canal 1 e Canal 2")
+
+interactive_plot(t, sig, ch, 
              selected_channels=['CH_1 Sensor_1 [nm]', 'CH_2 Sensor_1 [nm]'], 
              title="Sinal do Canal 1 e Canal 2")
