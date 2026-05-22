@@ -29,6 +29,25 @@ class OpticalPipeline:
         self.__is_loaded = True
         return self
     
+    def rename_channel(self, rename_map: dict) -> 'OpticalPipeline':
+        """
+        Renames a channel in the channels list.
+        
+        Parameters:
+        - rename_map: dict, a dictionary mapping old channel names to new channel names.
+        
+        Returns:
+        - self: The instance of the OpticalPipeline with the renamed channels.
+        """
+        self._check_loaded()
+        for old_name, new_name in rename_map.items():
+            if old_name in self.channels:
+                idx = self.channels.index(old_name)
+                self.channels[idx] = new_name
+            else:
+                raise ValueError(f"Channel '{old_name}' not found in channels list.")
+        return self
+    
     def delimit_time_window(self, start_time: float, end_time: float) -> 'OpticalPipeline':
         """
         Delimits the time and signal data based on the specified start and end times.
