@@ -3,6 +3,7 @@ from typing import Callable, Tuple, List, Optional
 from .io.reader import read_asc
 from .processing.filters import apply_savgol_filter
 from .processing.delimiting import slice_time_window
+from .processing.preprocessing import remove_null_values
 
 class OpticalPipeline:
     def __init__(self, file_path: str):
@@ -63,13 +64,40 @@ class OpticalPipeline:
         self.time_array, self.signals_array = slice_time_window(self.time_array, self.signals_array, start_time, end_time)
         return self
     
+    def preprocess(self, preprocess_func: Callable, **kwargs) -> 'OpticalPipeline':
+        """
+        Applies a preprocessing function that may modify both time and signal data.
+
+        Use this for functions with the signature::
+
+            func(time_array, signals_array, **kwargs) -> (time_array, signals_array)
+
+        This is the correct method for ``remove_null_values`` and any other step
+        that can add or remove rows (e.g. outlier removal).
+
+        Parameters:
+        - preprocess_func: Callable with signature (time, signals, **kwargs) -> (time, signals).
+
+        Returns:
+        - self: The instance of the OpticalPipeline with preprocessed data.
+        """
+        self._check_loaded()
+        self.time_array, self.signals_array = preprocess_func(
+            self.time_array, self.signals_array, **kwargs
+        )
+        return self
+
     def apply_filter(self, filter_func: Callable, **kwargs) -> 'OpticalPipeline':
         """
-        Applies the specified filter function to the signal data.
-        
+        Applies the specified filter function to the signal data only.
+
+        Use this for functions with the signature::
+
+            func(signals_array, **kwargs) -> signals_array
+
         Parameters:
         - filter_func: A callable that takes a 2D numpy array and returns a filtered 2D numpy array.
-        
+
         Returns:
         - self: The instance of the OpticalPipeline with filtered data.
         """
