@@ -1,0 +1,3 @@
+# Atalho: instala o BraggFlow em modo editável com as dependências de desenvolvimento.
+# As dependências de verdade (com versões mínimas) estão em pyproject.toml.
+-e .[dev]

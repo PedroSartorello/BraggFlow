@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+*.egg
+.python-version
+
+# Virtual environments
+.env
+
+# IDE and editor
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and reports
+*.log
+*.csv
+*.dat
+
+# Data and model artifacts
+*.h5
+*.ckpt
+*.pt
+*.pth
+*.npy
+*.npz
+
+# Data folder: everything inside is local (real measurements, uploads,
+# results and the app settings that point to files on this machine). Only
+# its README and the .gitkeep that keeps each subfolder are versioned.
+/data/**
+!/data/
+!/data/README.md
+!/data/*/
+!/data/*/.gitkeep
+
+# Synthetic example data and test fixtures ARE versioned (never real data)
+!examples/data/**
+!tests/fixtures/**

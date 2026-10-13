@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "braggflow"
+dynamic = ["version"]
+description = "Processing pipeline, web app and publication figures for FBG (Fiber Bragg Grating) interrogator data"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Pedro Henrique Sartorello" }]
+requires-python = ">=3.10"
+keywords = ["fbg", "fiber bragg grating", "optical sensors", "interrogator", "signal processing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",   # legend loc="outside ..." in the publication figures
+    "plotly>=5.0",
+    "flask>=2.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+braggflow = "braggflow.cli:main"
+braggflow-web = "braggflow.cli:web"
+
+[project.urls]
+Repository = "https://github.com/PedroSartorello/BraggFlow"
+
+[tool.setuptools.dynamic]
+version = { attr = "braggflow.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+braggflow = ["webapp/templates/*.html", "webapp/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

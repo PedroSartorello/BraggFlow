@@ -1,0 +1,3 @@
+# Synthetic example data: keep the exact bytes on every platform, so that
+# re-running examples/make_synthetic_data.py reproduces the committed files.
+examples/data/** -text

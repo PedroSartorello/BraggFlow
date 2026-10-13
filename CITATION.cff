@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use BraggFlow in your research, please cite it as below."
+title: "BraggFlow: processing pipeline, web app and publication figures for FBG interrogator data"
+type: software
+authors:
+  - family-names: Sartorello
+    given-names: Pedro Henrique
+    affiliation: "Universidade Tecnológica Federal do Paraná (UTFPR), CPGEI / NUEM"
+    # TODO: add the ORCID iD, e.g.  orcid: "https://orcid.org/0000-0000-0000-0000"
+version: 0.1.0
+license: MIT
+repository-code: "https://github.com/PedroSartorello/BraggFlow"
+keywords:
+  - fiber Bragg grating
+  - FBG
+  - optical sensors
+  - interrogator
+  - signal processing
