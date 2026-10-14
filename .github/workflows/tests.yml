@@ -44,7 +44,14 @@ jobs:
         run: python -m pip install -e ".[dev]"
 
       - name: pytest
-        run: python -m pytest -q
+        shell: bash
+        # Cada teste que falha vira uma anotação, visível no resumo do PR
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short | tee "$RUNNER_TEMP/pytest.log" || {
+            grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=pytest::/'
+            exit 1
+          }
 
       - name: Dados sintéticos reproduzíveis
         # O gerador tem semente fixa: regenerar precisa dar os mesmos bytes
@@ -76,4 +83,11 @@ jobs:
           python -m pip install --no-deps -e .
 
       - name: pytest
-        run: python -m pytest -q
+        shell: bash
+        # Cada teste que falha vira uma anotação, visível no resumo do PR
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short | tee "$RUNNER_TEMP/pytest.log" || {
+            grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=pytest::/'
+            exit 1
+          }
