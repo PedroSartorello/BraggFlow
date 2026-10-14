@@ -45,7 +45,7 @@ version = { attr = "braggflow.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-braggflow = ["webapp/templates/*.html"]
+braggflow = ["webapp/templates/*.html", "webapp/static/css/*.css", "webapp/static/js/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

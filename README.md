@@ -336,7 +336,8 @@ BraggFlow/
     sensors.py             # Sensor setups
     projects.py            # Saved projects (files + steps + markers + style)
     options.py             # Validation of options coming from the UI
-    webapp/                # Flask app: app.py (create_app + routes), state.py, templates/
+    webapp/                # Flask app: app.py (create_app + routes), state.py,
+                           #   templates/index.html, static/js/ (ES modules), static/css/
   examples/                # Runnable examples and synthetic data (examples/data/)
   docs/                    # data-formats.md, webapp.md, migration.md
   data/                    # Your data (ignored by git): raw/ uploads/ processed/ projects/ setups/ styles/ figures/

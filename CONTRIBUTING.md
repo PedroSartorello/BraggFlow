@@ -49,7 +49,7 @@ pytest -m "not e2e"               # everything except the browser tests
 ```
 
 Without Playwright installed, `pytest` skips this folder. When you change
-`templates/index.html`, run them; when you fix a bug in the page, add a test
+`templates/index.html` or `static/`, run them; when you fix a bug in the page, add a test
 there that fails without the fix.
 
 ## Where things live
@@ -61,7 +61,10 @@ there that fails without the fix.
 | `src/braggflow/io/` | format detection, interrogator and spectrum readers, processed CSV |
 | `src/braggflow/visualization/` | publication figures and quick plots |
 | `src/braggflow/recipe.py` | the processing recipe as a dict of options, shared by `braggflow process` and the web app |
-| `src/braggflow/webapp/` | the Flask app (`app.py`: `create_app` and routes; `state.py`: data folder and caches; `templates/`) |
+| `src/braggflow/webapp/` | the Flask app (`app.py`: `create_app` and routes; `state.py`: data folder and caches) |
+| `src/braggflow/webapp/templates/index.html` | the page markup (no inline script or style) |
+| `src/braggflow/webapp/static/js/` | the page logic as ES modules, loaded by the browser without a build step (see [`docs/webapp.md`](docs/webapp.md#for-developers)) |
+| `src/braggflow/webapp/static/css/app.css` | the page styles |
 | `src/braggflow/cli.py`, `paths.py` | the commands and the data-folder resolution |
 | `examples/` | runnable examples and the synthetic data generator |
 | `docs/` | data formats, web app, migration notes |
@@ -106,8 +109,10 @@ Then:
    (a sine below and above a cutoff, a step of known height, …).
 4. Optionally expose it in the web app: add its option section to
    `run_recipe` in `src/braggflow/recipe.py` (used by the web app and by
-   `braggflow process`) and its controls to
-   `src/braggflow/webapp/templates/index.html`.
+   `braggflow process`) and its controls to the step cards of
+   `src/braggflow/webapp/templates/index.html`. Inputs with
+   `data-opt="section.field"` are collected and restored automatically by
+   `static/js/series.js`.
 5. Add a line to the "Processing steps" table of the README and to
    `CHANGELOG.md`.
 

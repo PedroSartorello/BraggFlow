@@ -74,3 +74,24 @@ app = create_app("/path/to/data")
 client = app.test_client()
 client.get("/api/files").get_json()
 ```
+
+The page is `templates/index.html` (markup only), `static/css/app.css` and
+the ES modules in `static/js/`, loaded straight by the browser — no Node, no
+build step. `main.js` is the entry point; the modules are:
+
+| Module | What |
+|---|---|
+| `core.js` | `$`, error bar, number formatting, the `fetch` wrapper and the server version check; imports nothing |
+| `state.js` | files of the project and what each one keeps; `shared`, the variables read and changed by more than one module |
+| `series.js` | Séries temporais tab: processing options, sensors, setups, file list, plot, processing (one, batch, joined), concatenation |
+| `spectra.js` | Espectros tab: preparation, plot, peaks and valleys |
+| `viz.js` | Visualização tab: data sources, styles, markers, figure |
+| `analysis.js` | interval statistics |
+| `projects.js` | project screen, adding/removing files, save, open, delete, unsaved-changes dialog |
+| `tabs.js` | switching tabs |
+| `main.js` | events that cross tabs (sidebar, keyboard shortcuts) and startup |
+
+A variable that another module must **reassign** goes in `shared` (an
+imported `let` is read-only for the importer). Keep `core.js` free of
+imports: the other modules use `$` while loading. `API_BUILD` in `core.js`
+must match the one in `app.py`.
