@@ -1,0 +1,93 @@
+name: tests
+
+on:
+  push:                    # qualquer branch: o resultado aparece antes do PR
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MPLBACKEND: Agg          # sem janela: os gráficos só existem em memória
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  pytest:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          # Windows é onde o autor roda; mínimo e máximo bastam
+          - os: windows-latest
+            python: "3.10"
+          - os: windows-latest
+            python: "3.14"
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar
+        run: python -m pip install -e ".[dev]"
+
+      - name: pytest
+        shell: bash
+        # Cada teste que falha vira uma anotação, visível no resumo do PR
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short | tee "$RUNNER_TEMP/pytest.log" || {
+            grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=pytest::/'
+            exit 1
+          }
+
+      - name: Dados sintéticos reproduzíveis
+        # O gerador tem semente fixa: regenerar precisa dar os mesmos bytes
+        # que estão versionados, em qualquer sistema.
+        shell: bash
+        run: |
+          python examples/make_synthetic_data.py
+          git diff --exit-code --stat examples/data
+
+      - name: braggflow process no exemplo
+        shell: bash
+        run: braggflow process examples/data/synthetic_interrogator.asc --no-plot --data-dir "$RUNNER_TEMP/data"
+
+  minimum-versions:
+    # As versões mínimas declaradas no pyproject.toml precisam funcionar de fato
+    name: pytest (versões mínimas das dependências)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Instalar com as versões mínimas
+        run: |
+          python -m pip install "numpy==1.24.*" "pandas==2.0.*" "scipy==1.10.*" \
+            "matplotlib==3.7.*" "plotly==5.0.*" "flask==2.3.*" "pytest==7.*"
+          python -m pip install --no-deps -e .
+
+      - name: pytest
+        shell: bash
+        # Cada teste que falha vira uma anotação, visível no resumo do PR
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short | tee "$RUNNER_TEMP/pytest.log" || {
+            grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=pytest::/'
+            exit 1
+          }

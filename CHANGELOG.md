@@ -32,6 +32,8 @@ itself did not change: the same input gives the same output as before.
   `CITATION.cff`, `CONTRIBUTING.md`, `data/README.md`.
 - The Gas Marker page is served by the web app at `/static/gas_marker.html`.
 - `braggflow` re-exports `Sensor` and `SensorSetup`.
+- GitHub Actions (`.github/workflows/tests.yml`): pytest on Linux and Windows,
+  Python 3.10–3.14, plus a run with the minimum dependency versions.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.
