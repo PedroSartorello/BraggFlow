@@ -95,7 +95,11 @@ Then:
 ## Pull requests
 
 - One topic per pull request, with a short description of the why.
-- `pytest` must pass. Say in the description which data you used to check the
-  change (synthetic, or real data you did **not** commit).
+- `pytest` must pass. GitHub Actions runs it on every push and pull request
+  (Linux with Python 3.10–3.14, Windows with 3.10 and 3.14, and once with the
+  minimum dependency versions of `pyproject.toml`), and also checks that the
+  synthetic example data regenerates byte for byte.
+- Say in the description which data you used to check the change
+  (synthetic, or real data you did **not** commit).
 - Do not change the numbers produced by an existing step without saying so
   explicitly: published results may depend on them.

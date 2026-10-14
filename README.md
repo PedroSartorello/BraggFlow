@@ -1,5 +1,7 @@
 # BraggFlow
 
+[![tests](https://github.com/PedroSartorello/BraggFlow/actions/workflows/tests.yml/badge.svg)](https://github.com/PedroSartorello/BraggFlow/actions/workflows/tests.yml)
+
 A declarative Python pipeline for processing Fiber Bragg Grating (FBG) optical sensor data. Designed to be readable, chainable, and easy to extend — usable both as a fluent Python API and through an interactive web front-end.
 
 ## Quick start
