@@ -91,3 +91,40 @@ jobs:
             grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=pytest::/'
             exit 1
           }
+
+  browser:
+    # Fluxos da interface num Chromium de verdade (tests/e2e)
+    name: navegador (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar
+        run: |
+          python -m pip install -e ".[dev,e2e]"
+          python -m playwright install --with-deps chromium
+
+      - name: pytest tests/e2e
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest tests/e2e -q -rfE --tb=short --tracing retain-on-failure \
+            | tee "$RUNNER_TEMP/pytest.log" || {
+            grep -E "^(FAILED|ERROR) " "$RUNNER_TEMP/pytest.log" | sed 's/^/::error title=navegador::/'
+            exit 1
+          }
+
+      - name: Guardar o rastro dos testes que falharam
+        # Abra com: playwright show-trace trace.zip (ou em trace.playwright.dev)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

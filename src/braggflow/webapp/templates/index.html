@@ -3306,6 +3306,7 @@ async function openProjectGate({ canReturn = false } = {}) {
   $("gate-error").classList.add("hidden");
   $("project-gate").classList.remove("hidden");
   $("project-gate").dataset.canReturn = canReturn ? "1" : "";
+  $("gate-name").value = "";         // antes de esperar a lista: não apaga o que for digitado
   let last = null;
   try { last = localStorage.getItem(LAST_PROJECT_KEY); } catch { /* sem armazenamento */ }
 
@@ -3316,7 +3317,6 @@ async function openProjectGate({ canReturn = false } = {}) {
   if (!projects.length) {
     box.innerHTML = '<span class="hint">Nenhum projeto salvo ainda. Comece um novo abaixo.</span>';
   }
-  $("gate-name").value = "";
 }
 
 function closeProjectGate() {

@@ -350,6 +350,10 @@ pip install -e ".[dev]"
 pytest
 ```
 
+The browser tests in `tests/e2e/` (the web app driven in Chromium) run too
+when Playwright is installed: `pip install -e ".[e2e]"` and
+`playwright install chromium`.
+
 Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the
 setup and how to add a processing step.
 

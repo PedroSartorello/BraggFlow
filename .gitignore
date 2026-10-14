@@ -54,3 +54,6 @@ Thumbs.db
 # Synthetic example data and test fixtures ARE versioned (never real data)
 !examples/data/**
 !tests/fixtures/**
+
+# Rastros dos testes de navegador (pytest --tracing)
+test-results/

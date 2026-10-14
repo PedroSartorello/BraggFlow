@@ -33,6 +33,25 @@ new fixture under `tests/fixtures/` (versioned) and generate it with code.
 may be confidential. Everything under `data/` is ignored by git for that
 reason.
 
+### Browser tests
+
+`tests/e2e/` opens the web app in a real Chromium with
+[Playwright](https://playwright.dev/python/) and clicks through the main flows
+(add a file, process, save and reopen a project, switch projects, spectrum
+peaks, figure). They use the synthetic data and need internet, because the
+page loads Plotly from a CDN.
+
+```bash
+pip install -e ".[e2e]"
+playwright install chromium
+pytest tests/e2e                  # add --headed --slowmo 300 to watch
+pytest -m "not e2e"               # everything except the browser tests
+```
+
+Without Playwright installed, `pytest` skips this folder. When you change
+`templates/index.html`, run them; when you fix a bug in the page, add a test
+there that fails without the fix.
+
 ## Where things live
 
 | Path | What |
@@ -97,8 +116,8 @@ Then:
 - One topic per pull request, with a short description of the why.
 - `pytest` must pass. GitHub Actions runs it on every push and pull request
   (Linux with Python 3.10–3.14, Windows with 3.10 and 3.14, and once with the
-  minimum dependency versions of `pyproject.toml`), and also checks that the
-  synthetic example data regenerates byte for byte.
+  minimum dependency versions of `pyproject.toml`), runs the browser tests,
+  and checks that the synthetic example data regenerates byte for byte.
 - Say in the description which data you used to check the change
   (synthetic, or real data you did **not** commit).
 - Do not change the numbers produced by an existing step without saying so
