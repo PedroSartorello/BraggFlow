@@ -32,7 +32,11 @@ itself did not change: the same input gives the same output as before.
   `CITATION.cff`, `CONTRIBUTING.md`, `data/README.md`.
 - `braggflow` re-exports `Sensor` and `SensorSetup`.
 - GitHub Actions (`.github/workflows/tests.yml`): pytest on Linux and Windows,
-  Python 3.10–3.14, plus a run with the minimum dependency versions.
+  Python 3.10–3.14, plus a run with the minimum dependency versions and the
+  browser tests.
+- Browser tests (`tests/e2e/`, Playwright): adding a file, processing, saving
+  and reopening a project, switching projects, unsaved-changes dialog,
+  spectrum peaks and the figure. Extra `e2e` in `pyproject.toml`.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.
@@ -62,3 +66,8 @@ itself did not change: the same input gives the same output as before.
   `notebooks/01_exploracao.ipynb`.
 - The Gas Marker page (`gasMarker.html`), no longer used. The gas event table
   format it exported is still read by `load_gas_table`.
+
+### Fixed
+
+- The "Projetos…" screen no longer erases a project name typed while the
+  project list is still loading.
