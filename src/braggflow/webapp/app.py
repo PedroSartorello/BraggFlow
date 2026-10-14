@@ -1,29 +1,30 @@
 """
 app.py – Front-end web do pipeline óptico (BraggFlow)
 =====================================================
-Servidor Flask que expõe o ``OpticalPipeline`` (o mesmo usado por
-``main.py``) para processamento interativo no navegador: o usuário escolhe
-o arquivo .ASC, liga/desliga etapas, ajusta parâmetros e vê o resultado em
-um gráfico Plotly em tempo real.
+Servidor Flask que expõe o ``OpticalPipeline`` para processamento interativo
+no navegador: o usuário escolhe o arquivo .ASC, liga/desliga etapas, ajusta
+parâmetros e vê o resultado em um gráfico Plotly em tempo real.
+
+``create_app(data_dir)`` monta um app com a sua própria pasta de dados e os
+seus caches (``webapp.state``); a receita de processamento é
+``braggflow.recipe.run_recipe``, a mesma do comando ``braggflow process``.
 
 Uso:
-    python webapp/app.py
+    braggflow-web [--port 5000] [--data-dir DIR]
     # abra http://127.0.0.1:5000
 """
 
 import base64
 import io
+import json
 import shutil
 import threading
 import uuid
-from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from flask import Flask, jsonify, render_template, request, send_file
-
-import json
+from flask import Blueprint, Flask, current_app, jsonify, render_template, request, send_file
 
 import matplotlib
 matplotlib.use("Agg")  # backend sem janela — obrigatório em servidor
@@ -33,24 +34,19 @@ from braggflow.io.processed import (
     channel_quantities,
     metadata_path_for,
     read_metadata,
-    read_processed_csv,
     read_processed_header,
 )
-from braggflow.paths import resolve_data_dir
 from braggflow.io.reader import (
     DESCRIPTOR_EXTENSIONS,
-    classify_file,
     concat_plan,
-    concatenate,
     describe_file,
-    file_fingerprint,
-    load_interrogator_file,
-    load_spectra,
     read_descriptor,
 )
 from braggflow.pipeline import OpticalPipeline
+from braggflow.processing import estimate_sampling_rate
 from braggflow.projects import Project
-from braggflow.sensors import Sensor, SensorSetup
+from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
+from braggflow.sensors import SensorSetup
 from braggflow.processing.spectra import (
     NORMALIZATIONS,
     analyse_spectrum,
@@ -74,76 +70,20 @@ from braggflow.visualization.figure import (
     available_fonts,
     default_style,
     parse_markers,
-    render_figure,
     resolve_style,
 )
-from braggflow.processing import (
-    apply_highpass_filter,
-    apply_lowpass_filter,
-    apply_moving_average_filter,
-    apply_savgol_filter,
-    estimate_sampling_rate,
-    mark_invalid_peaks,
-    remove_null_values,
-    remove_outliers,
-    resample_uniform,
-    sort_and_deduplicate,
-    temperature_compensation,
-    to_delta_lambda,
-)
 
-# Pasta de dados: --data-dir, BRAGGFLOW_DATA_DIR ou ./data (braggflow.paths).
-# A API e os projetos salvos se referem aos arquivos como "data/<subpasta>/...":
-# esse "data" é um prefixo virtual que aponta para a pasta escolhida, qualquer
-# que seja o nome ou o lugar dela, para que projetos antigos continuem abrindo.
-DATA_PREFIX = "data"
-
-
-def set_data_dir(data_dir=None, *, create: bool = True) -> Path:
-    """Escolhe a pasta de dados do app (e cria as subpastas, por padrão)."""
-    global DATA_DIR, RAW_DIR, UPLOAD_DIR, PROCESSED_DIR, SETUPS_DIR, STYLES_DIR, PROJECTS_DIR
-    DATA_DIR = resolve_data_dir(data_dir, create=create)
-    RAW_DIR = DATA_DIR / "raw"
-    UPLOAD_DIR = DATA_DIR / "uploads"
-    PROCESSED_DIR = DATA_DIR / "processed"
-    SETUPS_DIR = DATA_DIR / "setups"
-    STYLES_DIR = DATA_DIR / "styles"
-    PROJECTS_DIR = DATA_DIR / "projects"
-    return DATA_DIR
-
-
-# Só importar o módulo não cria pastas; o comando braggflow-web as cria
-set_data_dir(create=False)
-
-
-def _rel(path: Path) -> str:
-    """Caminho de um arquivo como a API o mostra: ``data/<subpasta>/...``."""
-    return f"{DATA_PREFIX}/{Path(path).relative_to(DATA_DIR).as_posix()}"
+from .state import AppState, DataFolder
 
 # Qualquer exportação de texto do interrogador ou do analisador de espectro
 RAW_EXTENSIONS = {".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec"}
 
-# rcParams do matplotlib são globais; o servidor Flask atende em threads
+# rcParams do matplotlib são globais do processo (não do app); o servidor
+# Flask atende em threads
 _figure_lock = threading.Lock()
 
 FIGURE_MIMETYPES = {"pdf": "application/pdf", "png": "image/png", "svg": "image/svg+xml",
                     "eps": "application/postscript", "tiff": "image/tiff"}
-
-# Arquivos do interrogador já lidos (reprocessar não relê o disco)
-FILE_CACHE_SIZE = 2
-_file_cache: OrderedDict = OrderedDict()
-_spectrum_cache: OrderedDict = OrderedDict()
-_processed_cache: OrderedDict = OrderedDict()
-_kind_cache: dict = {}
-_cache_lock = threading.Lock()
-
-# Sugestão inicial de mapeamento (mesma de main.py). A interface permite
-# editar por arquivo, já que o mapeamento nem sempre é o mesmo.
-DEFAULT_RENAME = {
-    "CH_1 Sensor_1 [nm]": "EFBG1",
-    "CH_2 Sensor_1 [nm]": "EFBG2",
-    "CH_3 Sensor_1 [nm]": "FBG",
-}
 
 # Máximo de pontos por canal enviados ao gráfico (o processamento usa tudo)
 MAX_PLOT_POINTS = 8000
@@ -152,14 +92,43 @@ MAX_PLOT_POINTS = 8000
 # rotas mudarem: é assim que a página percebe um servidor ainda sem reiniciar.
 API_BUILD = "2026-10-14"
 
-app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB
-app.config["TEMPLATES_AUTO_RELOAD"] = True
+bp = Blueprint("braggflow", __name__)
+
+
+def create_app(data_dir=None, *, create: bool = True) -> Flask:
+    """
+    App com a sua própria pasta de dados (``--data-dir``,
+    ``BRAGGFLOW_DATA_DIR`` ou ``./data``) e os seus caches. ``create=False``
+    não cria as subpastas.
+    """
+    app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.extensions["braggflow"] = AppState(DataFolder(data_dir, create=create))
+    app.register_blueprint(bp)
+    return app
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _state() -> AppState:
+    """Pasta de dados e caches do app que atende a requisição."""
+    return current_app.extensions["braggflow"]
+
+
+def _data() -> DataFolder:
+    return _state().data
+
+
+def _rel(path: Path) -> str:
+    return _data().rel(path)
+
+
+def _resolve_data_file(rel_path: str) -> Path:
+    return _data().resolve(rel_path)
+
 
 def _list_raw_files() -> list[dict]:
     """
@@ -168,7 +137,7 @@ def _list_raw_files() -> list[dict]:
     comprimento de onda).
     """
     files = []
-    for folder in (RAW_DIR, UPLOAD_DIR):
+    for folder in (_data().raw, _data().uploads):
         if not folder.is_dir():
             continue
         for f in sorted(folder.iterdir()):
@@ -177,116 +146,16 @@ def _list_raw_files() -> list[dict]:
             stat = f.stat()
             files.append({
                 "path": _rel(f),
-                "kind": _cached_kind(f),
+                "kind": _state().kinds.get(f),
                 "size": stat.st_size,
                 "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="minutes"),
             })
     return files
 
 
-def _cached_kind(path: Path) -> str:
-    """Tipo do arquivo, lido só do começo dele e guardado por data/tamanho."""
-    stat = path.stat()
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
-    with _cache_lock:
-        if key in _kind_cache:
-            return _kind_cache[key]
-    try:
-        kind = classify_file(path)
-    except (ValueError, IOError, OSError):
-        kind = "unknown"
-    with _cache_lock:
-        _kind_cache[key] = kind
-    return kind
-
-
-def _resolve_data_file(rel_path: str) -> Path:
-    """Resolve um caminho ``data/...`` garantindo que fique dentro da pasta de dados."""
-    caminho = Path(rel_path)
-    if caminho.is_absolute():
-        full = caminho.resolve()
-    elif caminho.parts[:1] == (DATA_PREFIX,):
-        full = DATA_DIR.joinpath(*caminho.parts[1:]).resolve()
-    else:
-        full = None
-    data_dir = DATA_DIR.resolve()
-    if full is None or not full.is_file() or data_dir not in full.parents:
-        raise ValueError(f"Arquivo inválido ou fora de data/: {rel_path}")
-    return full
-
-
-def _num(value, default=None):
-    """Converte para float aceitando None/'' como ausente."""
-    if value is None or value == "":
-        return default
-    return float(value)
-
-
 def _safe_name(name: str) -> str:
     """Mantém apenas caracteres inofensivos em nomes de arquivo."""
     return "".join(c for c in name if c.isalnum() or c in "._- ").strip(". ")
-
-
-def _load_cached(path: Path):
-    """
-    Lê o arquivo do interrogador uma única vez e reaproveita a leitura
-    enquanto ele não mudar (mesmo caminho, data de modificação e tamanho).
-    Retorna (InterrogatorData, fingerprint da origem).
-    """
-    stat = path.stat()
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
-    with _cache_lock:
-        if key in _file_cache:
-            _file_cache.move_to_end(key)
-            return _file_cache[key]
-
-    entry = (load_interrogator_file(path), file_fingerprint(path))
-    with _cache_lock:
-        for old in [k for k in _file_cache if k[0] == key[0]]:
-            del _file_cache[old]  # versões antigas do mesmo arquivo
-        _file_cache[key] = entry
-        while len(_file_cache) > FILE_CACHE_SIZE:
-            _file_cache.popitem(last=False)
-    return entry
-
-
-def _load_processed_cached(path: Path):
-    """Lê um CSV processado uma vez e reaproveita enquanto ele não mudar."""
-    stat = path.stat()
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
-    with _cache_lock:
-        if key in _processed_cache:
-            _processed_cache.move_to_end(key)
-            return _processed_cache[key]
-
-    df, units, metadata = read_processed_csv(path)
-    entry = (df, units, channel_quantities(metadata))
-    with _cache_lock:
-        for old in [k for k in _processed_cache if k[0] == key[0]]:
-            del _processed_cache[old]
-        _processed_cache[key] = entry
-        while len(_processed_cache) > FILE_CACHE_SIZE * 3:
-            _processed_cache.popitem(last=False)
-    return entry
-
-
-def _load_spectra_cached(path: Path):
-    """Lê o arquivo de espectro uma vez e reaproveita enquanto ele não mudar."""
-    stat = path.stat()
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
-    with _cache_lock:
-        if key in _spectrum_cache:
-            _spectrum_cache.move_to_end(key)
-            return _spectrum_cache[key]
-
-    spectra = load_spectra(path)
-    with _cache_lock:
-        for old in [k for k in _spectrum_cache if k[0] == key[0]]:
-            del _spectrum_cache[old]
-        _spectrum_cache[key] = spectra
-        while len(_spectrum_cache) > FILE_CACHE_SIZE * 3:
-            _spectrum_cache.popitem(last=False)
-    return spectra
 
 
 def _curve_key(path: Path, spectra, trace_name: str) -> str:
@@ -304,7 +173,7 @@ def _spectrum_items(options: dict) -> list[dict]:
     items = []
     for entry in options.get("spectra") or []:
         path = _resolve_data_file(entry["file"])
-        spectra = _load_spectra_cached(path)
+        spectra = _state().spectra.get(path)
         name = entry.get("trace") or (spectra.names[0] if spectra.names else "")
         spectrum = spectra.get(name)
         if spectrum is None:
@@ -331,7 +200,7 @@ def _series_entries(options: dict) -> list[dict]:
         return []
     channels = options.get("channels")
     if not channels:
-        df, _, _ = _load_processed_cached(_resolve_data_file(file))
+        df, _, _ = _state().processed.get(_resolve_data_file(file))
         channels = [c for c in df.columns if c != "Time"]
     return [{"file": file, "channel": channel} for channel in channels]
 
@@ -352,7 +221,7 @@ def _series_items(options: dict, style: dict, markers: list):
     items, unit, is_shift, divisor = [], "nm", False, 1.0
     for entry in entries:
         path = _resolve_data_file(entry["file"])
-        df, units, quantities = _load_processed_cached(path)
+        df, units, quantities = _state().processed.get(path)
         channel = entry["channel"]
         if channel not in df.columns:
             raise ValueError(f"Canal '{channel}' não existe em {path.name}.")
@@ -368,250 +237,12 @@ def _series_items(options: dict, style: dict, markers: list):
     return items, xlabel, ylabel, divisor, markers
 
 
-def _setup_from_options(options: dict) -> SensorSetup:
-    """
-    Setup de sensores enviado pela interface. Sem ele, usa o mapeamento
-    ``rename`` (formato antigo) ou o padrão de main.py.
-    """
-    raw = options.get("sensors")
-    if not raw:
-        return SensorSetup.from_rename_map(options.get("rename") or DEFAULT_RENAME)
-
-    sensors = []
-    for s in raw:
-        low, high = _num(s.get("band_min")), _num(s.get("band_max"))
-        name = (s.get("name") or "").strip() or None
-        if (low is None) != (high is None):
-            raise ValueError(
-                f"Banda incompleta no sensor '{name or s['channel']}': "
-                "informe mínimo e máximo, ou deixe os dois vazios."
-            )
-        sensors.append(Sensor(
-            channel=s["channel"],
-            name=name,
-            nominal_wavelength=_num(s.get("nominal_wavelength")),
-            band=(low, high) if low is not None else None,
-        ))
-    return SensorSetup(name=str(options.get("setup_name") or ""), sensors=sensors)
-
-
-def _br(valor: float, fmt: str = ".4g") -> str:
-    """Número para as mensagens da interface, no padrão brasileiro (2,5)."""
-    return format(valor, fmt).replace(".", ",")
-
-
-def _br_int(n: int) -> str:
-    """Contagem com ponto de milhar (12.996)."""
-    return f"{int(n):,}".replace(",", ".")
-
-
-def _invalid_report(entry: dict) -> str:
-    """Resumo por canal das leituras marcadas como inválidas numa etapa."""
-    n = max(entry["samples_after"], 1)
-    parts = []
-    for ch, nan_after in entry["nan_after"].items():
-        added = nan_after - entry["nan_before"][ch]
-        if added > 0:
-            parts.append(f"{ch} {_br_int(added)} ({_br(100 * added / n, '.2g')}%)")
-    return "Limpeza: " + (", ".join(parts) if parts else "nenhuma leitura inválida")
-
-
 def _run_pipeline(options: dict):
     """
-    Executa o OpticalPipeline com as etapas habilitadas em ``options``.
-
-    Retorna (pipeline, (raw_time, raw_signals), messages). O bruto é
-    capturado após o recorte temporal e a limpeza do interrogador — leituras
-    descartadas aparecem como lacunas no overlay. ``messages`` tem as listas
-    ``report`` (informativo) e ``warnings`` (atenção do usuário).
+    ``run_recipe`` com os arquivos pedidos (dentro da pasta de dados) e o
+    cache de leitura do app. Retorna (pipeline, (raw_time, raw_signals), messages).
     """
-    messages = {"report": [], "warnings": []}
-    caminhos = _requested_files(options)
-
-    partes = [_load_cached(caminho) for caminho in caminhos]
-    if len(partes) == 1:
-        data, source = partes[0]
-        juncoes = []
-    else:
-        data, juncoes = concatenate([parte[0] for parte in partes])
-        source = [parte[1] for parte in partes]
-        nomes = ", ".join(caminho.name for caminho in caminhos)
-        messages["report"].append(
-            f"{len(partes)} arquivos juntos ({nomes}); emendas em "
-            + ", ".join(f"{_br(t)} s" for t in juncoes))
-
-    pipeline = OpticalPipeline.from_data(data, str(caminhos[0]), source)
-    pipeline.joins = juncoes
-    pipeline.apply_setup(_setup_from_options(options))
-
-    # Recorte temporal
-    window = options.get("window") or {}
-    start = _num(window.get("start"))
-    end = _num(window.get("end"))
-    if start is not None or end is not None:
-        pipeline.delimit_time_window(start_time=start, end_time=end)
-
-    cleaning = options.get("cleaning") or {}
-    if cleaning.get("enabled"):
-        pipeline.preprocess(
-            mark_invalid_peaks,
-            zero_as_missing=bool(cleaning.get("zeros", True)),
-            bands=pipeline.sensor_bands() if cleaning.get("bands", True) else None,
-            jump_threshold=_num(cleaning.get("jump_threshold")),
-            max_jump_duration=_num(cleaning.get("jump_duration")),
-        )
-        messages["report"].append(_invalid_report(pipeline.history[-1]))
-
-    # Bruto (pós-recorte e limpeza) para overlay
-    raw_time = pipeline.time_array.copy()
-    raw_signals = pipeline.signals_array.copy()
-
-    timebase = options.get("timebase") or {}
-    if timebase.get("enabled"):
-        pipeline.preprocess(sort_and_deduplicate,
-                            duplicates=timebase.get("duplicates", "mean"))
-        entry = pipeline.history[-1]
-        merged = entry["samples_before"] - entry["samples_after"]
-        if merged:
-            messages["report"].append(
-                f"Eixo de tempo: {_br_int(merged)} amostra(s) com tempo repetido ou inválido unidas/descartadas"
-            )
-        if timebase.get("resample"):
-            fs = _sampling_rate(timebase.get("fs"), pipeline, messages)
-            pipeline.preprocess(resample_uniform, fs=fs,
-                                max_gap=_num(timebase.get("max_gap")))
-            messages["report"].append(
-                f"Reamostrado a {_br(fs)} Hz ({_br_int(len(pipeline.time_array))} amostras)"
-            )
-
-    nulls = options.get("nulls") or {}
-    if nulls.get("enabled"):
-        pipeline.preprocess(
-            remove_null_values,
-            strategy=nulls.get("strategy", "linear"),
-            fill_value=_num(nulls.get("fill_value")),
-        )
-
-    outliers = options.get("outliers") or {}
-    if outliers.get("enabled"):
-        pipeline.preprocess(
-            remove_outliers,
-            method=outliers.get("method", "rolling"),
-            threshold=_num(outliers.get("threshold"), 3.5),
-            window_size=int(_num(outliers.get("window_size"), 51)),
-            strategy=outliers.get("strategy", "linear"),
-            fill_value=_num(outliers.get("fill_value")),
-        )
-
-    # Etapas que supõem amostragem uniforme e dados completos: avisa sobre
-    # lacunas no eixo de tempo e leituras inválidas remanescentes.
-    uniform_steps = [name for name, key in (
-        ("Savitzky-Golay", "savgol"), ("média móvel", "moving_average"),
-        ("passa-baixa", "lowpass"), ("passa-alta", "highpass"),
-    ) if (options.get(key) or {}).get("enabled")]
-    if uniform_steps and len(pipeline.time_array) > 2:
-        dt = np.diff(pipeline.time_array)
-        n_gaps = int((dt > 1.5 * np.median(dt)).sum())
-        if n_gaps:
-            messages["warnings"].append(
-                f"{_br_int(n_gaps)} lacuna(s) no eixo de tempo; {', '.join(uniform_steps)} "
-                "supõe(m) amostragem uniforme. Ative a reamostragem no cartão "
-                "'Eixo de tempo' ou use estratégias que preservam as linhas."
-            )
-        n_nan = int(np.isnan(pipeline.signals_array).sum())
-        if n_nan:
-            messages["warnings"].append(
-                f"{_br_int(n_nan)} leitura(s) inválida(s) chegam aos filtros e serão "
-                "propagadas; ative 'Remoção de nulos'."
-            )
-
-    savgol = options.get("savgol") or {}
-    if savgol.get("enabled"):
-        pipeline.apply_filter(
-            apply_savgol_filter,
-            window_length=int(_num(savgol.get("window_length"), 11)),
-            polyorder=int(_num(savgol.get("polyorder"), 2)),
-        )
-
-    movavg = options.get("moving_average") or {}
-    if movavg.get("enabled"):
-        pipeline.apply_filter(
-            apply_moving_average_filter,
-            window_size=int(_num(movavg.get("window_size"), 30)),
-        )
-
-    lowpass = options.get("lowpass") or {}
-    if lowpass.get("enabled"):
-        pipeline.apply_filter(
-            apply_lowpass_filter,
-            fs=_sampling_rate(lowpass.get("fs"), pipeline, messages),
-            cutoff=_num(lowpass.get("cutoff"), 20.0),
-            order=int(_num(lowpass.get("order"), 4)),
-        )
-
-    highpass = options.get("highpass") or {}
-    if highpass.get("enabled"):
-        pipeline.apply_filter(
-            apply_highpass_filter,
-            fs=_sampling_rate(highpass.get("fs"), pipeline, messages),
-            cutoff=_num(highpass.get("cutoff"), 5.0),
-            order=int(_num(highpass.get("order"), 4)),
-        )
-
-    delta = options.get("delta_lambda") or {}
-    linha_de_base = None
-    if delta.get("enabled"):
-        n_base = int(_num(delta.get("baseline_samples"), 20))
-        # A mesma linha de base que o Δλ subtrai, para o bruto ir junto
-        with np.errstate(all="ignore"):
-            linha_de_base = np.nanmean(pipeline.signals_array[:max(n_base, 1)], axis=0)
-        pipeline.apply_filter(to_delta_lambda, baseline_samples=n_base)
-
-    tempcomp = options.get("temp_comp") or {}
-    if tempcomp.get("enabled"):
-        pipeline.apply_filter(
-            temperature_compensation,
-            temp_channel_idx=tempcomp.get("channel", "FBG"),
-            k_coeff=_num(tempcomp.get("k_coeff"), 1.0),
-        )
-
-    raw_signals = _align_raw(raw_signals, pipeline.signals_array, linha_de_base,
-                             highpass.get("enabled") or tempcomp.get("enabled"), messages)
-    return pipeline, (raw_time, raw_signals), messages
-
-
-def _align_raw(raw: np.ndarray, processed: np.ndarray, linha_de_base, sem_dc: bool,
-               messages: dict) -> np.ndarray:
-    """
-    Põe o sinal bruto do overlay na escala do processado. O Δλ subtrai uma
-    linha de base: o bruto perde a mesma. Passa-alta e compensação de
-    temperatura também tiram o nível DC; aí o bruto é deslocado pela
-    diferença das medianas (aproximado, só para comparar a forma).
-    """
-    if raw.shape[1] != processed.shape[1]:
-        return raw
-    if sem_dc:
-        with np.errstate(all="ignore"):
-            deslocamento = np.nanmedian(raw, axis=0) - np.nanmedian(processed, axis=0)
-        messages["report"].append(
-            "Sinal bruto deslocado pela mediana para a escala do processado "
-            "(passa-alta ou compensação de temperatura tiram o nível DC)")
-    elif linha_de_base is not None:
-        deslocamento = linha_de_base
-    else:
-        return raw
-    return raw - np.where(np.isfinite(deslocamento), deslocamento, 0.0)
-
-
-def _sampling_rate(value, pipeline: OpticalPipeline, messages: dict) -> float:
-    """fs informado pelo usuário ou, se vazio, estimado do vetor de tempo."""
-    fs = _num(value)
-    if fs is None:
-        fs = estimate_sampling_rate(pipeline.time_array)
-        msg = f"fs estimado a partir do vetor de tempo: {_br(fs)} Hz"
-        if msg not in messages["report"]:
-            messages["report"].append(msg)
-    return fs
+    return run_recipe(_requested_files(options), options, load=_state().interrogator.get)
 
 
 def _requested_files(options: dict) -> list[Path]:
@@ -637,7 +268,7 @@ def _processed_dir(options: dict) -> Path:
     usa ``data/processed/`` como antes.
     """
     projeto = _safe_name(str(options.get("project") or ""))
-    return PROCESSED_DIR / projeto if projeto else PROCESSED_DIR
+    return _data().processed / projeto if projeto else _data().processed
 
 
 def _existing_processed(stem: str, folder: Path) -> str | None:
@@ -655,13 +286,14 @@ def _adopt_legacy_processed(project: Project) -> None:
     (com o JSON de rastreabilidade), sem apagar nem alterar os originais.
     Só copia o que ainda não existe na pasta do projeto.
     """
+    processed = _data().processed
     pasta = _processed_dir({"project": project.name})
-    if pasta == PROCESSED_DIR:
+    if pasta == processed:
         return
     for entry in project.series:
         stem = Path(entry["file"]).stem
         for nome in (f"{stem}_processado.csv", f"{stem}_juntos_processado.csv"):
-            origem, destino = PROCESSED_DIR / nome, pasta / nome
+            origem, destino = processed / nome, pasta / nome
             if not origem.is_file() or destino.exists():
                 continue
             pasta.mkdir(parents=True, exist_ok=True)
@@ -678,7 +310,7 @@ def _save_processed(pipeline: OpticalPipeline, source_rel: str,
     Visualização. Escreve em arquivos temporários e substitui no fim, para
     que a figura nunca leia um CSV pela metade durante um reprocessamento.
     """
-    folder = folder or PROCESSED_DIR
+    folder = folder or _data().processed
     folder.mkdir(parents=True, exist_ok=True)
     dest = folder / f"{source_rel}_processado.csv"
     token = uuid.uuid4().hex
@@ -742,38 +374,38 @@ def _style_path(name: str) -> Path:
     safe = _safe_name(name)
     if not safe:
         raise ValueError("Informe um nome para o estilo.")
-    return STYLES_DIR / f"{safe}.json"
+    return _data().styles / f"{safe}.json"
 
 
 def _project_path(name: str) -> Path:
     safe = _safe_name(name)
     if not safe:
         raise ValueError("Informe um nome para o projeto.")
-    return PROJECTS_DIR / f"{safe}.json"
+    return _data().projects / f"{safe}.json"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Rotas
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.route("/")
+@bp.route("/")
 def index():
     return render_template("index.html")
 
 
-@app.route("/api/version")
+@bp.route("/api/version")
 def api_version():
     """Versão do servidor, para a página avisar quando ele está desatualizado."""
     from braggflow import __version__
     return jsonify({"api_build": API_BUILD, "version": __version__})
 
 
-@app.route("/api/files")
+@bp.route("/api/files")
 def api_files():
     return jsonify({"files": _list_raw_files()})
 
 
-@app.route("/api/channels")
+@bp.route("/api/channels")
 def api_channels():
     """
     Canais do arquivo do interrogador, com sugestão de nome, unidade e
@@ -783,7 +415,7 @@ def api_channels():
     rel = request.args.get("file", "")
     try:
         path = _resolve_data_file(rel)
-        data, _ = _load_cached(path)
+        data, _ = _state().interrogator.get(path)
         nominal = {}
         for i, ch in enumerate(data.channels):
             col = data.signals[:, i]
@@ -807,18 +439,18 @@ def api_channels():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route("/api/setups")
+@bp.route("/api/setups")
 def api_setups():
     """Setups de sensores salvos em data/setups."""
-    names = []
-    if SETUPS_DIR.is_dir():
-        names = sorted(f.stem for f in SETUPS_DIR.glob("*.json") if f.is_file())
+    names, setups = [], _data().setups
+    if setups.is_dir():
+        names = sorted(f.stem for f in setups.glob("*.json") if f.is_file())
     return jsonify({"setups": names})
 
 
-@app.route("/api/setups/<name>")
+@bp.route("/api/setups/<name>")
 def api_setup_get(name):
-    path = SETUPS_DIR / f"{_safe_name(name)}.json"
+    path = _data().setups / f"{_safe_name(name)}.json"
     if not _safe_name(name) or not path.is_file():
         return jsonify({"error": f"Setup não encontrado: {name}"}), 404
     try:
@@ -827,7 +459,7 @@ def api_setup_get(name):
         return jsonify({"error": f"Setup inválido: {e}"}), 400
 
 
-@app.route("/api/setups", methods=["POST"])
+@bp.route("/api/setups", methods=["POST"])
 def api_setup_save():
     """Salva (ou substitui) um setup a partir dos sensores da interface."""
     options = request.get_json(silent=True) or {}
@@ -835,22 +467,22 @@ def api_setup_save():
     if not name:
         return jsonify({"error": "Informe um nome para o setup."}), 400
     try:
-        setup = _setup_from_options({**options, "setup_name": name})
+        setup = setup_from_options({**options, "setup_name": name})
         if not options.get("sensors"):
             raise ValueError("Nenhum sensor para salvar.")
-        setup.save(SETUPS_DIR / f"{name}.json")
+        setup.save(_data().setups / f"{name}.json")
     except (ValueError, TypeError, KeyError, OSError) as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"name": name})
 
 
-@app.route("/api/spectra/traces")
+@bp.route("/api/spectra/traces")
 def api_spectrum_traces():
     """Traços de um arquivo de espectro, com faixa e número de pontos."""
     rel = request.args.get("file", "")
     try:
         path = _resolve_data_file(rel)
-        spectra = _load_spectra_cached(path)
+        spectra = _state().spectra.get(path)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -869,7 +501,7 @@ def api_spectrum_traces():
     })
 
 
-@app.route("/api/spectra/preview", methods=["POST"])
+@bp.route("/api/spectra/preview", methods=["POST"])
 def api_spectrum_preview():
     """
     Espectro já preparado (recorte, suavização, normalização e deslocamento),
@@ -878,7 +510,7 @@ def api_spectrum_preview():
     options = request.get_json(silent=True) or {}
     try:
         path = _resolve_data_file(options.get("file", ""))
-        spectra = _load_spectra_cached(path)
+        spectra = _state().spectra.get(path)
         settings = resolve_spectrum_settings(options.get("settings"))
         traces = []
         for spectrum in spectra.spectra:
@@ -899,7 +531,7 @@ def api_spectrum_preview():
     return jsonify({"file": options.get("file"), "traces": traces})
 
 
-@app.route("/api/concat/preview", methods=["POST"])
+@bp.route("/api/concat/preview", methods=["POST"])
 def api_concat_preview():
     """
     Prévia da concatenação: onde cada arquivo entra na linha do tempo, na
@@ -911,7 +543,7 @@ def api_concat_preview():
         caminhos = _requested_files(options)
         if len(caminhos) < 2:
             raise ValueError("Escolha dois ou mais arquivos para juntar.")
-        plano = concat_plan([_load_cached(caminho)[0] for caminho in caminhos])
+        plano = concat_plan([_state().interrogator.get(caminho)[0] for caminho in caminhos])
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -939,7 +571,7 @@ def api_concat_preview():
     })
 
 
-@app.route("/api/file-info")
+@bp.route("/api/file-info")
 def api_file_info():
     """Formato detectado e conteúdo de um arquivo bruto (diagnóstico)."""
     try:
@@ -948,7 +580,7 @@ def api_file_info():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route("/api/processed")
+@bp.route("/api/processed")
 def api_processed():
     """
     CSVs processados disponíveis para a aba de visualização: os da pasta do
@@ -956,7 +588,7 @@ def api_processed():
     """
     pasta = _processed_dir({"project": request.args.get("project", "")})
     files = []
-    for folder in (pasta, UPLOAD_DIR):
+    for folder in (pasta, _data().uploads):
         if folder.is_dir():
             for f in sorted(folder.iterdir()):
                 if f.is_file() and f.suffix.lower() == ".csv":
@@ -965,7 +597,7 @@ def api_processed():
                     "folder": _rel(pasta)})
 
 
-@app.route("/api/processed-channels")
+@bp.route("/api/processed-channels")
 def api_processed_channels():
     """
     Canais de um CSV processado (só o cabeçalho), com unidade e grandeza de
@@ -985,7 +617,7 @@ def api_processed_channels():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route("/api/figure", methods=["POST"])
+@bp.route("/api/figure", methods=["POST"])
 def api_figure():
     """
     Pré-visualização em PNG (base64) na resolução ``export.preview_dpi``, com
@@ -1004,7 +636,7 @@ def api_figure():
     return jsonify({"image": base64.b64encode(image).decode("ascii"), "info": info})
 
 
-@app.route("/api/figure/download", methods=["POST"])
+@bp.route("/api/figure/download", methods=["POST"])
 def api_figure_download():
     """Figura final no formato e na resolução definidos em ``style.export``."""
     options = request.get_json(silent=True) or {}
@@ -1046,7 +678,7 @@ def _analysis_curves(options: dict, style: dict):
     curvas, unidade = [], "nm"
     for entry in entries:
         path = _resolve_data_file(entry["file"])
-        df, units, quantities = _load_processed_cached(path)
+        df, units, quantities = _state().processed.get(path)
         channel = entry["channel"]
         if channel not in df.columns:
             raise ValueError(f"Canal '{channel}' não existe em {path.name}.")
@@ -1060,7 +692,7 @@ def _analysis_curves(options: dict, style: dict):
     return curvas, unidade
 
 
-@app.route("/api/analysis", methods=["POST"])
+@bp.route("/api/analysis", methods=["POST"])
 def api_analysis():
     """
     Estatísticas por intervalo entre marcações e o degrau em cada marcação,
@@ -1076,9 +708,9 @@ def api_analysis():
             {"key": curva["key"],
              **analyse_curve(
                  curva["time"], curva["values"], markers,
-                 settle_window=_num(settings.get("settle_window")),
+                 settle_window=as_float(settings.get("settle_window")),
                  reference=str(settings.get("reference") or "previous"),
-                 step_window=_num(settings.get("step_window"), 10.0),
+                 step_window=as_float(settings.get("step_window"), 10.0),
              )}
             for curva in curvas
         ]
@@ -1089,7 +721,7 @@ def api_analysis():
                     "n_markers": len(markers)})
 
 
-@app.route("/api/figure/options")
+@bp.route("/api/figure/options")
 def api_figure_options():
     """Estilo padrão e as opções disponíveis para montar a interface."""
     return jsonify({
@@ -1105,16 +737,16 @@ def api_figure_options():
     })
 
 
-@app.route("/api/styles")
+@bp.route("/api/styles")
 def api_styles():
     """Estilos de figura salvos em data/styles."""
-    names = []
-    if STYLES_DIR.is_dir():
-        names = sorted(f.stem for f in STYLES_DIR.glob("*.json") if f.is_file())
+    names, styles = [], _data().styles
+    if styles.is_dir():
+        names = sorted(f.stem for f in styles.glob("*.json") if f.is_file())
     return jsonify({"styles": names})
 
 
-@app.route("/api/styles/<name>")
+@bp.route("/api/styles/<name>")
 def api_style_get(name):
     try:
         path = _style_path(name)
@@ -1126,26 +758,26 @@ def api_style_get(name):
     return jsonify({"name": path.stem, "style": style})
 
 
-@app.route("/api/styles", methods=["POST"])
+@bp.route("/api/styles", methods=["POST"])
 def api_style_save():
     """Valida e salva (ou substitui) um estilo de figura."""
     options = request.get_json(silent=True) or {}
     try:
         path = _style_path(str(options.get("name", "")))
         style = resolve_style(options.get("style"))
-        STYLES_DIR.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(style, indent=2, ensure_ascii=False), encoding="utf-8")
     except (ValueError, TypeError, KeyError, OSError) as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"name": path.stem})
 
 
-@app.route("/api/projects")
+@bp.route("/api/projects")
 def api_projects():
     """Projetos salvos, do mais recente para o mais antigo."""
-    projects = []
-    if PROJECTS_DIR.is_dir():
-        for path in PROJECTS_DIR.glob("*.json"):
+    projects, folder = [], _data().projects
+    if folder.is_dir():
+        for path in folder.glob("*.json"):
             try:
                 projects.append(Project.load(path).summary())
             except (ValueError, OSError, KeyError):
@@ -1154,7 +786,7 @@ def api_projects():
     return jsonify({"projects": projects})
 
 
-@app.route("/api/projects/<name>")
+@bp.route("/api/projects/<name>")
 def api_project_get(name):
     try:
         path = _project_path(name)
@@ -1170,7 +802,7 @@ def api_project_get(name):
     return jsonify(project.to_dict())
 
 
-@app.route("/api/projects", methods=["POST"])
+@bp.route("/api/projects", methods=["POST"])
 def api_project_save():
     """Salva (ou substitui) um projeto com tudo o que está na tela."""
     data = request.get_json(silent=True) or {}
@@ -1187,7 +819,7 @@ def api_project_save():
     return jsonify(project.summary())
 
 
-@app.route("/api/projects/<name>", methods=["DELETE"])
+@bp.route("/api/projects/<name>", methods=["DELETE"])
 def api_project_delete(name):
     try:
         path = _project_path(name)
@@ -1199,7 +831,7 @@ def api_project_delete(name):
     return jsonify({"deleted": path.stem})
 
 
-@app.route("/api/upload", methods=["POST"])
+@bp.route("/api/upload", methods=["POST"])
 def api_upload():
     file = request.files.get("file")
     if file is None or not file.filename:
@@ -1217,14 +849,15 @@ def api_upload():
             f"Extensão não suportada: {suffix}. Aceito: "
             f"{', '.join(sorted(RAW_EXTENSIONS))}."}), 400
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    uploads = _data().uploads
+    uploads.mkdir(parents=True, exist_ok=True)
     safe_name = _safe_name(Path(file.filename).name) or f"upload{suffix}"
-    dest = UPLOAD_DIR / safe_name
+    dest = uploads / safe_name
     file.save(dest)
     return jsonify({"file": _rel(dest)})
 
 
-@app.route("/api/process", methods=["POST"])
+@bp.route("/api/process", methods=["POST"])
 def api_process():
     options = request.get_json(silent=True) or {}
     if not (options.get("file") or options.get("files")):
@@ -1278,7 +911,7 @@ def api_process():
     return jsonify(payload)
 
 
-@app.route("/api/download", methods=["POST"])
+@bp.route("/api/download", methods=["POST"])
 def api_download():
     """Reprocessa com as mesmas opções e devolve o CSV completo (sem downsample)."""
     options = request.get_json(silent=True) or {}
@@ -1314,7 +947,8 @@ def main(argv=None) -> None:
     parser.add_argument("--data-dir", default=None,
                         help="Pasta de dados (padrão: $BRAGGFLOW_DATA_DIR ou ./data)")
     args = parser.parse_args(argv)
-    pasta = set_data_dir(args.data_dir)
+    app = create_app(args.data_dir)
+    pasta = app.extensions["braggflow"].data.root
     print(f"BraggFlow web — http://127.0.0.1:{args.port}  (dados em {pasta})")
     app.run(host="127.0.0.1", port=args.port, debug=False)
 

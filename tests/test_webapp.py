@@ -1,23 +1,20 @@
-import importlib.util
 import io
 from pathlib import Path
-
-import braggflow.webapp
 
 import numpy as np
 import pytest
 
-APP_PATH = Path(braggflow.webapp.__file__).with_name("app.py")
+import braggflow.webapp
+from braggflow.io.processed import read_metadata
+from braggflow.webapp.app import API_BUILD, create_app
+
+TEMPLATES = Path(braggflow.webapp.__file__).with_name("templates")
 
 
 @pytest.fixture
-def webapp(tmp_path, monkeypatch):
-    spec = importlib.util.spec_from_file_location("braggflow_webapp", APP_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
+def webapp(tmp_path):
     data = tmp_path / "data"
-    module.set_data_dir(data, create=False)    # módulo novo a cada teste
+    app = create_app(data, create=False)        # pasta e caches só deste teste
 
     raw = data / "raw"
     raw.mkdir(parents=True)
@@ -34,8 +31,8 @@ def webapp(tmp_path, monkeypatch):
         lines.append(f"{t:.3f}\t{a:.6f}\t{b:.6f}".replace(".", ","))
     (raw / "ensaio.ASC").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    module.app.config["TESTING"] = True
-    return module, module.app.test_client()
+    app.config["TESTING"] = True
+    return app.extensions["braggflow"].data, app.test_client()
 
 
 SENSORS = [
@@ -69,7 +66,7 @@ def test_channels_endpoint_reports_nominal_and_fs(webapp):
 
 
 def test_process_cleans_resamples_and_saves_with_metadata(webapp):
-    module, client = webapp
+    dados, client = webapp
     resp = _process(client)
     data = resp.get_json()
     assert resp.status_code == 200, data
@@ -81,12 +78,12 @@ def test_process_cleans_resamples_and_saves_with_metadata(webapp):
     assert not data["warnings"]
     assert max(data["signals"]["S2"]) < 1545.1, "peak jump must be removed"
 
-    csv = module.PROCESSED_DIR / "ensaio_processado.csv"
+    csv = dados.processed / "ensaio_processado.csv"
     assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],S1 [nm],S2 [nm]"
-    meta = module.read_metadata(csv)
+    meta = read_metadata(csv)
     assert meta["sampling"]["uniform"] is True
     assert [c["name"] for c in meta["channels"]] == ["S1", "S2"]
-    assert not list(module.PROCESSED_DIR.glob("*.tmp"))
+    assert not list(dados.processed.glob("*.tmp"))
 
 
 def test_filters_warn_about_remaining_invalid_readings(webapp):
@@ -137,9 +134,9 @@ def test_download_csv_has_units(webapp):
 
 
 def test_preview_does_not_overwrite_saved_result(webapp):
-    module, client = webapp
+    dados, client = webapp
     _process(client)
-    csv = module.PROCESSED_DIR / "ensaio_processado.csv"
+    csv = dados.processed / "ensaio_processado.csv"
     saved = csv.read_bytes()
 
     resp = _process(client, save=False, cleaning={"enabled": False})
@@ -216,7 +213,7 @@ PROJECT = {
 
 
 def test_project_save_list_open_and_delete(webapp):
-    module, client = webapp
+    dados, client = webapp
     saved = client.post("/api/projects", json=PROJECT).get_json()
     assert saved["name"] == "Ensaio 1" and saved["n_markers"] == 1
 
@@ -263,9 +260,9 @@ def test_invalid_project_is_rejected(webapp, payload, message):
 
 
 def test_broken_project_file_does_not_break_the_list(webapp):
-    module, client = webapp
+    dados, client = webapp
     client.post("/api/projects", json=PROJECT)
-    (module.PROJECTS_DIR / "quebrado.json").write_text("{isto não é json", encoding="utf-8")
+    (dados.projects / "quebrado.json").write_text("{isto não é json", encoding="utf-8")
     assert [p["name"] for p in client.get("/api/projects").get_json()["projects"]] == ["Ensaio 1"]
     assert client.get("/api/projects/quebrado").status_code == 404
 
@@ -275,12 +272,12 @@ def test_broken_project_file_does_not_break_the_list(webapp):
 @pytest.fixture
 def spectrum_file(webapp):
     """Exportação de OSA (UTF-16, sem cabeçalho, traço vazio no fim) em data/raw."""
-    module, _ = webapp
+    dados, _ = webapp
     lines = []
     for i in range(500):
         lines.append(f"CH 1\t{i + 1}\t{1510 + i * 0.02:.3f}\t{60 + (i % 9):.5f}".replace(".", ","))
     lines += [f"Subset 2\t{i + 1}\t\t" for i in range(500)]
-    path = module.RAW_DIR / "AR.dat"
+    path = dados.raw / "AR.dat"
     path.write_bytes(("\r\n".join(lines) + "\r\n").encode("utf-16"))
     return "data/raw/AR.dat"
 
@@ -344,9 +341,9 @@ def test_project_keeps_the_spectrum_selection(webapp, spectrum_file):
 
 
 def test_figure_combines_channels_from_two_processed_files(webapp):
-    module, client = webapp
-    second = module.RAW_DIR / "ensaio2.ASC"
-    second.write_bytes((module.RAW_DIR / "ensaio.ASC").read_bytes())
+    dados, client = webapp
+    second = dados.raw / "ensaio2.ASC"
+    second.write_bytes((dados.raw / "ensaio.ASC").read_bytes())
     _process(client)
     _process(client, file="data/raw/ensaio2.ASC")
 
@@ -411,9 +408,9 @@ def test_spectrum_preview_without_detection_has_no_extrema(webapp, spectrum_file
 
 
 def test_spectrum_settings_are_independent_per_file(webapp, spectrum_file):
-    module, client = webapp
-    other = module.RAW_DIR / "H2O.dat"
-    other.write_bytes((module.RAW_DIR / "AR.dat").read_bytes())
+    dados, client = webapp
+    other = dados.raw / "H2O.dat"
+    other.write_bytes((dados.raw / "AR.dat").read_bytes())
 
     options = {
         "source": "spectra",
@@ -458,11 +455,11 @@ def test_unsupported_extension_lists_what_is_accepted(webapp):
 
 def test_version_endpoint_matches_the_page(webapp):
     """A página compara este valor com o seu para avisar sobre servidor antigo."""
-    module, client = webapp
+    dados, client = webapp
     data = client.get("/api/version").get_json()
-    assert data["api_build"] == module.API_BUILD
-    page = APP_PATH.with_name("templates").joinpath("index.html").read_text(encoding="utf-8")
-    assert f'const API_BUILD = "{module.API_BUILD}"' in page
+    assert data["api_build"] == API_BUILD
+    page = TEMPLATES.joinpath("index.html").read_text(encoding="utf-8")
+    assert f'const API_BUILD = "{API_BUILD}"' in page
 
 
 def test_project_with_empty_sensor_bands_is_saved(webapp):
@@ -561,16 +558,16 @@ def test_analysis_rejects_spectra_and_empty_selection(webapp, spectrum_file):
 @pytest.fixture
 def segundo_arquivo(webapp):
     """Continuação do ensaio: mesmos canais, valores deslocados."""
-    module, _ = webapp
+    dados, _ = webapp
     linhas = ["Time [s]\tCH_1 Sensor_1 [nm]\tCH_2 Sensor_1 [nm]"]
     for i in range(300):
         linhas.append(f"{i / 50:.3f}\t{1550.5:.6f}\t{1545.5:.6f}".replace(".", ","))
-    (module.RAW_DIR / "ensaio_parte2.ASC").write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    (dados.raw / "ensaio_parte2.ASC").write_text("\n".join(linhas) + "\n", encoding="utf-8")
     return "data/raw/ensaio_parte2.ASC"
 
 
 def test_processing_two_files_as_one_signal(webapp, segundo_arquivo):
-    module, client = webapp
+    dados, client = webapp
     resp = _process(client, files=["data/raw/ensaio.ASC", segundo_arquivo],
                     timebase={"enabled": True, "duplicates": "mean", "resample": False})
     data = resp.get_json()
@@ -583,14 +580,14 @@ def test_processing_two_files_as_one_signal(webapp, segundo_arquivo):
 
     # o resultado sai num CSV próprio, sem sobrescrever o do primeiro arquivo
     assert data["processed_file"] == "data/processed/ensaio_juntos_processado.csv"
-    meta = module.read_metadata(module.PROCESSED_DIR / "ensaio_juntos_processado.csv")
+    meta = read_metadata(dados.processed / "ensaio_juntos_processado.csv")
     assert [fonte["file"] for fonte in meta["source"]] == ["ensaio.ASC", "ensaio_parte2.ASC"]
     assert meta["joins"] == [pytest.approx(10.0, abs=0.01)]
 
 
 def test_joining_files_with_different_channels_is_refused(webapp, spectrum_file):
-    module, client = webapp
-    outro = module.RAW_DIR / "outro.ASC"
+    dados, client = webapp
+    outro = dados.raw / "outro.ASC"
     outro.write_text("Time [s]\tCH_9 Sensor_1 [nm]\n0\t1550,1\n0,02\t1550,2\n0,04\t1550,3\n",
                      encoding="utf-8")
     resp = _process(client, files=["data/raw/ensaio.ASC", "data/raw/outro.ASC"])
@@ -639,11 +636,11 @@ def test_concat_preview_matches_the_processed_signal(webapp, segundo_arquivo):
 
 
 def test_concat_preview_warns_about_different_sampling_rates(webapp):
-    module, client = webapp
+    dados, client = webapp
     linhas = ["Time [s]\tCH_1 Sensor_1 [nm]\tCH_2 Sensor_1 [nm]"]
     for i in range(200):
         linhas.append(f"{i / 1000:.4f}\t1550,1\t1545,1")          # 1 kHz, não 50 Hz
-    (module.RAW_DIR / "rapido.ASC").write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    (dados.raw / "rapido.ASC").write_text("\n".join(linhas) + "\n", encoding="utf-8")
 
     data = client.post("/api/concat/preview", json={
         "files": ["data/raw/ensaio.ASC", "data/raw/rapido.ASC"]}).get_json()
@@ -664,8 +661,8 @@ def test_concat_preview_needs_two_files(webapp):
 
 
 def test_concat_preview_refuses_files_with_other_channels(webapp):
-    module, client = webapp
-    (module.RAW_DIR / "outro.ASC").write_text(
+    dados, client = webapp
+    (dados.raw / "outro.ASC").write_text(
         "Time [s]\tCH_9 Sensor_1 [nm]\n0\t1550,1\n0,02\t1550,2\n", encoding="utf-8")
     resp = client.post("/api/concat/preview", json={
         "files": ["data/raw/ensaio.ASC", "data/raw/outro.ASC"]})
@@ -681,39 +678,39 @@ def test_project_remembers_the_join_option(webapp):
 # ── um CSV processado por projeto ─────────────────────────────────────────────
 
 def test_processed_csv_goes_to_the_project_folder(webapp):
-    module, client = webapp
+    dados, client = webapp
     data = _process(client, project="Ensaio A").get_json()
     assert data["processed_file"] == "data/processed/Ensaio A/ensaio_processado.csv"
-    assert (module.PROCESSED_DIR / "Ensaio A" / "ensaio_processado.csv").is_file()
-    assert (module.PROCESSED_DIR / "Ensaio A" / "ensaio_processado.json").is_file()
-    assert not (module.PROCESSED_DIR / "ensaio_processado.csv").exists()
+    assert (dados.processed / "Ensaio A" / "ensaio_processado.csv").is_file()
+    assert (dados.processed / "Ensaio A" / "ensaio_processado.json").is_file()
+    assert not (dados.processed / "ensaio_processado.csv").exists()
 
 
 def test_two_projects_do_not_overwrite_each_other(webapp):
-    module, client = webapp
+    dados, client = webapp
     _process(client, project="Bruto")
     _process(client, project="Filtrado",
              moving_average={"enabled": True, "window": "25"})
-    bruto = (module.PROCESSED_DIR / "Bruto" / "ensaio_processado.csv").read_bytes()
-    filtrado = (module.PROCESSED_DIR / "Filtrado" / "ensaio_processado.csv").read_bytes()
+    bruto = (dados.processed / "Bruto" / "ensaio_processado.csv").read_bytes()
+    filtrado = (dados.processed / "Filtrado" / "ensaio_processado.csv").read_bytes()
     assert bruto != filtrado, "cada projeto mantém o próprio resultado"
 
 
 def test_project_name_cannot_escape_the_processed_folder(webapp):
-    module, client = webapp
+    dados, client = webapp
     data = _process(client, project="../../fora").get_json()
-    salvo = module.DATA_DIR.joinpath(*Path(data["processed_file"]).parts[1:]).resolve()
-    assert module.PROCESSED_DIR.resolve() in salvo.parents
+    salvo = dados.root.joinpath(*Path(data["processed_file"]).parts[1:]).resolve()
+    assert dados.processed.resolve() in salvo.parents
 
 
 def test_preview_does_not_write_and_reports_the_saved_csv(webapp):
-    module, client = webapp
+    dados, client = webapp
     vazio = _process(client, project="P", save=False).get_json()
     assert vazio["processed_file"] is None and vazio["existing_file"] is None
-    assert not (module.PROCESSED_DIR / "P").exists(), "pré-visualizar não grava nada"
+    assert not (dados.processed / "P").exists(), "pré-visualizar não grava nada"
 
     _process(client, project="P")
-    csv = module.PROCESSED_DIR / "P" / "ensaio_processado.csv"
+    csv = dados.processed / "P" / "ensaio_processado.csv"
     antes = csv.stat().st_mtime_ns
     previa = _process(client, project="P", save=False).get_json()
     assert previa["processed_file"] is None
@@ -722,23 +719,23 @@ def test_preview_does_not_write_and_reports_the_saved_csv(webapp):
 
 
 def test_new_project_does_not_claim_another_projects_csv(webapp):
-    module, client = webapp
+    dados, client = webapp
     _process(client)                                   # CSV solto, de antes das pastas
     data = _process(client, project="Novo", save=False).get_json()
     assert data["existing_file"] is None
 
 
 def test_opening_an_old_project_copies_its_loose_csvs(webapp):
-    module, client = webapp
+    dados, client = webapp
     _process(client)                                   # CSV solto, de antes das pastas
-    solto = module.PROCESSED_DIR / "ensaio_processado.csv"
+    solto = dados.processed / "ensaio_processado.csv"
     original = solto.read_bytes()
     client.post("/api/projects", json=PROJECT)
 
     assert client.get("/api/projects/Ensaio 1").status_code == 200
-    copia = module.PROCESSED_DIR / "Ensaio 1" / "ensaio_processado.csv"
+    copia = dados.processed / "Ensaio 1" / "ensaio_processado.csv"
     assert copia.read_bytes() == original
-    assert (module.PROCESSED_DIR / "Ensaio 1" / "ensaio_processado.json").is_file()
+    assert (dados.processed / "Ensaio 1" / "ensaio_processado.json").is_file()
     assert solto.read_bytes() == original, "o original fica onde estava"
 
     data = _process(client, project="Ensaio 1", save=False).get_json()
@@ -746,18 +743,18 @@ def test_opening_an_old_project_copies_its_loose_csvs(webapp):
 
 
 def test_opening_a_project_never_overwrites_its_own_csv(webapp):
-    module, client = webapp
+    dados, client = webapp
     client.post("/api/projects", json=PROJECT)
     _process(client, project="Ensaio 1")
     _process(client)                                   # um CSV solto diferente
-    meu = module.PROCESSED_DIR / "Ensaio 1" / "ensaio_processado.csv"
+    meu = dados.processed / "Ensaio 1" / "ensaio_processado.csv"
     antes = meu.read_bytes()
     client.get("/api/projects/Ensaio 1")
     assert meu.read_bytes() == antes
 
 
 def test_processed_list_includes_the_project_folder(webapp):
-    module, client = webapp
+    dados, client = webapp
     _process(client)
     _process(client, project="Ensaio A")
     _process(client, project="Outro")
@@ -807,10 +804,41 @@ def test_raw_overlay_is_untouched_without_level_changes(webapp):
 # ── páginas servidas pelo pacote instalado ────────────────────────────────────
 
 def test_index_and_gas_marker_are_served_from_the_package():
-    from braggflow.webapp.app import app
-
-    client = app.test_client()
+    client = create_app(create=False).test_client()
     assert client.get("/").status_code == 200
     pagina = client.get("/static/gas_marker.html")
     assert pagina.status_code == 200
     assert b"Gas Marker" in pagina.data
+
+
+# ── uma instância por create_app ─────────────────────────────────────────────
+
+def test_two_apps_do_not_share_the_data_folder(tmp_path):
+    a, b = create_app(tmp_path / "a"), create_app(tmp_path / "b")
+    (tmp_path / "a" / "raw" / "so_em_a.ASC").write_text("x", encoding="utf-8")
+    arquivos = lambda app: [f["path"] for f in app.test_client().get("/api/files").get_json()["files"]]
+    assert arquivos(a) == ["data/raw/so_em_a.ASC"]
+    assert arquivos(b) == []
+
+
+def test_create_app_without_create_makes_no_folders(tmp_path):
+    create_app(tmp_path / "dados", create=False)
+    assert not (tmp_path / "dados").exists()
+
+
+def test_file_cache_reloads_a_changed_file(tmp_path):
+    from braggflow.webapp.state import FileCache
+
+    leituras = []
+    cache = FileCache(lambda p: leituras.append(p) or p.read_text(), size=1)
+    arquivo, outro = tmp_path / "a.txt", tmp_path / "b.txt"
+    arquivo.write_text("1")
+    outro.write_text("x")
+
+    assert cache.get(arquivo) == "1" and cache.get(arquivo) == "1"
+    assert len(leituras) == 1, "a segunda leitura vem do cache"
+    arquivo.write_text("22")                     # tamanho novo = versão nova
+    assert cache.get(arquivo) == "22"
+    cache.get(outro)                             # size=1: tira o arquivo a.txt
+    cache.get(arquivo)
+    assert len(leituras) == 4

@@ -1,10 +1,7 @@
-import importlib.util
-from pathlib import Path
-
 import pytest
 
-import braggflow.webapp
 from braggflow.paths import ENV_VAR, SUBDIRS, resolve_data_dir
+from braggflow.webapp.state import DataFolder
 
 
 def test_argument_wins_over_environment_and_cwd(tmp_path, monkeypatch):
@@ -32,24 +29,19 @@ def test_subfolders_are_created(tmp_path):
 
 
 @pytest.fixture
-def app_module(tmp_path):
-    spec = importlib.util.spec_from_file_location(
-        "braggflow_webapp_paths", Path(braggflow.webapp.__file__).with_name("app.py"))
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.set_data_dir(tmp_path / "outra_pasta")       # o nome não precisa ser "data"
-    return module
+def pasta(tmp_path):
+    return DataFolder(tmp_path / "outra_pasta")          # o nome não precisa ser "data"
 
 
-def test_api_paths_use_the_virtual_data_prefix(app_module):
-    arquivo = app_module.RAW_DIR / "ensaio.ASC"
+def test_api_paths_use_the_virtual_data_prefix(pasta):
+    arquivo = pasta.raw / "ensaio.ASC"
     arquivo.write_text("x", encoding="utf-8")
-    assert app_module._rel(arquivo) == "data/raw/ensaio.ASC"
-    assert app_module._resolve_data_file("data/raw/ensaio.ASC") == arquivo.resolve()
+    assert pasta.rel(arquivo) == "data/raw/ensaio.ASC"
+    assert pasta.resolve("data/raw/ensaio.ASC") == arquivo.resolve()
 
 
 @pytest.mark.parametrize("caminho", ["data/../fora.txt", "raw/ensaio.ASC", "../outra_pasta/raw/x"])
-def test_paths_outside_the_data_folder_are_refused(app_module, tmp_path, caminho):
+def test_paths_outside_the_data_folder_are_refused(pasta, tmp_path, caminho):
     (tmp_path / "fora.txt").write_text("x", encoding="utf-8")
     with pytest.raises(ValueError, match="fora de data/"):
-        app_module._resolve_data_file(caminho)
+        pasta.resolve(caminho)

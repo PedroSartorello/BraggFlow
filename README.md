@@ -326,6 +326,7 @@ BraggFlow/
   src/braggflow/
     __init__.py            # OpticalPipeline, Sensor, SensorSetup, __version__
     pipeline.py            # Fluent pipeline and provenance (JSON sidecar)
+    recipe.py              # Processing recipe as options (shared by the CLI and the web app)
     cli.py                 # braggflow process / braggflow-web
     paths.py               # Data-folder resolution
     io/                    # Format detection, interrogator and spectrum readers, processed CSV
@@ -335,7 +336,7 @@ BraggFlow/
     sensors.py             # Sensor setups
     projects.py            # Saved projects (files + steps + markers + style)
     options.py             # Validation of options coming from the UI
-    webapp/                # Flask app: app.py, templates/, static/gas_marker.html
+    webapp/                # Flask app: app.py (create_app + routes), state.py, templates/, static/
   examples/                # Runnable examples and synthetic data (examples/data/)
   docs/                    # data-formats.md, webapp.md, migration.md
   data/                    # Your data (ignored by git): raw/ uploads/ processed/ projects/ setups/ styles/ figures/
