@@ -74,11 +74,3 @@ app = create_app("/path/to/data")
 client = app.test_client()
 client.get("/api/files").get_json()
 ```
-
-## Gas Marker
-
-`http://127.0.0.1:5000/static/gas_marker.html` is a standalone page: open a
-processed CSV, click the instants where the gas changes and export the event
-table (`GAS, SM_INDEX, SEGUNDOS, OBSERVACOES`). The format is described in
-[`data-formats.md`](data-formats.md#3-gas-event-table). The page works offline
-as a plain file too, but loads Plotly and PapaParse from a CDN.

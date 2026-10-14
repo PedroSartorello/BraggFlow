@@ -803,12 +803,9 @@ def test_raw_overlay_is_untouched_without_level_changes(webapp):
 
 # ── páginas servidas pelo pacote instalado ────────────────────────────────────
 
-def test_index_and_gas_marker_are_served_from_the_package():
+def test_index_is_served_from_the_package():
     client = create_app(create=False).test_client()
     assert client.get("/").status_code == 200
-    pagina = client.get("/static/gas_marker.html")
-    assert pagina.status_code == 200
-    assert b"Gas Marker" in pagina.data
 
 
 # ── uma instância por create_app ─────────────────────────────────────────────

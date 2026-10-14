@@ -66,15 +66,14 @@ Wavelength [nm];Reflection [dBm]
 ## 3. Gas event table
 
 The instants at which the gas (or flow, or any condition) changes during a
-test. Exported by the Gas Marker page of the web app (`/static/gas_marker.html`)
-and read by `braggflow.visualization.publication.load_gas_table`, which accepts
+test, read by `braggflow.visualization.publication.load_gas_table`, which accepts
 three variants and always returns a `SEGUNDOS` column with the **absolute start
 time** of each event, sorted.
 
 | Variant | Columns | How the start time is obtained |
 |---|---|---|
 | Old | `GAS, SEGUNDOS` | `SEGUNDOS` itself |
-| New (Gas Marker) | `GAS, SM_INDEX, SEGUNDOS, OBSERVACOES` | `Time[SM_INDEX]` of the processed signal when `SM_INDEX` is filled, else `SEGUNDOS` (a row may have either or both) |
+| Indexed | `GAS, SM_INDEX, SEGUNDOS, OBSERVACOES` | `Time[SM_INDEX]` of the processed signal when `SM_INDEX` is filled, else `SEGUNDOS` (a row may have either or both) |
 | Interval | `GAS, INTERVALO_LITERAL, SEGUNDOS_DURACAO, OBSERVACAO` | left side of `INTERVALO_LITERAL` (`"376-750"` → 376 s) |
 
 | Optional column | Meaning |
