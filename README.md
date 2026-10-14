@@ -273,9 +273,7 @@ braggflow-web                   # or: braggflow-web --port 5001 --data-dir /path
 # open http://127.0.0.1:5000
 ```
 
-The Gas Marker page (`/static/gas_marker.html`) marks gas changes on a
-processed CSV and exports the event table. More in
-[`docs/webapp.md`](docs/webapp.md).
+More in [`docs/webapp.md`](docs/webapp.md).
 
 ### Publication figures
 
@@ -336,7 +334,7 @@ BraggFlow/
     sensors.py             # Sensor setups
     projects.py            # Saved projects (files + steps + markers + style)
     options.py             # Validation of options coming from the UI
-    webapp/                # Flask app: app.py (create_app + routes), state.py, templates/, static/
+    webapp/                # Flask app: app.py (create_app + routes), state.py, templates/
   examples/                # Runnable examples and synthetic data (examples/data/)
   docs/                    # data-formats.md, webapp.md, migration.md
   data/                    # Your data (ignored by git): raw/ uploads/ processed/ projects/ setups/ styles/ figures/

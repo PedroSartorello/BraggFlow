@@ -39,7 +39,6 @@ sed -i -E 's/\bfrom src\./from braggflow./; s/\bfrom src import/from braggflow i
 |---|---|
 | `python main.py data/raw/x.ASC [--setup s.json]` | `braggflow process data/raw/x.ASC [--setup s.json] [--out x.csv]` — or `python examples/01_process_file.py data/raw/x.ASC` |
 | `python webapp/app.py [--port 5001]` | `braggflow-web [--port 5001] [--data-dir DIR]` |
-| open `gasMarker.html` from disk | `http://127.0.0.1:5000/static/gas_marker.html` while `braggflow-web` runs (or open `src/braggflow/webapp/static/gas_marker.html`) |
 
 ## Paths
 
@@ -47,7 +46,6 @@ sed -i -E 's/\bfrom src\./from braggflow./; s/\bfrom src import/from braggflow i
 |---|---|
 | `src/…` | `src/braggflow/…` |
 | `webapp/app.py`, `webapp/templates/` | `src/braggflow/webapp/app.py`, `src/braggflow/webapp/templates/` |
-| `gasMarker.html` | `src/braggflow/webapp/static/gas_marker.html` |
 | `main.py` | `examples/01_process_file.py` |
 | data folder: always `<repository>/data` | `--data-dir`, else `$BRAGGFLOW_DATA_DIR`, else **`./data` in the directory where you run the command** |
 
@@ -70,3 +68,4 @@ covers them).
 | `scripts/plotarCSV.py`, `scripts/plotarCSV2.py` | figure of one or more concatenated CSVs with gas events (the second added an uncompensated EFBG2 overlay) |
 | `scripts/calcular_medias.py`, `scripts/media_ciclos.py`, `scripts/calcular_media_ciclos.py` | mean of the last N seconds of each gas cycle (now: interval statistics in the Visualização tab, `braggflow.analysis`) |
 | `notebooks/01_exploracao.ipynb` | empty file |
+| `gasMarker.html` | standalone page to click the gas changes on a processed CSV and export the event table; no longer used (the table format is still read, see [`data-formats.md`](data-formats.md#3-gas-event-table)) |

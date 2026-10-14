@@ -16,7 +16,7 @@ Files written (fixed random seed, so the output is reproducible):
 
 ``synthetic_gas_events.csv``
     Gas event table (``GAS, SM_INDEX, SEGUNDOS, OBSERVACOES, VAZAO_L_MIN,
-    TEMP_FLUKE_C``), the format exported by the Gas Marker page.
+    TEMP_FLUKE_C``), read by ``load_gas_table``.
 
 ``synthetic_spectrum.txt``
     Short reflection spectrum (dBm) of the three gratings, 1535-1555 nm.

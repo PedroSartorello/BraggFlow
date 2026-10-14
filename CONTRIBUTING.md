@@ -42,7 +42,7 @@ reason.
 | `src/braggflow/io/` | format detection, interrogator and spectrum readers, processed CSV |
 | `src/braggflow/visualization/` | publication figures and quick plots |
 | `src/braggflow/recipe.py` | the processing recipe as a dict of options, shared by `braggflow process` and the web app |
-| `src/braggflow/webapp/` | the Flask app (`app.py`: `create_app` and routes; `state.py`: data folder and caches; `templates/`, `static/`) |
+| `src/braggflow/webapp/` | the Flask app (`app.py`: `create_app` and routes; `state.py`: data folder and caches; `templates/`) |
 | `src/braggflow/cli.py`, `paths.py` | the commands and the data-folder resolution |
 | `examples/` | runnable examples and the synthetic data generator |
 | `docs/` | data formats, web app, migration notes |

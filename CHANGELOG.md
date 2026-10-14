@@ -30,7 +30,6 @@ itself did not change: the same input gives the same output as before.
   `01_process_file.py` and `02_publication_figure.py`.
 - `docs/data-formats.md`, `docs/webapp.md`, `docs/migration.md`,
   `CITATION.cff`, `CONTRIBUTING.md`, `data/README.md`.
-- The Gas Marker page is served by the web app at `/static/gas_marker.html`.
 - `braggflow` re-exports `Sensor` and `SensorSetup`.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
@@ -59,3 +58,5 @@ itself did not change: the same input gives the same output as before.
   `scripts/plotarCSV2.py`, `scripts/calcular_medias.py`,
   `scripts/media_ciclos.py`, `scripts/calcular_media_ciclos.py`, and the empty
   `notebooks/01_exploracao.ipynb`.
+- The Gas Marker page (`gasMarker.html`), no longer used. The gas event table
+  format it exported is still read by `load_gas_table`.
