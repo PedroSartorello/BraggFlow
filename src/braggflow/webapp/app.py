@@ -17,6 +17,7 @@ Uso:
 import base64
 import io
 import json
+import mimetypes
 import shutil
 import threading
 import uuid
@@ -74,6 +75,11 @@ from braggflow.visualization.figure import (
 )
 
 from .state import AppState, DataFolder
+
+# No Windows, o mimetypes lê os tipos do registro, onde .js às vezes está como
+# text/plain; o navegador então recusa os módulos da página (static/js/).
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 # Qualquer exportação de texto do interrogador ou do analisador de espectro
 RAW_EXTENSIONS = {".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec"}
