@@ -149,7 +149,8 @@ def test_stacked_panels_labels_and_shared_ylabel(data):
         fig.canvas.draw()
     axes = fig.axes
     assert len(axes) == 2
-    assert fig.get_supylabel() == "Deslocamento" and axes[0].get_ylabel() == ""
+    # fig.get_supylabel() só existe a partir do matplotlib 3.8; o mínimo é 3.7
+    assert fig._supylabel.get_text() == "Deslocamento" and axes[0].get_ylabel() == ""
     assert [t.get_text() for t in axes[0].texts if t.get_text().startswith("(")] == ["(A)"]
     assert {t.get_text() for t in axes[0].texts} >= {"N2", "CO2"}
     assert axes[1].get_xlabel() == "Time (min)"
