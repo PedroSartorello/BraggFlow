@@ -2,7 +2,8 @@
 Command-line entry points.
 
 ``braggflow process <file> [--setup SETUP.json] [--out OUT.csv]``
-    Processes one interrogator file with the standard recipe (the one of
+    Processes one interrogator file with the standard recipe
+    (``braggflow.recipe.STANDARD_RECIPE``, also written with the fluent API in
     ``examples/01_process_file.py``) and saves the processed CSV plus its
     JSON provenance file.
 
@@ -17,33 +18,16 @@ from typing import List, Optional
 from .paths import resolve_data_dir
 
 
-def default_setup():
-    """Three-channel setup used when no ``--setup`` is given."""
-    from .sensors import Sensor, SensorSetup
-
-    return SensorSetup(name="padrão", sensors=[
-        Sensor("CH_1 Sensor_1 [nm]", "EFBG1"),
-        Sensor("CH_2 Sensor_1 [nm]", "EFBG2"),
-        Sensor("CH_3 Sensor_1 [nm]", "FBG"),
-    ])
-
-
 def process_file(path: Path, setup_path: Optional[Path] = None, out: Optional[Path] = None,
                  data_dir: Optional[Path] = None, plot: bool = True) -> Path:
     """
     Standard processing of one interrogator file; returns the CSV written.
 
-    Without ``out`` the result goes to ``<data dir>/processed/<name>_processado.csv``.
+    The steps are ``braggflow.recipe.STANDARD_RECIPE``, run by the same
+    ``run_recipe`` the web app uses. Without ``out`` the result goes to
+    ``<data dir>/processed/<name>_processado.csv``.
     """
-    from . import OpticalPipeline
-    from .processing import (
-        apply_moving_average_filter,
-        apply_savgol_filter,
-        mark_invalid_peaks,
-        remove_null_values,
-        remove_outliers,
-        sort_and_deduplicate,
-    )
+    from .recipe import STANDARD_RECIPE, default_setup, run_recipe
     from .sensors import SensorSetup
 
     path = Path(path)
@@ -51,17 +35,8 @@ def process_file(path: Path, setup_path: Optional[Path] = None, out: Optional[Pa
     if out is None:
         out = resolve_data_dir(data_dir) / "processed" / f"{path.stem}_processado.csv"
 
-    pipeline = OpticalPipeline(path)
-    pipeline.load_data().apply_setup(setup)
-    (pipeline
-     .delimit_time_window(start_time=None, end_time=None)
-     .preprocess(mark_invalid_peaks, zero_as_missing=True, bands=pipeline.sensor_bands())
-     .preprocess(sort_and_deduplicate, duplicates="mean")
-     .preprocess(remove_null_values, strategy="linear")
-     .preprocess(remove_outliers, method="rolling", threshold=3.5, window_size=51, strategy="linear")
-     .apply_filter(apply_savgol_filter, window_length=11, polyorder=2)
-     .apply_filter(apply_moving_average_filter, window_size=30)
-     .save_processed_data(out))
+    pipeline, _, _ = run_recipe([path], STANDARD_RECIPE, setup=setup)
+    pipeline.save_processed_data(out)
 
     t, sig, ch = pipeline.get_data()
     print("Time array shape:", t.shape)

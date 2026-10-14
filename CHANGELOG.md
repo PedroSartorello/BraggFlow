@@ -32,12 +32,23 @@ itself did not change: the same input gives the same output as before.
   `CITATION.cff`, `CONTRIBUTING.md`, `data/README.md`.
 - The Gas Marker page is served by the web app at `/static/gas_marker.html`.
 - `braggflow` re-exports `Sensor` and `SensorSetup`.
+- `braggflow.recipe`: the processing recipe as a dict of options
+  (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
+  app.
+- `braggflow.webapp.app.create_app(data_dir)`: each app has its own data folder
+  and read caches (`braggflow.webapp.state`).
 
 ### Changed
 
 - `main.py` became `examples/01_process_file.py`; without arguments it
   processes the synthetic example.
 - `requirements.txt` is a shortcut for `-e .[dev]`.
+- `braggflow process` runs `STANDARD_RECIPE` through `run_recipe` instead of
+  its own copy of the steps. The CSV is byte for byte the same; the JSON no
+  longer lists the empty time-window step and records `None` for the optional
+  parameters, as the web app does.
+- The web app no longer keeps the data folder and caches in module globals;
+  there is no module-level `app` (use `create_app`).
 - `.gitignore` versions the synthetic example data and test fixtures, and keeps
   everything else under `data/` ignored.
 

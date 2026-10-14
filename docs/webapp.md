@@ -59,6 +59,22 @@ axes and ticks, marker bands, export to PDF/PNG/SVG/EPS/TIFF. Below the figure,
 statistics per interval between markers (mean, deviation, drift, noise,
 steady-state mean, steps).
 
+## For developers
+
+`braggflow.webapp.app.create_app(data_dir=None)` builds an app with its own
+data folder and read caches (`braggflow.webapp.state`), so tests or two
+instances never share them; `braggflow-web` calls it. The processing options
+sent by the page are run by `braggflow.recipe.run_recipe`, the same function
+behind `braggflow process`.
+
+```python
+from braggflow.webapp.app import create_app
+
+app = create_app("/path/to/data")
+client = app.test_client()
+client.get("/api/files").get_json()
+```
+
 ## Gas Marker
 
 `http://127.0.0.1:5000/static/gas_marker.html` is a standalone page: open a
