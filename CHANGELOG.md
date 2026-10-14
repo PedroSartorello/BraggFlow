@@ -52,6 +52,9 @@ itself did not change: the same input gives the same output as before.
   its own copy of the steps. The CSV is byte for byte the same; the JSON no
   longer lists the empty time-window step and records `None` for the optional
   parameters, as the web app does.
+- The page script and styles left `index.html`: ES modules in
+  `webapp/static/js/` (no build step) and `webapp/static/css/app.css`. The
+  code of each function is unchanged.
 - The web app no longer keeps the data folder and caches in module globals;
   there is no module-level `app` (use `create_app`).
 - `.gitignore` versions the synthetic example data and test fixtures, and keeps

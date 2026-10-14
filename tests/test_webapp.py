@@ -8,7 +8,7 @@ import braggflow.webapp
 from braggflow.io.processed import read_metadata
 from braggflow.webapp.app import API_BUILD, create_app
 
-TEMPLATES = Path(braggflow.webapp.__file__).with_name("templates")
+WEBAPP = Path(braggflow.webapp.__file__).parent
 
 
 @pytest.fixture
@@ -458,8 +458,8 @@ def test_version_endpoint_matches_the_page(webapp):
     dados, client = webapp
     data = client.get("/api/version").get_json()
     assert data["api_build"] == API_BUILD
-    page = TEMPLATES.joinpath("index.html").read_text(encoding="utf-8")
-    assert f'const API_BUILD = "{API_BUILD}"' in page
+    core = (WEBAPP / "static" / "js" / "core.js").read_text(encoding="utf-8")
+    assert f'const API_BUILD = "{API_BUILD}"' in core
 
 
 def test_project_with_empty_sensor_bands_is_saved(webapp):
@@ -806,6 +806,29 @@ def test_raw_overlay_is_untouched_without_level_changes(webapp):
 def test_index_is_served_from_the_package():
     client = create_app(create=False).test_client()
     assert client.get("/").status_code == 200
+
+
+def test_page_modules_and_styles_are_served():
+    """Cada módulo importado pela página existe e é servido como JavaScript."""
+    import re
+
+    client = create_app(create=False).test_client()
+    page = client.get("/").get_data(as_text=True)
+    assert '<script type="module" src="/static/js/main.js">' in page
+    assert client.get("/static/css/app.css").mimetype == "text/css"
+
+    pendentes, vistos = ["main.js"], set()
+    while pendentes:
+        nome = pendentes.pop()
+        if nome in vistos:
+            continue
+        vistos.add(nome)
+        resp = client.get(f"/static/js/{nome}")
+        assert resp.status_code == 200, nome
+        assert resp.mimetype == "text/javascript", nome
+        pendentes += re.findall(r'from "\./([\w-]+\.js)"', resp.get_data(as_text=True))
+    feitos = {p.name for p in (WEBAPP / "static" / "js").glob("*.js")}
+    assert vistos == feitos, "todo módulo da pasta é alcançado a partir de main.js"
 
 
 # ── uma instância por create_app ─────────────────────────────────────────────
