@@ -180,3 +180,72 @@ def test_temperature_compensation_uses_the_thermal_sensitivity_of_each_fbg(app):
 
     app.uncheck("#delta-enabled")                               # sem Δλ, sem compensação
     expect(app.locator("#tempcomp-enabled")).not_to_be_checked()
+
+
+# ── espectros LMR ────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def lmr(data_dir):
+    """Três transmissões com a ressonância andando e um trio bruto (amostra, fonte, fundo)."""
+    import numpy as np
+
+    from ..lmr_synthetic import (DARK_COUNTS, WAVELENGTH, lmr_series, sample_counts,
+                                 source_counts, transmission, write_oceanview)
+    series = lmr_series(data_dir / "raw", resonances=(870.0, 866.0, 862.0))
+    write_oceanview(data_dir / "raw" / "bruto_amostra.txt", sample_counts(transmission(780.0)))
+    write_oceanview(data_dir / "raw" / "bruto_fonte.txt", source_counts())
+    write_oceanview(data_dir / "raw" / "bruto_fundo.txt", np.full(WAVELENGTH.size, DARK_COUNTS))
+    return series
+
+
+def preparar_lmr(page: Page) -> None:
+    page.fill('[data-spec="lambda_min"]', "450")
+    page.fill('[data-spec="lambda_max"]', "950")
+    page.fill('[data-spec="smooth_window"]', "21")
+    page.select_option('[data-spec="detrend"]', "2")
+    page.check('[data-spec="find_min"]')
+
+
+def test_lmr_valleys_follow_the_files_in_time_order(lmr, app):
+    novo_projeto(app, "LMR")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text=lmr[0].name).click()
+    expect(app.locator("#spectra-status")).to_contain_text("gravado 2026-03-02 09:30:15")
+    app.locator("#tab-spectra-sidebar details.advanced > summary").click()
+    for caminho in lmr[1:]:
+        app.check(f'.pick-spectrum[value="data/raw/{caminho.name}"]')
+    app.click("#btn-add-spectra")
+    expect(app.locator("#spectra-files .file-name")).to_have_count(3)
+
+    preparar_lmr(app)
+    expect(app.locator("#spectra-results")).to_be_visible()
+    app.click("#btn-copy-spectrum")
+    app.locator("#spectra-evolution > summary").click()
+
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s) · 1 trilha(s)")
+    linhas = app.locator("#evolution-table tbody tr")
+    expect(linhas).to_have_count(3)
+    expect(linhas.nth(0)).to_contain_text("09:30:15")
+    lams = [float(t.replace(",", ".")) for t in app.locator(
+        "#evolution-table tbody tr td:nth-child(4)").all_inner_texts()]
+    assert lams == pytest.approx([870, 866, 862], abs=1.5)
+    assert curvas(app, "evolution-plot") == ["vale mais proeminente"]
+
+
+def test_raw_spectrum_becomes_transmission_with_source_and_dark(lmr, app):
+    novo_projeto(app, "Bruto")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text="bruto_amostra.txt").click()
+    expect(app.locator("#spectra-status")).to_contain_text("pontos")
+    titulo = "document.querySelector('#spectra-plot').layout.yaxis.title.text"
+    assert app.evaluate(titulo) == "Intensidade", "sem fonte nem fundo: o espectro bruto"
+
+    app.select_option('[data-spec="reference_file"]', "data/raw/bruto_fonte.txt")
+    app.select_option('[data-spec="dark_file"]', "data/raw/bruto_fundo.txt")
+    preparar_lmr(app)
+    app.wait_for_function(f"{titulo} === 'Transmissão (%)'")
+    principal = app.evaluate("""() => {
+        const t = document.querySelector('#spectra-plot').data.find((d) => d.mode === 'markers');
+        return t.x[t.y.indexOf(Math.min(...t.y))];
+    }""")
+    assert principal == pytest.approx(780.0, abs=1.5)

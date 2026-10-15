@@ -863,3 +863,73 @@ def test_file_cache_reloads_a_changed_file(tmp_path):
     cache.get(outro)                             # size=1: tira o arquivo a.txt
     cache.get(arquivo)
     assert len(leituras) == 4
+
+
+# ── espectros LMR: transmissão a partir do bruto e evolução entre arquivos ────
+
+LMR_PREPARO = {"lambda_min": 450, "lambda_max": 950, "smooth_window": 21, "detrend": 2}
+
+
+def test_spectra_evolution_endpoint(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    items = [{"file": f"data/raw/{c.name}", "settings": LMR_PREPARO} for c in reversed(caminhos)]
+    resp = client.post("/api/spectra/evolution", json={"items": items, "kind": "min"})
+    data = resp.get_json()
+    assert resp.status_code == 200, data
+    assert data["x"] == "time" and data["unit"] == "%" and data["warnings"] == []
+    assert [f["file"] for f in data["files"]] == [f"data/raw/{c.name}" for c in caminhos]
+    assert data["files"][1]["acquired"] == "2026-03-02T09:31:30.500"
+    lams = [p["wavelength"] for p in data["tracks"][0]["points"]]
+    assert lams == pytest.approx([870, 866, 862], abs=1.5)
+
+    resp = client.post("/api/spectra/evolution", json={"items": items[:1]})
+    assert resp.status_code == 400 and "dois ou mais" in resp.get_json()["error"]
+
+
+def test_spectra_evolution_warns_about_files_without_date(webapp):
+    from datetime import datetime
+
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    com = lmr_series(dados.raw / "com", resonances=(870.0, 866.0))
+    sem = lmr_series(dados.raw / "sem", resonances=(862.0,), header=False,
+                     start=datetime(2026, 3, 2, 9, 41, 11))
+    items = [{"file": f"data/raw/{c.parent.name}/{c.name}", "settings": LMR_PREPARO} for c in com + sem]
+    data = client.post("/api/spectra/evolution", json={"items": items}).get_json()
+    assert any("mesmo dia" in a for a in data["warnings"])
+    # o arquivo sem cabeçalho (09:41) ganha a data dos outros e fica por último
+    assert data["files"][-1]["file"].endswith("09-41-11-000.txt")
+    assert data["files"][-1]["acquired"] == "09:41:11.000", "sem cabeçalho: só a hora"
+    assert data["files"][-1]["elapsed_s"] == pytest.approx(656.0)
+
+
+def test_preview_converts_raw_counts_with_source_and_dark(webapp):
+    from .lmr_synthetic import (DARK_COUNTS, WAVELENGTH, sample_counts, source_counts,
+                                transmission, write_oceanview)
+
+    dados, client = webapp
+    dados.raw.mkdir(parents=True, exist_ok=True)
+    write_oceanview(dados.raw / "amostra.txt", sample_counts(transmission(780.0)))
+    write_oceanview(dados.raw / "fonte.txt", source_counts())
+    write_oceanview(dados.raw / "fundo.txt", np.full(WAVELENGTH.size, DARK_COUNTS))
+
+    bruto = client.post("/api/spectra/preview", json={
+        "file": "data/raw/amostra.txt", "settings": {**LMR_PREPARO, "find_min": True}}).get_json()
+    assert bruto["unit"] == "a.u." and bruto["acquired_from"] == "header"
+
+    data = client.post("/api/spectra/preview", json={
+        "file": "data/raw/amostra.txt",
+        "settings": {**LMR_PREPARO, "find_min": True, "prominence": 0.5,
+                     "reference_file": "data/raw/fonte.txt", "dark_file": "data/raw/fundo.txt"},
+    }).get_json()
+    assert data["unit"] == "%"
+    principal = max(data["traces"][0]["extrema"], key=lambda e: e["prominence"])
+    assert principal["wavelength"] == pytest.approx(780.0, abs=1.5)
+
+    resp = client.post("/api/spectra/preview", json={
+        "file": "data/raw/amostra.txt", "settings": {"reference_file": "data/../fora.txt"}})
+    assert resp.status_code == 400 and "fora de data/" in resp.get_json()["error"]

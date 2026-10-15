@@ -57,10 +57,30 @@ K_T uses the "k padrão" of the step. It works on wavelength shifts, so turning
 it on turns Δλ on too. The status details list the k used for each channel,
 and the JSON records the K_T values.
 
-**Espectros** — optical spectra. Wavelength window, smoothing (Savitzky-Golay
-or moving average), normalisation, vertical offset, and detection of maxima and
-minima with position (sub-sample), prominence, FWHM or 3-dB band, Q factor,
-centroid and spacing; results table with CSV export.
+**Espectros** — optical spectra (OSA, or spectrometers such as OceanView
+exports with or without header). Each file has its own preparation, applied in
+this order:
+
+1. *Transmission (raw data)*, optional: choose the source spectrum R and/or
+   the background (dark) D among the spectra of the project; the sample S
+   becomes `T = (S − D)/(R − D)` (%, 0–1, dB or absorbance), `S/R` without
+   dark, or `S − D` without source. Left empty, the spectrum is analysed as
+   it is — raw counts, or transmission already computed by the spectrometer.
+2. Wavelength window, smoothing (Savitzky-Golay or moving average).
+3. *Remove trend*: subtracts a polynomial (degree 0–4) fitted to the window,
+   so shallow valleys on a sloping baseline (LMR, SPR, fringes) stand out.
+4. Normalisation and vertical offset.
+
+Detection of maxima and minima with position (sub-sample), prominence, FWHM or
+3-dB band, Q factor, centroid and spacing; results table with CSV export.
+
+*Evolução entre arquivos* follows the valleys (or peaks) across the spectra of
+the project, in acquisition order (header `Date:` or time in the file name),
+each with its own preparation; source and dark files are left out. Two modes:
+the most prominent valley of each file, or one track per valley of the first
+file (each keeps the nearest valley of the next file, up to a maximum jump).
+Plot λ, Δλ to the first file, intensity, depth or width against elapsed time or
+file order; table and CSV with every value.
 
 **Visualização** — publication figures from processed CSVs or spectra: size
 presets (IEEE, Elsevier, A4, slide), fonts, stacked or overlaid curves, legend,

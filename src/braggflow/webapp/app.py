@@ -49,11 +49,16 @@ from braggflow.projects import Project
 from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
 from braggflow.sensors import SensorSetup
 from braggflow.processing.spectra import (
+    EVOLUTION_MODES,
     NORMALIZATIONS,
+    TRANSMISSION_OUTPUTS,
     analyse_spectrum,
+    apply_transmission,
     default_spectrum_settings,
     prepare_spectrum,
     resolve_spectrum_settings,
+    spectra_evolution,
+    transmission_unit,
 )
 from braggflow.visualization.figure import (
     CHANNEL_LINESTYLES,
@@ -170,6 +175,29 @@ def _curve_key(path: Path, spectra, trace_name: str) -> str:
     return stem if len(spectra.spectra) == 1 else f"{stem} · {trace_name}"
 
 
+def _first_trace(rel_path: str):
+    """``(λ, intensidade)`` do primeiro traço de um arquivo de espectro (fonte, fundo)."""
+    path = _resolve_data_file(rel_path)
+    spectrum = _state().spectra.get(path).spectra[0]
+    return spectrum.wavelength, spectrum.intensity
+
+
+def _prepared(spectrum, settings: dict):
+    """Fonte e fundo (se escolhidos), depois o preparo: ``(λ, intensidade)``."""
+    intensity = apply_transmission(spectrum.wavelength, spectrum.intensity, settings, _first_trace)
+    return prepare_spectrum(spectrum.wavelength, intensity, settings)
+
+
+def _acquisition(spectra) -> dict:
+    """Instante da aquisição para a interface (ISO; sem data quando veio só do nome)."""
+    quando = spectra.acquired
+    if quando is None:
+        return {"acquired": None, "acquired_from": ""}
+    texto = (quando.time().isoformat(timespec="milliseconds") if spectra.acquired_from == "filename"
+             else quando.isoformat(timespec="milliseconds"))
+    return {"acquired": texto, "acquired_from": spectra.acquired_from}
+
+
 def _spectrum_items(options: dict) -> list[dict]:
     """
     Curvas de espectro pedidas pela interface. Cada entrada traz o seu próprio
@@ -187,7 +215,7 @@ def _spectrum_items(options: dict) -> list[dict]:
 
         key = _curve_key(path, spectra, name)
         settings = resolve_spectrum_settings(entry.get("settings"), prefix=f"[{key}] ")
-        wavelength, intensity = prepare_spectrum(spectrum.wavelength, spectrum.intensity, settings)
+        wavelength, intensity = _prepared(spectrum, settings)
         items.append({"key": key, "label": entry.get("label") or key,
                       "x": wavelength, "y": intensity})
     if not items:
@@ -494,6 +522,8 @@ def api_spectrum_traces():
 
     return jsonify({
         "file": rel,
+        "unit": spectra.intensity_unit,
+        **_acquisition(spectra),
         "traces": [
             {
                 "name": spectrum.name,
@@ -520,7 +550,7 @@ def api_spectrum_preview():
         settings = resolve_spectrum_settings(options.get("settings"))
         traces = []
         for spectrum in spectra.spectra:
-            wavelength, intensity = prepare_spectrum(spectrum.wavelength, spectrum.intensity, settings)
+            wavelength, intensity = _prepared(spectrum, settings)
             (x, y), stride = _downsample(wavelength, intensity)
             traces.append({
                 "name": spectrum.name,
@@ -534,7 +564,67 @@ def api_spectrum_preview():
             })
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({"file": options.get("file"), "traces": traces})
+    return jsonify({"file": options.get("file"), "traces": traces,
+                    "unit": transmission_unit(settings, spectra.intensity_unit),
+                    **_acquisition(spectra)})
+
+
+@bp.route("/api/spectra/evolution", methods=["POST"])
+def api_spectrum_evolution():
+    """
+    Vales (ou picos) de vários espectros, um por arquivo, acompanhados de
+    arquivo para arquivo na ordem da aquisição. Cada arquivo usa o seu
+    preparo; os extremos são medidos no espectro inteiro já preparado.
+    """
+    options = request.get_json(silent=True) or {}
+    kind = str(options.get("kind") or "min")
+    mode = str(options.get("mode") or "prominent")
+    try:
+        if mode not in EVOLUTION_MODES:
+            raise ValueError(f"Modo desconhecido: {mode}.")
+        entradas, unidades = [], set()
+        for item in options.get("items") or []:
+            path = _resolve_data_file(item.get("file", ""))
+            spectra = _state().spectra.get(path)
+            nome = item.get("trace") or spectra.names[0]
+            spectrum = spectra.get(nome)
+            if spectrum is None:
+                raise ValueError(f"Traço '{nome}' não encontrado em {path.name}.")
+            key = _curve_key(path, spectra, nome)
+            settings = resolve_spectrum_settings(
+                {**(item.get("settings") or {}), "find_min": kind == "min", "find_max": kind == "max"},
+                prefix=f"[{key}] ")
+            wavelength, intensity = _prepared(spectrum, settings)
+            unidades.add(transmission_unit(settings, spectra.intensity_unit))
+            entradas.append({"key": key, "file": _rel(path), "acquired": spectra.acquired,
+                             "acquired_from": spectra.acquired_from,
+                             "extrema": analyse_spectrum(wavelength, intensity, settings)["extrema"]})
+        if len(entradas) < 2:
+            raise ValueError("Escolha dois ou mais espectros para ver a evolução.")
+        resultado = spectra_evolution(entradas, kind=kind, mode=mode,
+                                      tolerance=as_float(options.get("tolerance")))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    origem = {e["key"]: e for e in entradas}
+    for arquivo in resultado["files"]:
+        e = origem[arquivo["key"]]
+        arquivo["file"] = e["file"]
+        arquivo["acquired_from"] = e["acquired_from"]
+        if e["acquired_from"] == "filename" and arquivo["acquired"]:
+            arquivo["acquired"] = arquivo["acquired"].split("T")[1]     # só a hora
+    avisos = []
+    if resultado["x"] == "order":
+        avisos.append("Nem todos os arquivos têm o instante da aquisição (cabeçalho Date: "
+                      "ou hora no nome); a evolução está na ordem dos arquivos.")
+    elif len({e["acquired_from"] == "filename" for e in entradas}) > 1:
+        avisos.append("Alguns instantes vêm do cabeçalho e outros só do nome do arquivo "
+                      "(sem data): o tempo decorrido supõe que todos são do mesmo dia.")
+    if len(unidades) > 1:
+        avisos.append("Os espectros estão em unidades diferentes (" + ", ".join(sorted(unidades))
+                      + "): confira o preparo de cada arquivo.")
+    resultado.update({"unit": unidades.pop() if len(unidades) == 1 else "", "warnings": avisos})
+    return jsonify(resultado)
 
 
 @bp.route("/api/concat/preview", methods=["POST"])
@@ -740,6 +830,7 @@ def api_figure_options():
         "formats": list(EXPORT_FORMATS),
         "spectrum_settings": default_spectrum_settings(),
         "normalizations": list(NORMALIZATIONS),
+        "transmission_outputs": list(TRANSMISSION_OUTPUTS),
     })
 
 

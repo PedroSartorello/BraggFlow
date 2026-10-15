@@ -42,6 +42,15 @@ itself did not change: the same input gives the same output as before.
   compensation uses `k = K_T,s / K_T,r` per sensor
   (`thermal_sensitivities=`), falling back to one `k_coeff`; the status
   details list the k of each channel. Old setups and projects load unchanged.
+- Spectrometer spectra (OceanView/SpectraSuite, UV-VIS-NIR, with or without
+  header): wavelengths from 150 to 2500 nm, header lines kept as metadata, and
+  the acquisition time from the `Date:` header and/or the file name
+  (`..._09-30-15-250`).
+- Espectros tab: optional transmission from raw data (`T = (S − D)/(R − D)`,
+  `to_transmission` / `apply_transmission`; or the raw spectrum as it is),
+  trend removal (`remove_trend`), and the evolution of valleys or peaks across
+  files (`spectra_evolution`, `/api/spectra/evolution`) with plot, table and
+  CSV.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.
@@ -80,6 +89,11 @@ itself did not change: the same input gives the same output as before.
   format it exported is still read by `load_gas_table`.
 
 ### Fixed
+
+- Text files with blank lines in the equipment header were read from the wrong
+  line (the header count skipped them, the reader did not).
+- A one-field line just before the data (such as
+  `>>>>>Begin Spectral Data<<<<<`) is no longer taken as the column names.
 
 - The "Projetos…" screen no longer erases a project name typed while the
   project list is still loading.
