@@ -23,6 +23,8 @@ $("sidebar").addEventListener("change", async (e) => {
     return;
   }
   if (el.id === "file-upload" || el.id === "setup-name") return;
+  if (el.id === "tempcomp-enabled" && el.checked) $("delta-enabled").checked = true;
+  if (el.id === "delta-enabled" && !el.checked) $("tempcomp-enabled").checked = false;
   if (el.classList.contains("step-switch") && el.checked) toggleStep(el.closest(".step"), true);
   syncCardStyles();
   try {

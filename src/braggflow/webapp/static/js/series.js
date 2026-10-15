@@ -16,6 +16,7 @@ export function collectSensors() {
     nominal_wavelength: row.dataset.nominal || null,
     band_min: row.querySelector(".sensor-band-min").value,
     band_max: row.querySelector(".sensor-band-max").value,
+    temp_sensitivity: row.querySelector(".sensor-kt").value,
   }));
 }
 
@@ -278,7 +279,14 @@ function sensorRow(ch, data, previous) {
       previous?.min ?? (band ? band[0] : ""), "mín"),
     makeInput("number", "sensor-band-max",
       previous?.max ?? (band ? band[1] : ""), "máx"),
+    makeInput("number", "sensor-kt",
+      previous?.kt ?? fromSetup?.temp_sensitivity ?? "", "K_T"),
   );
+  const kt = row.querySelector(".sensor-kt");
+  kt.title = "Sensibilidade térmica K_T (pm/°C), da calibração em temperatura. " +
+    "Usada pela compensação de temperatura: k = K_T do sensor / K_T da referência.";
+  kt.min = "0";
+  kt.step = "any";
   return row;
 }
 
@@ -298,10 +306,20 @@ export async function loadChannels() {
         name: row.querySelector(".sensor-name").value,
         min: row.querySelector(".sensor-band-min").value,
         max: row.querySelector(".sensor-band-max").value,
+        kt: row.querySelector(".sensor-kt").value,
       };
     });
 
     list.innerHTML = "";
+    const cabecalho = document.createElement("div");
+    cabecalho.className = "sensor-head";
+    ["nome", "banda mín", "banda máx", "K_T pm/°C"].forEach((texto) => {
+      const span = document.createElement("span");
+      span.textContent = texto;
+      cabecalho.appendChild(span);
+    });
+    cabecalho.lastChild.title = "Sensibilidade térmica de cada rede (calibração em temperatura)";
+    list.appendChild(cabecalho);
     data.channels.forEach((ch) => list.appendChild(sensorRow(ch, data, previous[ch])));
 
     const info = [`${data.n_samples.toLocaleString("pt-BR")} amostras`];
@@ -351,6 +369,7 @@ export async function applySetup(name) {
     row.querySelector(".sensor-name").value = sensor.name || row.dataset.channel;
     row.querySelector(".sensor-band-min").value = sensor.band ? sensor.band[0] : "";
     row.querySelector(".sensor-band-max").value = sensor.band ? sensor.band[1] : "";
+    row.querySelector(".sensor-kt").value = sensor.temp_sensitivity ?? "";
   });
   syncTempChannels();
 }
@@ -488,6 +507,7 @@ export function applySensors(sensors) {
     const [low, high] = sensor.band || [sensor.band_min ?? "", sensor.band_max ?? ""];
     row.querySelector(".sensor-band-min").value = low ?? "";
     row.querySelector(".sensor-band-max").value = high ?? "";
+    row.querySelector(".sensor-kt").value = sensor.temp_sensitivity ?? "";
   });
   syncTempChannels();
 }

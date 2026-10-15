@@ -169,7 +169,9 @@ class OpticalPipeline:
         ``strategy='linear'`` can never collide with a channel name.
 
         A function may declare ``output_quantity`` (e.g. ``to_delta_lambda``
-        produces a wavelength shift); it is recorded for every channel.
+        produces a wavelength shift); it is recorded for every channel. It may
+        also declare ``input_quantity`` (``temperature_compensation`` needs
+        wavelength shifts): applying it to other data raises ``ValueError``.
 
         Parameters:
         - filter_func: A callable that takes a 2D numpy array and returns a filtered 2D numpy array.
@@ -178,6 +180,12 @@ class OpticalPipeline:
         - self: The instance of the OpticalPipeline with filtered data.
         """
         self._check_loaded()
+        required = getattr(filter_func, "input_quantity", None)
+        if required and any(q != required for q in self.quantities):
+            raise ValueError(
+                f"{filter_func.__name__} needs {required} data, but the channels hold "
+                f"{sorted(set(self.quantities))}. Apply to_delta_lambda first."
+            )
         before = self._snapshot()
         recorded = dict(kwargs)
 

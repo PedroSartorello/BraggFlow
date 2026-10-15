@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use BraggFlow in your research, please cite it as below."
-title: "BraggFlow: processing pipeline, web app and publication figures for FBG interrogator data"
+title: "BraggFlow"
 type: software
 authors:
   - family-names: Sartorello

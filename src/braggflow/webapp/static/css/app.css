@@ -508,6 +508,10 @@ body.no-spectra #spectra-results { display: none !important; }
 .setup-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
 .setup-row .btn-dashed { white-space: nowrap; }
 #sensor-list { display: flex; flex-direction: column; gap: 8px; }
-.sensor-row { display: grid; grid-template-columns: 1fr 88px 88px; gap: 5px; }
+.sensor-row { display: grid; grid-template-columns: 1fr 62px 62px 62px; gap: 5px; }
+.sensor-head { display: grid; grid-template-columns: 1fr 62px 62px 62px; gap: 5px;
+  font-size: 10px; color: var(--muted); padding-bottom: 4px; }
+.sensor-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sensor-row + .sensor-row { border-top: 1px solid var(--border); padding-top: 8px; }
 .sensor-caption { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.step-note { grid-column: 1 / -1; }

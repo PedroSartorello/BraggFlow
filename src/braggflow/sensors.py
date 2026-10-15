@@ -2,8 +2,9 @@
 Sensor setup: what is connected to each interrogator channel.
 
 A setup maps the channel columns of an interrogator export to named FBG
-sensors, with their nominal Bragg wavelength and the spectral band each
-grating is allowed to occupy. It is saved as JSON and reused across
+sensors, with their nominal Bragg wavelength, the spectral band each
+grating is allowed to occupy and, optionally, its thermal sensitivity (used
+by the temperature compensation). It is saved as JSON and reused across
 acquisitions of the same experimental assembly.
 """
 
@@ -19,12 +20,23 @@ class Sensor:
     name: Optional[str] = None                   # display name (defaults to channel)
     nominal_wavelength: Optional[float] = None   # λ0 [nm]
     band: Optional[Tuple[float, float]] = None   # allowed peak range [nm]
+    temp_sensitivity: Optional[float] = None     # K_T [pm/°C], from a temperature calibration
 
     def __post_init__(self):
         if self.nominal_wavelength in ("", None):
             self.nominal_wavelength = None
         else:
             self.nominal_wavelength = float(self.nominal_wavelength)
+
+        if self.temp_sensitivity in ("", None):
+            self.temp_sensitivity = None
+        else:
+            self.temp_sensitivity = float(self.temp_sensitivity)
+            if not self.temp_sensitivity > 0:
+                raise ValueError(
+                    f"Sensor '{self.label}': thermal sensitivity K_T must be > 0 "
+                    f"(got {self.temp_sensitivity})."
+                )
 
         # Banda pela metade (um limite vazio) é o mesmo que não ter banda
         if self.band is not None and any(v in ("", None) for v in self.band):
@@ -48,6 +60,7 @@ class Sensor:
             "name": self.name,
             "nominal_wavelength": self.nominal_wavelength,
             "band": list(self.band) if self.band else None,
+            "temp_sensitivity": self.temp_sensitivity,
         }
 
     @classmethod
@@ -60,6 +73,7 @@ class Sensor:
             name=data.get("name"),
             nominal_wavelength=data.get("nominal_wavelength"),
             band=tuple(band) if band else None,
+            temp_sensitivity=data.get("temp_sensitivity"),
         )
 
 
@@ -80,6 +94,10 @@ class SensorSetup:
     def bands(self, channels: Sequence[str]) -> List[Optional[Tuple[float, float]]]:
         """Allowed band for each file channel (None when not configured)."""
         return [self.get(ch).band if self.get(ch) else None for ch in channels]
+
+    def temp_sensitivities(self, channels: Sequence[str]) -> List[Optional[float]]:
+        """Thermal sensitivity K_T of each file channel (None when not configured)."""
+        return [self.get(ch).temp_sensitivity if self.get(ch) else None for ch in channels]
 
     def to_dict(self) -> dict:
         return {

@@ -32,6 +32,7 @@ from .processing import (
     temperature_compensation,
     to_delta_lambda,
 )
+from .processing.compensation import compensation_ratios
 from .sensors import Sensor, SensorSetup
 
 # Mapeamento usado quando nenhum setup de sensores é informado. A interface
@@ -101,6 +102,7 @@ def setup_from_options(options: dict) -> SensorSetup:
             name=name,
             nominal_wavelength=as_float(s.get("nominal_wavelength")),
             band=(low, high) if low is not None else None,
+            temp_sensitivity=as_float(s.get("temp_sensitivity")),
         ))
     return SensorSetup(name=str(options.get("setup_name") or ""), sensors=sensors)
 
@@ -283,15 +285,55 @@ def run_recipe(files: Sequence[Path], options: dict, *,
 
     tempcomp = options.get("temp_comp") or {}
     if tempcomp.get("enabled"):
-        pipeline.apply_filter(
-            temperature_compensation,
-            temp_channel_idx=tempcomp.get("channel", "FBG"),
-            k_coeff=as_float(tempcomp.get("k_coeff"), 1.0),
-        )
+        if not delta.get("enabled"):
+            raise ValueError(
+                "A compensação de temperatura subtrai deslocamentos (Δλs − k·Δλr): "
+                "ative a etapa Δλ.")
+        _compensate_temperature(pipeline, tempcomp, messages)
 
     raw_signals = _align_raw(raw_signals, pipeline.signals_array, linha_de_base,
                              highpass.get("enabled") or tempcomp.get("enabled"), messages)
     return pipeline, (raw_time, raw_signals), messages
+
+
+def _compensate_temperature(pipeline: OpticalPipeline, tempcomp: dict, messages: dict) -> None:
+    """
+    Compensação pela rede de referência: k = K_T,s / K_T,r para cada sensor com
+    sensibilidade térmica no setup; ``k_coeff`` para os que não têm.
+    """
+    referencia = tempcomp.get("channel", "FBG")
+    if referencia not in pipeline.channels:
+        raise ValueError(f"Canal de referência '{referencia}' não existe: "
+                         f"{', '.join(pipeline.channels)}.")
+    k_padrao = as_float(tempcomp.get("k_coeff"), 1.0)
+    sens = pipeline.setup.temp_sensitivities(pipeline.source_channels) if pipeline.setup else []
+    kwargs = {"temp_channel_idx": referencia, "k_coeff": k_padrao}
+    if any(v is not None for v in sens):
+        kwargs["thermal_sensitivities"] = sens
+    else:
+        sens = [None] * len(pipeline.channels)
+
+    ref = pipeline.channels.index(referencia)
+    try:
+        ratios = compensation_ratios(len(pipeline.channels), ref, k_padrao,
+                                     kwargs.get("thermal_sensitivities"))
+    except ValueError:
+        if sens[ref] is None:
+            raise ValueError(
+                f"Informe a sensibilidade térmica K_T da referência ({referencia}) no "
+                "cartão Sensores: os outros sensores têm K_T e k = K_T,s / K_T,r.") from None
+        raise
+    pipeline.apply_filter(temperature_compensation, **kwargs)
+
+    partes = []
+    for nome, k, kt in zip(pipeline.channels, ratios, sens):
+        if k is None:
+            continue
+        origem = (f"K_T {_br(kt, '.4g')} / {_br(sens[ref], '.4g')} pm/°C" if kt is not None
+                  else "k informado")
+        partes.append(f"{nome} k = {_br(k, '.4g')} ({origem})")
+    messages["report"].append(f"Compensação de temperatura pela referência {referencia}: "
+                              + "; ".join(partes))
 
 
 def _align_raw(raw: np.ndarray, processed: np.ndarray, linha_de_base, sem_dc: bool,
