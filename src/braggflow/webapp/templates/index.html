@@ -151,7 +151,7 @@
         <input type="text" id="setup-name" placeholder="nome do setup">
         <button type="button" id="btn-setup-save" class="btn-dashed">Salvar setup</button>
       </div>
-      <span class="hint" title="O setup fica em data/setups e serve para outras aquisições da mesma montagem.">Nome e banda permitida (nm) de cada grade.</span>
+      <span class="hint" title="O setup fica em data/setups e serve para outras aquisições da mesma montagem.">Nome, banda permitida (nm) e sensibilidade térmica K<sub>T</sub> (pm/°C) de cada grade. O K<sub>T</sub> vem da calibração em temperatura e é usado pela compensação de temperatura.</span>
     </div>
   </div>
 
@@ -321,7 +321,8 @@
       <label class="field">Canal de referência
         <select id="tempcomp-channel" data-opt="temp_comp.channel"><option value="FBG">FBG</option></select>
       </label>
-      <label class="field">k (0.8–1.2) <input type="number" id="tempcomp-k" data-opt="temp_comp.k_coeff" value="1.0" step="0.05"></label>
+      <label class="field" title="k dos sensores sem K_T no cartão Sensores. Redes iguais, com o mesmo encapsulamento: k = 1.">k padrão <input type="number" id="tempcomp-k" data-opt="temp_comp.k_coeff" value="1.0" step="0.05" min="0"></label>
+      <span class="hint step-note">Δλ<sub>comp</sub> = Δλ<sub>s</sub> − (K<sub>T,s</sub>/K<sub>T,r</sub>)·Δλ<sub>r</sub>: tira de cada sensor a parte térmica medida pela rede de referência. O K<sub>T</sub> de cada rede fica no cartão Sensores; o sensor sem K<sub>T</sub> usa o k ao lado. Precisa do Δλ (ligado junto).</span>
     </div>
       </div>
     </div>

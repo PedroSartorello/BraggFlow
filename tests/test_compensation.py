@@ -8,7 +8,7 @@ where Δλ_ref is the temperature-reference channel (temp_channel_idx).
 
 import numpy as np
 import pytest
-from braggflow.processing.compensation import temperature_compensation
+from braggflow.processing.compensation import compensation_ratios, temperature_compensation
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -176,3 +176,48 @@ class TestPhysicalEdgeCases:
         out = temperature_compensation(sig, temp_channel_idx=1, k_coeff=k)
         expected_residual = sensor - k * drift   # = (1 - k) * drift
         np.testing.assert_allclose(out[:, 0], expected_residual, atol=1e-14)
+
+
+# ── sensibilidade térmica de cada rede ────────────────────────────────────────
+
+class TestThermalSensitivities:
+
+    def test_each_channel_uses_its_own_ratio(self):
+        """k_i = K_T,s[i] / K_T,r: redes com recobrimentos diferentes."""
+        dT = np.linspace(0, 5, 50)                      # °C
+        measurand = np.r_[np.zeros(25), np.full(25, 0.3)]
+        kt = [10.0, 25.0, 12.5]                         # pm/°C; canal 2 é a referência
+        sig = np.column_stack([
+            measurand + kt[0] * 1e-3 * dT,
+            -measurand + kt[1] * 1e-3 * dT,
+            kt[2] * 1e-3 * dT,
+        ])
+        out = temperature_compensation(sig, temp_channel_idx=2, thermal_sensitivities=kt)
+        np.testing.assert_allclose(out[:, 0], measurand, atol=1e-12)
+        np.testing.assert_allclose(out[:, 1], -measurand, atol=1e-12)
+        np.testing.assert_array_equal(out[:, 2], sig[:, 2])
+
+    def test_channel_without_sensitivity_falls_back_to_k(self):
+        assert compensation_ratios(3, 2, 0.9, [20.0, None, 10.0]) == [2.0, 0.9, None]
+
+    def test_no_sensitivities_means_k_for_all(self):
+        assert compensation_ratios(3, 0, 1.1) == [None, 1.1, 1.1]
+
+    def test_nan_counts_as_missing(self):
+        assert compensation_ratios(2, 1, 1.0, [float("nan"), 10.0]) == [1.0, None]
+
+    def test_reference_without_sensitivity_raises(self):
+        with pytest.raises(ValueError, match="reference"):
+            compensation_ratios(2, 1, 1.0, [10.0, None])
+
+    def test_wrong_length_raises(self):
+        with pytest.raises(ValueError, match="entries"):
+            compensation_ratios(3, 0, 1.0, [10.0, 10.0])
+
+    @pytest.mark.parametrize("valor", [0.0, -5.0])
+    def test_non_positive_sensitivity_raises(self, valor):
+        with pytest.raises(ValueError, match="> 0"):
+            compensation_ratios(2, 1, 1.0, [valor, 10.0])
+
+    def test_declares_it_needs_wavelength_shifts(self):
+        assert temperature_compensation.input_quantity == "wavelength_shift"

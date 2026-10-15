@@ -134,3 +134,18 @@ def test_read_processed_csv_without_units(tmp_path):
 ])
 def test_split_unit(column, expected):
     assert split_unit(column) == expected
+
+
+def test_temperature_compensation_refuses_absolute_wavelengths(asc_file):
+    """λs − k·λr carregaria a constante λs0 − k·λr0: só sobre Δλ."""
+    from braggflow.processing import temperature_compensation
+
+    pipeline = OpticalPipeline(str(asc_file)).load_data()
+    with pytest.raises(ValueError, match="to_delta_lambda"):
+        pipeline.apply_filter(temperature_compensation, temp_channel_idx=1)
+    assert pipeline.history == [], "nada foi aplicado"
+
+    pipeline.apply_filter(to_delta_lambda, baseline_samples=10)
+    pipeline.apply_filter(temperature_compensation, temp_channel_idx=1,
+                          thermal_sensitivities=[12.0, 10.0])
+    assert pipeline.history[-1]["params"]["thermal_sensitivities"] == [12.0, 10.0]

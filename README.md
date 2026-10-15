@@ -91,7 +91,9 @@ pipeline.load_data().apply_setup(setup)
     .apply_filter(apply_savgol_filter, window_length=11, polyorder=2)
     .apply_filter(apply_moving_average_filter, window_size=30)
     .apply_filter(to_delta_lambda, baseline_samples=20)
-    .apply_filter(temperature_compensation, temp_channel_idx="FBG", k_coeff=1)
+    # K_T of each grating (pm/°C), in channel order; k = K_T,s / K_T,r
+    .apply_filter(temperature_compensation, temp_channel_idx="FBG",
+                  thermal_sensitivities=[12.4, 11.8, 10.1])
     .save_processed_data("data/processed/output.csv")   # + output.json
 )
 
@@ -241,14 +243,14 @@ and every step applied with its parameters and invalid-sample counts.
 | `apply_moving_average_filter` | filter | Centred (zero-lag) moving-average smoothing |
 | `apply_lowpass_filter` / `apply_highpass_filter` | filter | Butterworth frequency filtering |
 | `to_delta_lambda` | filter | Convert to wavelength shift relative to a baseline |
-| `temperature_compensation` | filter | Subtract a reference (temperature) channel |
+| `temperature_compensation` | filter | Reference-grating compensation, `Δλ_comp = Δλ_s − (K_T,s/K_T,r)·Δλ_r`, with the thermal sensitivity K_T of each FBG (or one ratio k); needs `to_delta_lambda` first |
 
 ## Web app
 
 Three tabs, each with its own data and settings:
 
 * **Séries temporais** — import several interrogator files; each keeps its own
-  sensors (names and bands) and its own pipeline settings, so changing one
+  sensors (names, bands and thermal sensitivity K_T) and its own pipeline settings, so changing one
   never touches another. Process the selected file, or every marked file in
   one go; "Copiar opções" replicates the current settings to the other files.
 * **Espectros** — import several spectrum files (OSA, or spectrometer exports

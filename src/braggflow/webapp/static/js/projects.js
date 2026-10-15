@@ -283,6 +283,7 @@ function sensorsForProject(sensors) {
       name: s.name ?? "",
       nominal_wavelength: s.nominal_wavelength ?? null,
       band: temBanda ? [low, high] : null,
+      temp_sensitivity: [undefined, null, ""].includes(s.temp_sensitivity) ? null : s.temp_sensitivity,
     };
   });
 }

@@ -37,6 +37,11 @@ itself did not change: the same input gives the same output as before.
 - Browser tests (`tests/e2e/`, Playwright): adding a file, processing, saving
   and reopening a project, switching projects, unsaved-changes dialog,
   spectrum peaks and the figure. Extra `e2e` in `pyproject.toml`.
+- Thermal sensitivity K_T (pm/°C) of each FBG in the sensor setup
+  (`Sensor.temp_sensitivity`, a column in the Sensores card). The temperature
+  compensation uses `k = K_T,s / K_T,r` per sensor
+  (`thermal_sensitivities=`), falling back to one `k_coeff`; the status
+  details list the k of each channel. Old setups and projects load unchanged.
 - Spectrometer spectra (OceanView/SpectraSuite, UV-VIS-NIR, with or without
   header): wavelengths from 150 to 2500 nm, header lines kept as metadata, and
   the acquisition time from the `Date:` header and/or the file name
@@ -64,6 +69,10 @@ itself did not change: the same input gives the same output as before.
 - The page script and styles left `index.html`: ES modules in
   `webapp/static/js/` (no build step) and `webapp/static/css/app.css`. The
   code of each function is unchanged.
+- `temperature_compensation` refuses absolute wavelengths (it declares
+  `input_quantity = "wavelength_shift"`): apply `to_delta_lambda` first. Before,
+  it accepted them and returned `λ_s − k·λ_r`, which carries the constant
+  `λ_s0 − k·λ_r0`. In the web app, turning the compensation on turns Δλ on.
 - The web app no longer keeps the data folder and caches in module globals;
   there is no module-level `app` (use `create_app`).
 - `.gitignore` versions the synthetic example data and test fixtures, and keeps
