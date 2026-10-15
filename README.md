@@ -251,11 +251,14 @@ Three tabs, each with its own data and settings:
   sensors (names and bands) and its own pipeline settings, so changing one
   never touches another. Process the selected file, or every marked file in
   one go; "Copiar opções" replicates the current settings to the other files.
-* **Espectros** — import several spectrum files; each has its own preparation
-  (wavelength window, Savitzky-Golay or moving-average smoothing, normalisation
-  and vertical offset), shown in a live plot, plus detection of maxima and
-  minima with position, prominence, FWHM or 3-dB band, Q factor, centroid and
-  spacing.
+* **Espectros** — import several spectrum files (OSA, or spectrometer exports
+  such as OceanView, with or without header); each has its own preparation
+  (optional transmission from raw sample, source and dark spectra, wavelength
+  window, Savitzky-Golay or moving-average smoothing, trend removal,
+  normalisation and vertical offset), shown in a live plot, plus detection of
+  maxima and minima with position, prominence, FWHM or 3-dB band, Q factor,
+  centroid and spacing, and the evolution of the valleys (or peaks) from file
+  to file in acquisition order.
 * **Visualização** — build the figure from either source: channels from one or
   several processed CSVs, or traces from one or several spectra. Curves from
   more than one file are named `arquivo · canal`.

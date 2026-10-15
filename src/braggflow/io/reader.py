@@ -12,7 +12,10 @@ Dois tipos de conteúdo são reconhecidos:
 * ``timeseries`` – comprimento de onda de pico de cada canal ao longo do tempo,
   que é o que o ``OpticalPipeline`` processa (:func:`load_interrogator_file`).
 * ``spectrum`` – espectro óptico, intensidade por comprimento de onda, um ou
-  mais traços por arquivo (:func:`load_spectra`).
+  mais traços por arquivo (:func:`load_spectra`): analisadores de espectro
+  (OSA) e espectrômetros UV-VIS-NIR (OceanView/SpectraSuite, com ou sem o
+  cabeçalho ``>>>>>Begin Spectral Data<<<<<``). O instante da aquisição vem
+  do cabeçalho (``Date: ...``) ou do nome do arquivo (``..._09-30-15-250``).
 """
 
 import codecs
@@ -32,8 +35,13 @@ from .processed import split_unit
 # Prefixos de nome de coluna reconhecidos como eixo de tempo
 TIME_PREFIXES = ("time", "tempo", "timestamp", "datetime", "date")
 
-# Faixa óptica (nm) usada para reconhecer uma coluna de comprimento de onda
-WAVELENGTH_RANGE = (1000.0, 2000.0)
+# Faixa óptica (nm) usada para reconhecer uma coluna de comprimento de onda:
+# do UV dos espectrômetros (~200 nm) ao infravermelho dos OSA (até 2500 nm)
+WAVELENGTH_RANGE = (150.0, 2500.0)
+# Picos de FBG ficam nesta faixa e variam pouco: num arquivo sem cabeçalho,
+# várias colunas assim indicam série temporal, mesmo que a 1ª coluna (tempo)
+# cresça em passos regulares como um eixo de comprimento de onda
+FBG_PEAK_RANGE = (1000.0, 2000.0)
 
 _WHITESPACE_SEP = r"\s+"
 _SEPARATORS = ("\t", ";", ",", _WHITESPACE_SEP)
@@ -190,6 +198,9 @@ class SpectrumSet:
     spectra: List[Spectrum] = field(default_factory=list)
     source: str = ""
     intensity_unit: str = "a.u."
+    acquired: Optional[datetime] = None   # instante da aquisição, se conhecido
+    acquired_from: str = ""               # "header", "header+filename" ou "filename"
+    metadata: Dict[str, str] = field(default_factory=dict)   # "chave: valor" do cabeçalho
 
     @property
     def names(self) -> List[str]:
@@ -246,12 +257,16 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
 
     encoding = _detect_encoding(raw)
     text = raw.decode(encoding, errors="replace")
-    lines = [line for line in text.splitlines()[:max_lines] if line.strip()]
-    if not lines:
+    # Linhas em branco ficam fora da análise, mas o skiprows do pandas conta
+    # todas as linhas do arquivo: ``numbers`` guarda a posição real de cada uma.
+    numbered = [(i, line) for i, line in enumerate(text.splitlines()[:max_lines]) if line.strip()]
+    if not numbered:
         raise ValueError("Arquivo sem linhas de dados.")
     # a última linha pode estar cortada pelo limite de leitura
-    if len(lines) > 2:
-        lines = lines[:-1]
+    if len(numbered) > 2:
+        numbered = numbered[:-1]
+    numbers = [i for i, _ in numbered]
+    lines = [line for _, line in numbered]
 
     # Delimitadores explícitos têm prioridade sobre espaços: um rótulo como
     # "CH 1" não pode acabar partido em duas colunas.
@@ -286,10 +301,13 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
 
     # Linhas de dados costumam terminar com um separador sobrando, então o
     # cabeçalho pode ter um campo a menos que elas.
+    # Um campo só não é cabeçalho: é título ou marcador do equipamento, como
+    # ">>>>>Begin Spectral Data<<<<<" do OceanView antes de duas colunas.
     previous = rows[first_data - 1] if first_data > 0 else []
-    has_header = (bool(previous) and not _looks_like_data(previous)
+    has_header = (len([f for f in previous if f.strip()]) >= 2
+                  and not _looks_like_data(previous)
                   and abs(len(previous) - len(rows[first_data])) <= 1)
-    skiprows = first_data - 1 if has_header else first_data
+    skiprows = numbers[first_data - 1] if has_header else numbers[first_data]
 
     decimal = "."
     data_text = " ".join(" ".join(r) for r in rows[first_data:])
@@ -389,8 +407,8 @@ def _is_wavelength(values: np.ndarray) -> bool:
     if len(finite) < 10:
         return False
     low, high = WAVELENGTH_RANGE
-    if not (low <= np.median(finite) <= high):
-        return False
+    if not (low <= finite.min() and finite.max() <= high):
+        return False              # inclui o tempo, que começa em 0
     if abs(finite[-1] - finite[0]) < 1.0:
         return False              # um canal de FBG varia bem menos de 1 nm
     diffs = np.diff(finite)
@@ -422,7 +440,22 @@ def classify_table(df: pd.DataFrame, fmt: TextFormat) -> str:
             return "spectrum"
         return "timeseries"
 
+    # Duas ou mais colunas, todas com cara de pico de FBG: interrogador sem
+    # cabeçalho. Uma coluna só pode ser a intensidade de um dark ou de uma
+    # fonte, que também fica quase parada na casa dos milhares de contagens.
+    outras = list(numeric.values())[1:]
+    if len(outras) >= 2 and all(_looks_like_fbg_peaks(v) for v in outras):
+        return "timeseries"
     return "spectrum" if any(_is_wavelength(v) for v in numeric.values()) else "timeseries"
+
+
+def _looks_like_fbg_peaks(values: np.ndarray) -> bool:
+    """Coluna de pico de FBG: na faixa de 1000–2000 nm e quase parada (< 20 nm)."""
+    finite = values[np.isfinite(values) & (values > 0)]   # 0 = pico perdido
+    if len(finite) < 10:
+        return False
+    low, high = FBG_PEAK_RANGE
+    return bool(low <= np.median(finite) <= high and np.ptp(finite) < 20.0)
 
 
 def classify_file(path, nrows: int = 2000) -> str:
@@ -604,6 +637,83 @@ def _spectra_from_table(df: pd.DataFrame, fmt: TextFormat, source: str) -> Spect
     return SpectrumSet(spectra=spectra, source=source)
 
 
+_MONTHS = {m: i for i, m in enumerate(
+    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1)}
+# "Mon Mar 02 09:30:15 BRT 2026" (OceanView/SpectraSuite); o fuso é ignorado
+_HEADER_DATE = re.compile(
+    r"^(?:\w{3}\s+)?(\w{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})(?:\s+[A-Za-z][\w+:-]*)?\s+(\d{4})$")
+# "..._09-30-15-250" no fim do nome: hora, minuto, segundo e milissegundo
+_FILENAME_TIME = re.compile(r"(?:^|[_\s-])(\d{2})-(\d{2})-(\d{2})(?:-(\d{1,3}))?$")
+
+
+def read_preamble(path, fmt: Optional[TextFormat] = None) -> Dict[str, str]:
+    """Linhas ``chave: valor`` antes da tabela (cabeçalho do equipamento)."""
+    fmt = fmt or detect_text_format(path)
+    if not fmt.skiprows:
+        return {}
+    with open(path, "r", encoding=fmt.encoding, errors="replace") as f:
+        lines = [next(f, "") for _ in range(fmt.skiprows)]
+    meta = {}
+    for line in lines:
+        key, sep, value = line.strip().partition(":")
+        if sep and key.strip() and len(key) <= 60:
+            meta[key.strip()] = value.strip()
+    return meta
+
+
+def _parse_header_date(text: str) -> Optional[datetime]:
+    text = text.strip()
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+    m = _HEADER_DATE.match(text)
+    if not m or m.group(1).lower() not in _MONTHS:
+        return None
+    mon, day, hh, mm, ss, year = m.groups()
+    try:
+        return datetime(int(year), _MONTHS[mon.lower()], int(day), int(hh), int(mm), int(ss))
+    except ValueError:
+        return None
+
+
+def acquisition_time(path, metadata: Optional[Dict[str, str]] = None):
+    """
+    Instante em que o espectro foi gravado: ``(datetime, origem)``.
+
+    O cabeçalho (``Date: ...``) dá data e hora até o segundo. O nome do
+    arquivo (``..._09-30-15-250``) dá a hora com milissegundos, mas não a
+    data: quando os dois existem e batem no segundo, os milissegundos do nome
+    completam o cabeçalho; sem cabeçalho, a data fica 1900-01-01 e só a hora
+    vale (serve para ordenar e medir intervalos no mesmo dia).
+    Devolve ``(None, "")`` quando nenhum dos dois existe.
+    """
+    header = None
+    for key, value in (metadata or {}).items():
+        if key.lower() in ("date", "data", "timestamp", "acquisition time"):
+            header = _parse_header_date(value)
+            if header:
+                break
+
+    m = _FILENAME_TIME.search(Path(path).stem)
+    from_name = None
+    if m:
+        hh, mm, ss, ms = m.groups()
+        try:
+            from_name = datetime(1900, 1, 1, int(hh), int(mm), int(ss),
+                                 int((ms or "0").ljust(3, "0")) * 1000)
+        except ValueError:
+            from_name = None
+
+    if header and from_name and header.time().replace(microsecond=0) == from_name.time().replace(microsecond=0):
+        return header.replace(microsecond=from_name.microsecond), "header+filename"
+    if header:
+        return header, "header"
+    if from_name:
+        return from_name, "filename"
+    return None, ""
+
+
 def load_spectra(path) -> SpectrumSet:
     """
     Lê um arquivo de espectro óptico (intensidade por comprimento de onda).
@@ -614,7 +724,12 @@ def load_spectra(path) -> SpectrumSet:
     ``Subset 2``…); traços sem dados são descartados.
     """
     df, fmt = read_table(path)
-    return _spectra_from_table(df, fmt, Path(path).name)
+    spectra = _spectra_from_table(df, fmt, Path(path).name)
+    spectra.metadata = read_preamble(path, fmt)
+    spectra.acquired, spectra.acquired_from = acquisition_time(path, spectra.metadata)
+    if "transmission" in Path(path).stem.lower():
+        spectra.intensity_unit = "%"
+    return spectra
 
 
 # ─────────────────────────────────────────────────────────────────────────────

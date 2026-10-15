@@ -42,10 +42,11 @@ Time [s]	CH_1 Sensor_1 [nm]	CH_2 Sensor_1 [nm]	CH_3 Sensor_1 [nm]
 
 ## 2. Optical spectrum
 
-Intensity against wavelength, for example an optical spectrum analyser (OSA)
-export. Read by `braggflow.io.reader.load_spectra`; `classify_file` tells a
-spectrum (uniform, monotonic wavelength grid spanning at least 1 nm) from a
-time series. Two layouts are recognised:
+Intensity against wavelength: an optical spectrum analyser (OSA) export or a
+UV-VIS-NIR spectrometer (OceanView/SpectraSuite, e.g. lossy-mode-resonance
+transmission). Read by `braggflow.io.reader.load_spectra`; `classify_file`
+tells a spectrum (monotonic wavelength grid between 150 and 2500 nm spanning at
+least 1 nm) from a time series. Two layouts are recognised:
 
 | Layout | Columns |
 |---|---|
@@ -53,7 +54,33 @@ time series. Two layouts are recognised:
 | Long (OSA) | traces stacked one after the other, with a label column (`CH 1`, `Subset 2`, …), an index, the wavelength and the intensity; empty traces are dropped |
 
 Descending sweeps are reordered. The intensity unit is whatever the file
-holds (linear or dBm); the peak/dip analysis has a "dB" mode for the latter.
+holds (counts, %, linear or dBm); the peak/dip analysis has a "dB" mode for
+dBm. A file whose name contains `Transmission` is taken as %.
+
+**Spectrometer exports (OceanView/SpectraSuite)** are read with or without
+their header. With it, the lines before `>>>>>Begin Spectral Data<<<<<` are
+kept as metadata (`SpectrumSet.metadata`: spectrometer, integration time,
+scans to average…):
+
+```
+Data from amostra_Transmission__01__09-30-15-250.txt Node
+
+Date: Mon Mar 02 09:30:15 BRT 2026
+Spectrometer: XXX0000
+Integration Time (sec): 1,000000E-1
+...
+>>>>>Begin Spectral Data<<<<<
+200,000	12,50000
+200,800	12,51000
+```
+
+**Acquisition time** (`SpectrumSet.acquired`, used to order spectra in the
+evolution analysis): the `Date:` line of the header (date and time to the
+second; the time zone is ignored) and/or the time at the end of the file name,
+`..._HH-MM-SS-mmm` (milliseconds, but no date). When both exist and agree to
+the second, the milliseconds of the name complete the header. A file without
+header and without a time in its name has no acquisition time; a file with
+only the time in its name takes the date of the other files of the same day.
 
 Minimal example (wide, `;`-separated, decimal comma):
 

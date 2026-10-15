@@ -371,6 +371,31 @@
   <div class="section-label">Preparo do espectro selecionado</div>
 
   <div class="card enabled">
+    <div class="card-header"><span>Transmissão (dados brutos)</span></div>
+    <div class="card-body">
+      <label class="field span2">Espectro da fonte (referência)
+        <select data-spec="reference_file" class="spec-file-select"></select>
+      </label>
+      <label class="field span2">Ruído de fundo (dark)
+        <select data-spec="dark_file" class="spec-file-select"></select>
+      </label>
+      <label class="field span2">Saída
+        <select data-spec="transmission_output">
+          <option value="percent">Transmissão (%)</option>
+          <option value="fraction">Transmissão (0–1)</option>
+          <option value="db">Transmissão (dB)</option>
+          <option value="absorbance">Absorbância (−log₁₀ T)</option>
+        </select>
+      </label>
+      <span class="hint span2">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
+        T = (S − D)/(R − D); só a fonte, T = S/R; só o fundo, S − D. Deixe os dois vazios para
+        analisar o espectro como está — bruto ou já em transmissão, como as exportações do OceanView
+        em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima) e ficam
+        fora da evolução entre arquivos.</span>
+    </div>
+  </div>
+
+  <div class="card enabled">
     <div class="card-header"><span>Recorte e suavização</span></div>
     <div class="card-body">
       <label class="field">λ mínimo (nm) <input type="number" step="any" data-spec="lambda_min" placeholder="início"></label>
@@ -383,6 +408,16 @@
       </label>
       <label class="field">Janela (pontos) <input type="number" step="1" min="3" data-spec="smooth_window" placeholder="sem suavização"></label>
       <label class="field" id="spec-order-field">Ordem do ajuste <input type="number" step="1" min="1" max="10" data-spec="smooth_order"></label>
+      <label class="field span2" title="Subtrai um polinômio ajustado ao espectro recortado. Vales e picos rasos sobre uma linha de base inclinada (LMR, SPR, franjas) passam a ser medidos em relação a essa linha de base.">Remover tendência
+        <select data-spec="detrend">
+          <option value="">não</option>
+          <option value="0">média (grau 0)</option>
+          <option value="1">reta (grau 1)</option>
+          <option value="2">parábola (grau 2)</option>
+          <option value="3">polinômio de grau 3</option>
+          <option value="4">polinômio de grau 4</option>
+        </select>
+      </label>
       <label class="field">Normalização
         <select data-spec="normalize">
           <option value="none">nenhuma</option>
@@ -797,6 +832,48 @@
             normalização), não na versão decimada do gráfico.</span>
         </div>
         <div class="table-wrap"><table class="data-table" id="spectra-table"></table></div>
+      </div>
+    </details>
+    <details class="card enabled collapsible" id="spectra-evolution">
+      <summary class="card-header"><span>Evolução entre arquivos</span></summary>
+      <div class="card-body" style="grid-template-columns: 1fr;">
+        <div class="analysis-options evolution-options">
+          <label class="field">Acompanhar
+            <select id="evo-kind"><option value="min">vales</option><option value="max">picos</option></select>
+          </label>
+          <label class="field" title="Mais proeminente: a ressonância principal de cada arquivo. Seguir: cada extremo do 1º arquivo vira uma trilha, que fica com o extremo mais próximo em cada arquivo seguinte.">Modo
+            <select id="evo-mode">
+              <option value="prominent">o mais proeminente</option>
+              <option value="follow">seguir os do 1º arquivo</option>
+            </select>
+          </label>
+          <label class="field" title="Maior salto (nm) entre arquivos para uma trilha no modo seguir. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo.">Salto máximo (nm)
+            <input type="number" id="evo-tolerance" step="any" min="0" placeholder="auto">
+          </label>
+          <label class="field">Eixo y
+            <select id="evo-y">
+              <option value="wavelength">λ (nm)</option>
+              <option value="delta">Δλ em relação ao 1º (nm)</option>
+              <option value="intensity">intensidade no extremo</option>
+              <option value="prominence">profundidade / altura</option>
+              <option value="fwhm">largura (nm)</option>
+            </select>
+          </label>
+          <label class="field">Eixo x
+            <select id="evo-x">
+              <option value="time">tempo decorrido (min)</option>
+              <option value="order">ordem dos arquivos</option>
+            </select>
+          </label>
+          <button type="button" id="btn-evolution" class="btn-primary btn-sm">Calcular</button>
+          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+        </div>
+        <span class="hint" id="evolution-status">Usa os espectros do projeto, cada um com o seu preparo
+          (recorte, suavização, tendência), em ordem de aquisição: cabeçalho <code>Date:</code> ou hora
+          no nome do arquivo (<code>..._09-30-15-250</code>). Para comparar, aplique o mesmo preparo a
+          todos.</span>
+        <div id="evolution-plot"></div>
+        <div class="table-wrap"><table class="data-table" id="evolution-table"></table></div>
       </div>
     </details>
     <div id="spectra-empty" class="empty-state">
