@@ -249,3 +249,61 @@ def test_raw_spectrum_becomes_transmission_with_source_and_dark(lmr, app):
         return t.x[t.y.indexOf(Math.min(...t.y))];
     }""")
     assert principal == pytest.approx(780.0, abs=1.5)
+
+
+def test_evolution_belongs_to_the_open_project(lmr, app):
+    """Trocar de projeto não pode deixar na tela a evolução do anterior."""
+    def adicionar_espectros(nomes):
+        app.click('#tabs .tab[data-tab="spectra"]')
+        app.locator("#spectra-empty-files .empty-file", has_text=nomes[0]).click()
+        expect(app.locator("#spectra-status")).to_contain_text("pontos")
+        if nomes[1:]:
+            app.locator("#tab-spectra-sidebar details.advanced > summary").click()
+            for nome in nomes[1:]:
+                app.check(f'.pick-spectrum[value="data/raw/{nome}"]')
+            app.click("#btn-add-spectra")
+        expect(app.locator("#spectra-files .file-name")).to_have_count(len(nomes))
+        preparar_lmr(app)
+        app.click("#btn-copy-spectrum")
+
+    def arquivos_da_evolucao():
+        return app.locator("#evolution-table tbody tr td:nth-child(1)").all_inner_texts()
+
+    nomes_a = [c.name for c in lmr]
+    novo_projeto(app, "A")
+    adicionar_espectros(nomes_a)
+    app.locator("#spectra-evolution > summary").click()
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+    salvar_projeto(app)
+
+    app.click("#btn-projects")
+    novo_projeto(app, "B")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(0)
+    assert curvas(app, "evolution-plot") == []
+
+    # B com outros arquivos: a evolução mostra os de B, e só eles
+    import shutil
+    pasta = lmr[0].parent
+    nomes_b = []
+    for i, caminho in enumerate(lmr[:2]):
+        destino = pasta / f"b{i}_{caminho.name}"
+        shutil.copy(caminho, destino)
+        nomes_b.append(destino.name)
+    app.reload()
+    novo_projeto(app, "B")
+    adicionar_espectros(nomes_b)
+    app.locator("#spectra-evolution > summary").click()          # a página recarregada fecha o cartão
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(2)
+    assert arquivos_da_evolucao() == nomes_b
+    salvar_projeto(app)
+
+    # De volta ao A, com o cartão ainda aberto: recalcula com os arquivos de A
+    app.click("#btn-projects")
+    import re
+    app.locator("#gate-projects .gate-row").filter(       # nome exato: "A" também está em "aberto"
+        has=app.locator("strong", has_text=re.compile(r"^A$"))).click()
+    expect(app.locator("#project-name")).to_have_value("A")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+    assert arquivos_da_evolucao() == nomes_a

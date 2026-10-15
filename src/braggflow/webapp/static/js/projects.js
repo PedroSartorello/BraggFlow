@@ -4,7 +4,7 @@
 import { $, fmtBytes, fmtWhen, showError } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, spectraState, spectraStateFor } from "./state.js";
 import { addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
-import { renderSpectraFiles, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
+import { renderSpectraFiles, resetSpectraAnalyses, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
 import { addMarkerRow, applySourceMode, applyStyle, channelStyleMemory, collectMarkers, collectStyle, drawPlotMarkers, loadVizSources, refreshVizCurves, rememberChannelStyles, vizSource } from "./viz.js";
 import { switchTab } from "./tabs.js";
 
@@ -47,6 +47,7 @@ function clearProjectState() {
   if (shared.figureOptions) applyStyle(shared.figureOptions.style);
   renderSeriesFiles();
   renderSpectraFiles();
+  resetSpectraAnalyses();
   Plotly.purge($("plot"));
   Plotly.purge($("spectra-plot"));
   $("status-text").textContent = "Adicione arquivos de série temporal.";
