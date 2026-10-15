@@ -153,11 +153,13 @@ What is connected to each interrogator channel. Saved by the web app in
 | `sensors[].name` | name used in the processed CSV and in the figures |
 | `sensors[].nominal_wavelength` | nominal Bragg wavelength (nm), optional |
 | `sensors[].band` | `[min, max]` allowed band (nm), optional; readings outside it are invalid |
+| `sensors[].temp_sensitivity` | thermal sensitivity K_T (pm/°C) from a temperature calibration, optional; the temperature compensation uses `k = K_T,s / K_T,r` |
 
 ```json
 {"name": "bancada", "description": "",
  "sensors": [{"channel": "CH_1 Sensor_1 [nm]", "name": "EFBG1",
-              "nominal_wavelength": null, "band": [1548.0, 1552.0]}]}
+              "nominal_wavelength": null, "band": [1548.0, 1552.0],
+              "temp_sensitivity": 12.4}]}
 ```
 
 ## 6. Other files of the web app

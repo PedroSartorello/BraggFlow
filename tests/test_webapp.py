@@ -109,7 +109,8 @@ def test_setup_save_list_and_load(webapp):
 
     setup = client.get("/api/setups/Bancada 1").get_json()
     assert setup["sensors"][0] == {"channel": "CH_1 Sensor_1 [nm]", "name": "S1",
-                                   "nominal_wavelength": None, "band": [1548.0, 1552.0]}
+                                   "nominal_wavelength": None, "band": [1548.0, 1552.0],
+                                   "temp_sensitivity": None}
     assert client.get("/api/setups/..%2Fsecret").status_code == 404
 
 

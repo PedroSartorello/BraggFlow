@@ -48,6 +48,15 @@ the processed signal over the raw one; click it to add a time marker. Several
 files of one run can be joined in the "Concatenação" card, in the order shown
 there. Shortcuts: Ctrl+Enter processes, Ctrl+S saves the project.
 
+**Temperature compensation** (last step of the Séries temporais pipeline) —
+reference-grating method: each sensing FBG loses the thermal part measured by
+the reference, `Δλ_comp = Δλ_s − (K_T,s/K_T,r)·Δλ_r`. Enter the thermal
+sensitivity K_T (pm/°C) of every grating, the reference included, in the
+Sensores card (it is saved with the setup and the project); a sensor without
+K_T uses the "k padrão" of the step. It works on wavelength shifts, so turning
+it on turns Δλ on too. The status details list the k used for each channel,
+and the JSON records the K_T values.
+
 **Espectros** — optical spectra. Wavelength window, smoothing (Savitzky-Golay
 or moving average), normalisation, vertical offset, and detection of maxima and
 minima with position (sub-sample), prominence, FWHM or 3-dB band, Q factor,

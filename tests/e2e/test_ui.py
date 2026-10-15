@@ -149,3 +149,34 @@ def test_figure_is_drawn_from_the_processed_csv(app):
     expect(app.locator("#viz-img")).to_be_visible()
     assert app.locator("#viz-img").get_attribute("src").startswith("data:image/png;base64,")
     expect(app.locator("#viz-status")).to_contain_text("3 curva(s)")
+
+
+def test_temperature_compensation_uses_the_thermal_sensitivity_of_each_fbg(app):
+    novo_projeto(app, "Compensação")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.uncheck("#auto-process")
+    kt = {"CH_1 Sensor_1 [nm]": "20", "CH_2 Sensor_1 [nm]": "", "CH_3 Sensor_1 [nm]": "10"}
+    for canal, valor in kt.items():
+        app.locator(f'.sensor-row[data-channel="{canal}"] .sensor-kt').fill(valor)
+
+    app.check("#tempcomp-enabled")
+    expect(app.locator("#delta-enabled")).to_be_checked()      # compensação precisa do Δλ
+    expect(app.locator("#tempcomp-k")).to_be_visible()           # ligar a etapa abre o cartão
+    expect(app.locator("#tempcomp-channel")).to_have_value("FBG")
+    app.fill("#tempcomp-k", "0.5")
+    app.click("#btn-process")
+
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    detalhes = app.locator("#status-details")
+    expect(detalhes).to_contain_text("EFBG1 k = 2 (K_T 20 / 10 pm/°C)")
+    expect(detalhes).to_contain_text("EFBG2 k = 0,5 (k informado)")
+
+    salvar_projeto(app)
+    app.reload()
+    abrir_projeto(app, "Compensação")
+    for canal, valor in kt.items():
+        expect(app.locator(f'.sensor-row[data-channel="{canal}"] .sensor-kt')).to_have_value(valor)
+    expect(app.locator("#tempcomp-enabled")).to_be_checked()
+
+    app.uncheck("#delta-enabled")                               # sem Δλ, sem compensação
+    expect(app.locator("#tempcomp-enabled")).not_to_be_checked()
