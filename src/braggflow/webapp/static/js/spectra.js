@@ -13,6 +13,7 @@ export async function openSpectraTab() {
   } else if (shared.currentSpectrumFile) {
     await previewSpectrum();
   }
+  if ($("spectra-evolution").open && !evolution) runEvolution();   // cartão aberto: do projeto atual
 }
 
 // ── Aba Espectros ────────────────────────────────────────────────────────────
@@ -101,6 +102,8 @@ export function renderSpectraFiles() {
   document.body.classList.toggle("no-spectra", !projectSpectraPaths().length);
   renderEmptyFiles("spectrum");
   renderFilePicker("spectrum");
+  const assinatura = projectSpectraPaths().join("|");
+  if (evolution && assinatura !== evolutionFiles) scheduleEvolution();
 }
 
 export async function selectSpectrumFile(path) {
@@ -333,11 +336,37 @@ $("tab-spectra-sidebar").addEventListener("change", (e) => {
   syncSpectrumFields();
   markProjectDirty();
   scheduleSpectrumPreview();
+  if (evolution) scheduleEvolution();     // o preparo mudou: a evolução também
 });
 $("btn-copy-spectrum").addEventListener("click", copySpectrumSettings);
 
 // ── Evolução entre arquivos ──────────────────────────────────────────────────
 let evolution = null;      // última resposta de /api/spectra/evolution
+let evolutionRequest = 0;  // descarta respostas de cálculos anteriores (ou de outro projeto)
+let evolutionFiles = "";   // arquivos do projeto usados no cálculo atual
+let evolutionTimer = null;
+const EVOLUTION_HINT = $("evolution-status").innerHTML;
+
+// Projeto trocado ou fechado: nada do anterior fica na tela
+export function resetSpectraAnalyses() {
+  evolutionRequest++;
+  clearTimeout(evolutionTimer);
+  evolution = null;
+  evolutionFiles = "";
+  Plotly.purge($("evolution-plot"));
+  $("evolution-table").innerHTML = "";
+  $("evolution-status").innerHTML = EVOLUTION_HINT;
+  spectraAnalysis = null;
+  $("spectra-summary").innerHTML = "";
+  $("spectra-table").innerHTML = "";
+  $("spectra-results").classList.add("hidden");
+}
+
+function scheduleEvolution() {
+  if (!$("spectra-evolution").open) { evolution = null; return; }   // recalcula ao abrir
+  clearTimeout(evolutionTimer);
+  evolutionTimer = setTimeout(() => runEvolution(), 600);
+}
 
 const EVO_Y = {
   wavelength: ["λ (nm)", (p) => p.wavelength, 4],
@@ -348,10 +377,21 @@ const EVO_Y = {
 };
 
 async function runEvolution() {
+  const request = ++evolutionRequest;
   const fora = referenceFiles();
   const items = projectSpectraPaths().filter((path) => !fora.has(path)).map((path) => ({
     file: path, settings: spectraStateFor(path).settings,
   }));
+  evolutionFiles = projectSpectraPaths().join("|");
+  if (items.length < 2) {
+    evolution = null;
+    Plotly.purge($("evolution-plot"));
+    $("evolution-table").innerHTML = "";
+    $("evolution-status").textContent = items.length
+      ? "Adicione mais espectros ao projeto: a evolução precisa de dois ou mais (fonte e fundo não contam)."
+      : "Adicione dois ou mais espectros ao projeto para ver a evolução.";
+    return;
+  }
   $("evolution-status").textContent = "Calculando…";
   try {
     const resp = await fetch("/api/spectra/evolution", {
@@ -361,12 +401,14 @@ async function runEvolution() {
                              tolerance: $("evo-tolerance").value }),
     });
     const data = await resp.json();
+    if (request !== evolutionRequest) return;      // outro cálculo (ou projeto) veio depois
     if (!resp.ok) throw new Error(data.error || "Erro ao calcular a evolução.");
     evolution = data;
     showError("");
     if (data.x === "order") $("evo-x").value = "order";
     renderEvolution();
   } catch (err) {
+    if (request !== evolutionRequest) return;
     evolution = null;
     $("evolution-status").textContent = `Falha: ${err.message}`;
     Plotly.purge($("evolution-plot"));

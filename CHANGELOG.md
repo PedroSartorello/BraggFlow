@@ -90,6 +90,10 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- Switching projects left the "Evolução entre arquivos" (and the peaks and
+  valleys table) of the previous project on screen. They are cleared, and the
+  evolution is recomputed for the open project, also when its files or their
+  preparation change while the card is open.
 - Text files with blank lines in the equipment header were read from the wrong
   line (the header count skipped them, the reader did not).
 - A one-field line just before the data (such as
