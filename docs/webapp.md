@@ -34,10 +34,25 @@ drop it on the page).
 A project keeps a whole analysis under a name: the files with their own sensors
 and processing steps, the concatenation order, the time markers, the spectra
 settings, the selected curves and the figure style
-(`data/projects/<name>.json`). The app asks before leaving a project with
-unsaved changes. Processed CSVs go to `data/processed/<project>/`, so two
+(`data/projects/<name>.json`). Processed CSVs go to `data/processed/<project>/`, so two
 projects never overwrite each other's results. Opening a project only shows the
 saved state; "Processar ▶" (or automatic reprocessing) writes the CSV.
+
+*Saving and undoing.* With "Salvar sozinho" on (the default, remembered in
+this browser), the project saves itself about 2 s after each change; the
+header says "alterações…", "salvando…" or "salvo às 14:03" (a failed save
+shows "erro ao salvar", click to retry). Switching projects or closing the
+page saves what is pending first, without asking. The project name is saved
+when you leave the field or press Enter, not at each letter, since saving
+under another name makes a copy. A project deleted while open is not saved
+again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
+asks before leaving a project with unsaved changes.
+
+↶ / ↷ (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y outside text fields) undo and redo
+changes to the project — files, steps, sensors, markers, figure style — up to
+50 steps back to how it was when it was opened; changes less than half a
+second apart (typing a value) count as one step, and the project name is not
+part of it. Inside a text field, Ctrl+Z is the field's own undo.
 
 ## Tabs
 
@@ -158,7 +173,7 @@ build step. `main.js` is the entry point; the modules are:
 | `spectra.js` | Espectros tab: preparation, plot, peaks and valleys |
 | `viz.js` | Figura tab: data sources, styles (changed options, card summaries, search), markers, figure, copy |
 | `analysis.js` | interval statistics under the Séries temporais plot |
-| `projects.js` | project screen, adding/removing files, save, open, delete, unsaved-changes dialog |
+| `projects.js` | project screen, adding/removing files, save, open, delete, autosave, undo/redo history, unsaved-changes dialog |
 | `tabs.js` | switching tabs |
 | `main.js` | events that cross tabs (sidebar, keyboard shortcuts) and startup |
 

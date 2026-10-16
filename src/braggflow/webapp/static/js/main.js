@@ -6,7 +6,7 @@ import { $, checkServerBuild, showError, syncCardStyles, toggleStep } from "./co
 import { applySetup, loadChannels, loadFileList, loadSetupList, processData, scheduleAutoProcess, syncTempChannels } from "./series.js";
 import { previewSpectrum } from "./spectra.js";
 import { drawPlotMarkers, generateFigure, loadFigureOptions, onVizChange, scheduleFigure, sortMarkerRows } from "./viz.js";
-import { markProjectDirty, openProjectGate, saveProject } from "./projects.js";
+import { markProjectDirty, openProjectGate, redo, saveProject, undo } from "./projects.js";
 
 // Marcações (abaixo do gráfico): não mudam o processamento, só a figura
 $("card-markers").addEventListener("change", (e) => {
@@ -42,6 +42,16 @@ $("sidebar").addEventListener("change", async (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  // Desfazer do projeto, fora dos campos onde se digita (lá vale o do campo)
+  const tecla = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && (tecla === "z" || tecla === "y")) {
+    const digitando = e.target.closest(
+      "textarea, [contenteditable], input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=color])");
+    if (digitando || !$("project-gate").classList.contains("hidden")) return;
+    e.preventDefault();
+    (tecla === "y" || e.shiftKey ? redo : undo)().catch((err) => showError(err.message));
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();                 // salva o projeto, não a página
     saveProject();
