@@ -41,12 +41,20 @@ saved state; "Processar ▶" (or automatic reprocessing) writes the CSV.
 
 ## Tabs
 
-**Séries temporais** — interrogator files. For each file: sensor names and
-allowed bands (reusable as setups), and the pipeline steps grouped as cleaning
-and sampling, filters and conversion, each with its parameters. The plot shows
-the processed signal over the raw one; click it to add a time marker. Several
-files of one run can be joined in the "Concatenação" card, in the order shown
-there. Shortcuts: Ctrl+Enter processes, Ctrl+S saves the project.
+**Séries temporais** — interrogator files. The sidebar follows the order of
+the work: *1 · Arquivos*, *2 · Sensores* (names, allowed bands and K_T,
+reusable as setups) and *3 · Etapas* (cleaning and sampling, filters and
+conversion, each with its parameters). The plot shows the processed signal
+over the raw one. Several files of one run can be joined in the "Concatenação"
+card, which appears once the project has two or more files. Shortcuts:
+Ctrl+Enter processes, Ctrl+S saves the project.
+
+*Markers* (instants that split the run, used by the figure and the interval
+statistics) are made on the plot with the *Marcar* tool: a click adds one, and
+dragging a marker line changes its instant. With the other tools a click adds
+nothing, so zooming never leaves stray markers. They are listed, with label
+and colour, in the "Marcações" panel under the plot, where they can also be
+typed in.
 
 The toolbar above the plot chooses how to look at it (display only, the
 processing does not change; the choice is remembered in this browser):
@@ -56,7 +64,7 @@ processing does not change; the choice is remembered in this browser):
 * *Relativo ao início* — each channel minus its first value.
 * *Sinal bruto* — the signal before processing, underneath. The y scale follows
   the processed signal, so raw spikes do not flatten the curve.
-* *Zoom* / *Medir trecho* — what dragging does. With *Medir trecho*, the
+* *Zoom* / *Medir trecho* / *Marcar* — what the mouse does. With *Medir trecho*, the
   dragged stretch gets, for every channel: mean, σ, min, max, peak to peak,
   drift (slope of a fitted line, per second), the value at the start and at
   the end (interpolated) and their difference. Computed on the whole
@@ -64,7 +72,8 @@ processing does not change; the choice is remembered in this browser):
   clipboard for a spreadsheet; Esc clears it.
 
 Plot shortcuts (outside text fields): 1 / 2 separate or same plot, D relative
-to the start, B raw signal, M measure, Z zoom, Esc clear the measurement.
+to the start, B raw signal, M measure, A mark, Z zoom, Esc clear the
+measurement.
 
 **Temperature compensation** (last step of the Séries temporais pipeline) —
 reference-grating method: each sensing FBG loses the thermal part measured by
@@ -79,7 +88,8 @@ and the JSON records the K_T values.
 exports with or without header). Each file has its own preparation, applied in
 this order:
 
-1. *Transmission (raw data)*, optional: choose the source spectrum R and/or
+1. *Transmission (raw data)*, optional (the card stays closed, and says "não
+   usada", until a source or a dark is chosen): choose the source spectrum R and/or
    the background (dark) D among the spectra of the project; the sample S
    becomes `T = (S − D)/(R − D)` (%, 0–1, dB or absorbance), `S/R` without
    dark, or `S − D` without source. Left empty, the spectrum is analysed as

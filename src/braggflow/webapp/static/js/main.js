@@ -8,16 +8,19 @@ import { previewSpectrum } from "./spectra.js";
 import { drawPlotMarkers, generateFigure, loadFigureOptions, onVizChange, scheduleFigure, sortMarkerRows } from "./viz.js";
 import { markProjectDirty, openProjectGate, saveProject } from "./projects.js";
 
+// Marcações (abaixo do gráfico): não mudam o processamento, só a figura
+$("card-markers").addEventListener("change", (e) => {
+  if (!e.target.closest("#marker-list")) return;
+  markProjectDirty();
+  sortMarkerRows();
+  drawPlotMarkers();
+  scheduleFigure();
+});
+
 $("sidebar").addEventListener("change", async (e) => {
   const el = e.target;
   if (el.matches(".pick-series, .pick-spectrum, #auto-process, #file-upload, #spectra-upload")) return;
   markProjectDirty();
-  if (el.closest("#marker-list")) {      // marcações não mudam o processamento
-    sortMarkerRows();
-    drawPlotMarkers();
-    scheduleFigure();
-    return;
-  }
   if (el.closest("#tab-viz-sidebar")) {
     await onVizChange(el);  // aba de visualização: atualiza a figura, não o processamento
     return;

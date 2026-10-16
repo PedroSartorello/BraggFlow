@@ -32,6 +32,16 @@ function applySpectrumSettings(settings) {
     else el.value = value ?? "";
   });
   syncSpectrumFields();
+  $("card-transmission").open = syncTransmissionState();   // aberto só quando está em uso
+}
+
+// Título do cartão: o que a conversão está usando (ou "não usada")
+function syncTransmissionState() {
+  const ref = document.querySelector('[data-spec="reference_file"]').value;
+  const dark = document.querySelector('[data-spec="dark_file"]').value;
+  $("transmission-state").textContent = ref && dark ? "fonte e fundo"
+    : ref ? "só a fonte" : dark ? "só o fundo" : "não usada";
+  return Boolean(ref || dark);
 }
 
 export function saveCurrentSpectrumState() {
@@ -334,6 +344,7 @@ function scheduleSpectrumPreview() {
 $("tab-spectra-sidebar").addEventListener("change", (e) => {
   if (e.target.matches("#spectra-upload, .pick-spectrum")) return;
   syncSpectrumFields();
+  syncTransmissionState();
   markProjectDirty();
   scheduleSpectrumPreview();
   if (evolution) scheduleEvolution();     // o preparo mudou: a evolução também

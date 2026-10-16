@@ -452,16 +452,37 @@ export function markerLayout() {
     annotations: markers.filter((m) => m.label).map((m) => ({
       x: m.time, xref: "x", y: 1, yref: "paper", text: m.label, showarrow: false,
       xanchor: "left", yanchor: "top", xshift: 3, font: { size: 11, color: m.color },
+      bgcolor: "rgba(255, 255, 255, 0.85)", borderpad: 2,           // legível por cima da curva
     })),
   };
 }
 
+// Instantes das marcações válidas, na ordem em que são desenhadas
+export function collectMarkerTimes() {
+  return collectMarkers().map((m) => Number(m.time)).filter(Number.isFinite);
+}
+
+// Uma marcação arrastada no gráfico (índice na ordem do desenho)
+export function moveMarker(indice, x) {
+  const linhas = [...document.querySelectorAll(".marker-row")]
+    .filter((row) => Number.isFinite(parseFloat(row.querySelector(".marker-time").value)));
+  const row = linhas[indice];
+  if (!row || !Number.isFinite(Number(x))) return;
+  row.querySelector(".marker-time").value = Math.round(Number(x) * 100) / 100;
+  sortMarkerRows();
+  markProjectDirty();
+  drawPlotMarkers();
+  scheduleFigure();
+}
+
 export function drawPlotMarkers() {
   const n = collectMarkers().length;
+  $("marker-count").textContent = n ? `(${n})` : "";
   $("viz-marker-count").textContent = n
     ? `${n} marcação(ões), feitas na aba Séries temporais.`
     : "Nenhuma marcação: clique no gráfico da aba Séries temporais para criar.";
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
+  if (!n) $("card-markers").open = false;
 }
 
 // Um clique marca; o duplo clique (que reajusta o zoom) não

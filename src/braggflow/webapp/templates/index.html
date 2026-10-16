@@ -90,10 +90,9 @@
 
   <div id="tab-series-sidebar">
 
-  <div class="section-label">Entrada</div>
+  <div class="section-label step-label"><span class="step-num">1</span> Arquivos</div>
 
   <div class="card enabled">
-    <div class="card-header"><span>Arquivos de série temporal</span></div>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <!-- Guarda qual arquivo está sendo editado; a lista acima é a interface -->
       <select id="file-select" class="hidden"></select>
@@ -117,7 +116,7 @@
 
   <div class="needs-series">
 
-  <details class="card enabled collapsible" id="card-concat">
+  <details class="card enabled collapsible hidden" id="card-concat">
     <summary class="card-header"><span>Concatenação</span></summary>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <span class="hint">Para um ensaio gravado em vários arquivos: os marcados na lista acima
@@ -128,19 +127,9 @@
     </div>
   </details>
 
-  <details class="card enabled collapsible" id="card-markers" open>
-    <summary class="card-header"><span>Marcações</span></summary>
-    <div class="card-body" style="grid-template-columns: 1fr;">
-      <span class="hint">Clique no gráfico para marcar um instante, ou adicione à mão.
-        Valem para a figura e para as estatísticas da aba Visualização.</span>
-      <span class="hint" id="marker-hint">t (s) · legenda · cor</span>
-      <div id="marker-list"></div>
-      <button type="button" id="btn-add-marker" class="btn-dashed">+ Adicionar marcação</button>
-    </div>
-  </details>
+  <div class="section-label step-label"><span class="step-num">2</span> Sensores</div>
 
   <div class="card enabled" id="card-sensors">
-    <div class="card-header"><span>Sensores</span></div>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <label class="field">Setup salvo
         <select id="setup-select"><option value="">— nenhum —</option></select>
@@ -157,7 +146,7 @@
 
   
 
-  <div class="section-label" title="As etapas são aplicadas de cima para baixo.">Etapas do pipeline · de cima para baixo</div>
+  <div class="section-label step-label" title="As etapas são aplicadas de cima para baixo."><span class="step-num">3</span> Etapas · de cima para baixo</div>
 
   <details class="card enabled collapsible" open>
     <summary class="card-header"><span>Limpeza e amostragem</span></summary>
@@ -348,10 +337,9 @@
 
   <div id="tab-spectra-sidebar" class="hidden">
 
-  <div class="section-label">Entrada</div>
+  <div class="section-label step-label"><span class="step-num">1</span> Arquivos</div>
 
   <div class="card enabled">
-    <div class="card-header"><span>Arquivos de espectro</span></div>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div id="spectra-files" class="file-list"></div>
       <details class="advanced">
@@ -369,10 +357,11 @@
   </div>
 
   <div class="needs-spectra">
-  <div class="section-label">Preparo do espectro selecionado</div>
+  <div class="section-label step-label"><span class="step-num">2</span> Preparo do espectro selecionado</div>
 
-  <div class="card enabled">
-    <div class="card-header"><span>Transmissão (dados brutos)</span></div>
+  <details class="card enabled collapsible" id="card-transmission">
+    <summary class="card-header"><span>Transmissão (dados brutos)</span>
+      <span class="card-state" id="transmission-state">não usada</span></summary>
     <div class="card-body">
       <label class="field span2">Espectro da fonte (referência)
         <select data-spec="reference_file" class="spec-file-select"></select>
@@ -394,7 +383,7 @@
         em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima) e ficam
         fora da evolução entre arquivos.</span>
     </div>
-  </div>
+  </details>
 
   <div class="card enabled">
     <div class="card-header"><span>Recorte e suavização</span></div>
@@ -435,8 +424,9 @@
     </div>
   </div>
 
+  <div class="section-label step-label"><span class="step-num">3</span> Picos e vales</div>
+
   <div class="card enabled">
-    <div class="card-header"><span>Picos e vales</span></div>
     <div class="card-body">
       <label class="check-row"><input type="checkbox" data-spec="find_max"> Máximos (picos)</label>
       <label class="check-row"><input type="checkbox" data-spec="find_min"> Mínimos (vales)</label>
@@ -756,8 +746,10 @@
           <input type="radio" name="plot-tool" value="zoom" checked> Zoom</label>
         <label title="Arrastar mede o trecho: média, desvio, deriva e variação de cada canal (atalho M)">
           <input type="radio" name="plot-tool" value="select"> Medir trecho</label>
+        <label title="Clicar marca um instante; arrastar uma marcação muda o instante dela (atalho A)">
+          <input type="radio" name="plot-tool" value="mark"> Marcar</label>
       </div>
-      <span class="plot-hint" id="plot-hint">arraste = zoom · clique = marcação</span>
+      <span class="plot-hint" id="plot-hint">arraste = zoom · duplo clique = ver tudo</span>
     </div>
     <div id="plot"></div>
     <div id="selection-panel" class="selection-panel hidden" aria-live="polite">
@@ -769,6 +761,13 @@
       </div>
       <div class="table-wrap"><table class="data-table" id="selection-table"></table></div>
     </div>
+    <details class="markers-panel" id="card-markers">
+      <summary><span>Marcações</span> <span class="marker-count" id="marker-count"></span>
+        <span class="hint">instantes que dividem o ensaio: valem para a figura e para as estatísticas</span></summary>
+      <span class="hint" id="marker-hint">t (s) · legenda · cor</span>
+      <div id="marker-list"></div>
+      <button type="button" id="btn-add-marker" class="btn-dashed">+ Adicionar marcação</button>
+    </details>
     <div id="series-empty" class="empty-state">
       <h2>Comece pelos arquivos do interrogador</h2>
       <div class="dropzone" data-kind="series">

@@ -96,6 +96,7 @@ header {
 .card-header span { font-weight: 600; font-size: 12.5px; order: 1; }
 .card:not(.enabled) .card-header span { color: var(--muted); }
 .card-body { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.card > .card-body:first-child { margin-top: 0; }   /* cartão sem cabeçalho (o rótulo numerado faz esse papel) */
 .card:not(.enabled) .card-body { display: none; }
 
 /* ── Etapas do pipeline ──────────────────────────────────────────────── */
@@ -229,6 +230,7 @@ button { font-family: var(--font); cursor: pointer; }
 .needs-series, .needs-spectra { display: contents; }
 body.no-series .needs-series, body.no-spectra .needs-spectra { display: none !important; }
 body.no-series #status, body.no-series #plot, body.no-series #plot-toolbar, body.no-series #selection-panel,
+body.no-series #card-markers,
 body.no-spectra #status-spectra, body.no-spectra #spectra-plot { display: none !important; }
 body.no-series #btn-copy-series { display: none; }
 body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { display: none !important; }
@@ -297,6 +299,24 @@ body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { displ
   border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow-sm); max-height: 34vh; overflow: auto;
 }
 .selection-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.step-label { display: flex; align-items: center; gap: 7px; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px;
+  border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 10.5px;
+}
+.card-state { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--muted); text-transform: none; }
+.markers-panel {
+  flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 7px 12px; box-shadow: var(--shadow-sm); max-height: 32vh; overflow: auto;
+  font-size: 12px;
+}
+.markers-panel > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; color: var(--text); }
+.markers-panel[open] > summary { margin-bottom: 8px; }
+.marker-count { color: var(--accent); }
+#plot.near-marker .nsewdrag, #plot.near-marker .drag { cursor: ew-resize !important; }
+.markers-panel #marker-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px 14px; margin: 6px 0;
+}
 .selection-head .hint { flex: 1; }
 .plot-hint { flex: 0 0 auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .status-link {

@@ -240,8 +240,11 @@ def test_raw_spectrum_becomes_transmission_with_source_and_dark(lmr, app):
     titulo = "document.querySelector('#spectra-plot').layout.yaxis.title.text"
     assert app.evaluate(titulo) == "Intensidade", "sem fonte nem fundo: o espectro bruto"
 
+    expect(app.locator("#transmission-state")).to_have_text("não usada")
+    app.locator("#card-transmission > summary").click()        # recolhido enquanto não é usado
     app.select_option('[data-spec="reference_file"]', "data/raw/bruto_fonte.txt")
     app.select_option('[data-spec="dark_file"]', "data/raw/bruto_fundo.txt")
+    expect(app.locator("#transmission-state")).to_have_text("fonte e fundo")
     preparar_lmr(app)
     app.wait_for_function(f"{titulo} === 'Transmissão (%)'")
     principal = app.evaluate("""() => {
@@ -403,3 +406,64 @@ def test_switching_file_clears_the_measured_stretch(app):
     app.locator("#series-files .file-name", has_text="ensaio_a.asc").click()
     expect(app.locator("#status-text")).to_contain_text("amostras")
     expect(app.locator("#selection-panel")).to_be_hidden()
+
+
+# ── marcações no gráfico e barra lateral na ordem do trabalho ────────────────
+
+def ponto_no_tempo(page: Page, t: float, t_max: float = 900.0) -> tuple[float, float]:
+    caixa = page.locator("#plot .nsewdrag").first.bounding_box()
+    return caixa["x"] + caixa["width"] * t / t_max, caixa["y"] + caixa["height"] / 2
+
+
+def instante_da_linha(page: Page) -> float:
+    return page.evaluate("document.getElementById('plot').layout.shapes.find((s) => s.type === 'line').x0")
+
+
+def test_markers_are_made_and_moved_with_the_mark_tool(app):
+    novo_projeto(app, "Marcas")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#card-markers")).not_to_have_attribute("open", "")
+
+    app.mouse.click(*ponto_no_tempo(app, 300))               # zoom: um clique não marca
+    app.wait_for_timeout(500)
+    expect(app.locator(".marker-row")).to_have_count(0)
+
+    app.keyboard.press("a")
+    expect(app.locator('input[name="plot-tool"][value="mark"]')).to_be_checked()
+    app.mouse.click(*ponto_no_tempo(app, 300))
+    expect(app.locator(".marker-row")).to_have_count(1)
+    expect(app.locator("#card-markers")).to_have_attribute("open", "")
+    expect(app.locator("#marker-count")).to_have_text("(1)")
+    assert float(app.locator(".marker-time").input_value()) == pytest.approx(300, abs=3)
+    app.locator(".marker-label").fill("troca")
+    app.keyboard.press("Tab")
+
+    x, y = ponto_no_tempo(app, instante_da_linha(app))      # arrastar a linha
+    app.mouse.move(x, y)
+    app.mouse.down()
+    app.mouse.move(*ponto_no_tempo(app, 450), steps=10)
+    app.mouse.up()
+    expect(app.locator(".marker-row")).to_have_count(1)     # mover não cria outra
+    assert float(app.locator(".marker-time").input_value()) == pytest.approx(450, abs=3)
+    assert instante_da_linha(app) == pytest.approx(450, abs=3)
+
+    app.locator(".marker-time").fill("600")                  # editar no painel move a linha
+    app.keyboard.press("Tab")
+    app.wait_for_function("document.getElementById('plot').layout.shapes.some((s) => s.x0 === 600)")
+    expect(app.locator("#project-dirty")).to_be_visible()
+
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    app.click('#tabs .tab[data-tab="viz"]')
+    expect(app.locator("#viz-status")).to_contain_text("1 marcação(ões)")
+
+
+def test_concatenation_card_appears_with_two_files(app):
+    novo_projeto(app, "Lote")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#card-concat")).to_be_hidden()
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    expect(app.locator("#card-concat")).to_be_visible()
