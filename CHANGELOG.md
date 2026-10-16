@@ -58,6 +58,13 @@ itself did not change: the same input gives the same output as before.
   channel, on the full-resolution processed signal (`selection_statistics`,
   `/api/series/stats`, reusing the processing just shown). Keyboard shortcuts
   for the plot.
+- Sidebar in the order of the work, numbered (1 · Arquivos, 2 · Sensores,
+  3 · Etapas; in Espectros, 1 · Arquivos, 2 · Preparo, 3 · Picos e vales).
+  "Concatenação" appears only with two or more files, and the raw-data
+  transmission card stays closed while unused, showing what it uses.
+- Markers moved from the sidebar to the plot: the *Marcar* tool (shortcut A)
+  adds one per click and drags existing ones; the list is a panel under the
+  plot. A click with the zoom or measure tool no longer adds a marker.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.

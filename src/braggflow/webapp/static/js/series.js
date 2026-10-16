@@ -4,7 +4,7 @@
 import { $, fmtNum, setBusy, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { renderSpectraFiles } from "./spectra.js";
-import { markerLayout, onPlotClick } from "./viz.js";
+import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
 import { numeroOuTraco } from "./analysis.js";
 import { switchTab } from "./tabs.js";
 import { addFileToProject, fileRow, markProjectDirty, renderEmptyFiles, renderFilePicker } from "./projects.js";
@@ -84,7 +84,7 @@ let statsRequest = 0;
 let lastStats = null;
 
 const plotLayout = () => document.querySelector('input[name="plot-layout"]:checked')?.value || "separate";
-const plotTool = () => document.querySelector('input[name="plot-tool"]:checked')?.value || "zoom";
+export const plotTool = () => document.querySelector('input[name="plot-tool"]:checked')?.value || "zoom";
 const plotRelative = () => $("plot-relative").checked;
 
 try {
@@ -171,7 +171,7 @@ function renderPlot(data) {
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
     hovermode: "x unified",
     legend: { orientation: "h", y: 1.08 },
-    dragmode: plotTool() === "select" ? "select" : "zoom",
+    dragmode: { select: "select", mark: false }[plotTool()] ?? "zoom",
     selectdirection: "h",
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
@@ -200,10 +200,63 @@ function renderPlot(data) {
 
   const gd = $("plot");             // o purge de um projeto anterior tira os eventos
   ["plotly_click", "plotly_doubleclick", "plotly_selected"].forEach((ev) => gd.removeAllListeners?.(ev));
-  gd.on("plotly_click", onPlotClick);
+  // Só a ferramenta Marcar cria marcações: um clique ao dar zoom não marca nada
+  gd.on("plotly_click", (event) => { if (plotTool() === "mark") onPlotClick(event); });
   gd.on("plotly_doubleclick", () => clearTimeout(shared.markerClickTimer));
   gd.on("plotly_selected", onPlotSelected);
 }
+
+// ── Arrastar marcações (ferramenta Marcar) ───────────────────────────────────
+// Feito aqui, e não com as "shapes editáveis" do Plotly: com um painel por
+// canal, as áreas de arraste dos outros painéis ficam por cima da linha.
+const MARKER_GRAB_PX = 6;
+let markerDrag = null;   // {indice, forma, t}
+
+// Instante (s) sob o ponteiro e a marcação mais perto dele, em pixels
+function markerNear(event) {
+  const gd = $("plot");
+  const xa = gd._fullLayout?.xaxis;
+  if (!xa) return null;
+  const px = event.clientX - gd.getBoundingClientRect().left - xa._offset;
+  if (px < 0 || px > xa._length) return null;
+  const t = xa.p2l(px);
+  let melhor = null;
+  collectMarkerTimes().forEach((tm, indice) => {
+    const dist = Math.abs(xa.l2p(tm) - px);
+    if (dist <= MARKER_GRAB_PX && (!melhor || dist < melhor.dist)) melhor = { indice, dist };
+  });
+  return { t, alvo: melhor };
+}
+
+$("plot").addEventListener("mousedown", (event) => {
+  if (plotTool() !== "mark" || event.button !== 0) return;
+  const perto = markerNear(event);
+  if (!perto?.alvo) return;
+  event.stopPropagation();          // nem zoom, nem clique (que criaria outra marcação)
+  event.preventDefault();
+  markerDrag = { indice: perto.alvo.indice, forma: perto.alvo.indice + (selection ? 1 : 0), t: perto.t };
+}, true);
+
+window.addEventListener("mousemove", (event) => {
+  const gd = $("plot");
+  if (markerDrag) {
+    const perto = markerNear(event);
+    if (!perto) return;
+    markerDrag.t = perto.t;
+    Plotly.relayout(gd, { [`shapes[${markerDrag.forma}].x0`]: perto.t, [`shapes[${markerDrag.forma}].x1`]: perto.t });
+    return;
+  }
+  if (plotTool() === "mark" && gd.contains(event.target)) {
+    gd.classList.toggle("near-marker", Boolean(markerNear(event)?.alvo));
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  if (!markerDrag) return;
+  const { indice, t } = markerDrag;
+  markerDrag = null;
+  moveMarker(indice, t);
+});
 
 function onPlotSelected(event) {
   const chave = Object.keys(event?.range || {}).find((k) => k.startsWith("x"));
@@ -305,12 +358,19 @@ function selectionText() {
   return `Trecho ${fmtNum(lastStats.start, 2)}–${fmtNum(lastStats.end, 2)} s\n` + linhas.join("\n");
 }
 
+const TOOL_HINTS = {
+  zoom: "arraste = zoom · duplo clique = ver tudo",
+  select: "arraste = medir trecho · Esc limpa",
+  mark: "clique = nova marcação · arraste uma marcação para mudar o instante",
+};
+
 function setPlotTool(tool) {
   document.querySelector(`input[name="plot-tool"][value="${tool}"]`).checked = true;
-  $("plot-hint").textContent = tool === "select"
-    ? "arraste = medir trecho · clique = marcação · Esc limpa"
-    : "arraste = zoom · duplo clique = ver tudo · clique = marcação";
-  if ($("plot").data) Plotly.relayout($("plot"), { dragmode: tool === "select" ? "select" : "zoom" });
+  $("plot-hint").textContent = TOOL_HINTS[tool];
+  if ($("plot").data) {
+    Plotly.relayout($("plot"), { dragmode: { select: "select", mark: false }[tool] ?? "zoom" });
+  }
+  if (tool !== "mark") $("plot").classList.remove("near-marker");
 }
 
 document.querySelectorAll('input[name="plot-layout"]').forEach((el) => el.addEventListener("change", () => {
@@ -350,8 +410,8 @@ document.addEventListener("keydown", (e) => {
     $("plot-relative").click();
   } else if (k === "b") {
     $("show-raw").click();
-  } else if (k === "m" || k === "z") {
-    setPlotTool(k === "m" ? "select" : "zoom");
+  } else if (k === "m" || k === "z" || k === "a") {
+    setPlotTool({ m: "select", z: "zoom", a: "mark" }[k]);
   } else if (k === "escape" && selection) {
     clearSelection();
   } else {
@@ -791,6 +851,7 @@ export function renderSeriesFiles() {
     box.innerHTML = '<span class="hint">Nenhum arquivo neste projeto ainda.</span>';
   }
   document.body.classList.toggle("no-series", !projectSeriesPaths().length);
+  $("card-concat").classList.toggle("hidden", projectSeriesPaths().length < 2);
   renderEmptyFiles("series");
   renderFilePicker("series");
   scheduleConcatPlan();
