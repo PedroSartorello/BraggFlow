@@ -253,6 +253,9 @@ Three tabs, each with its own data and settings:
   sensors (names, bands and thermal sensitivity K_T) and its own pipeline settings, so changing one
   never touches another. Process the selected file, or every marked file in
   one go; "Copiar opções" replicates the current settings to the other files.
+  The plot shows one panel per channel or all on the same plot (optionally
+  relative to the start), and dragging with "Medir trecho" gives the
+  statistics of that stretch for every channel.
 * **Espectros** — import several spectrum files (OSA, or spectrometer exports
   such as OceanView, with or without header); each has its own preparation
   (optional transmission from raw sample, source and dark spectra, wavelength

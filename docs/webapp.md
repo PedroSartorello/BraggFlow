@@ -48,6 +48,24 @@ the processed signal over the raw one; click it to add a time marker. Several
 files of one run can be joined in the "Concatenação" card, in the order shown
 there. Shortcuts: Ctrl+Enter processes, Ctrl+S saves the project.
 
+The toolbar above the plot chooses how to look at it (display only, the
+processing does not change; the choice is remembered in this browser):
+
+* *Canais separados* (default) — one panel per channel, each with its own y
+  scale and the same time axis; *Mesmo gráfico* — all channels on one axis.
+* *Relativo ao início* — each channel minus its first value.
+* *Sinal bruto* — the signal before processing, underneath. The y scale follows
+  the processed signal, so raw spikes do not flatten the curve.
+* *Zoom* / *Medir trecho* — what dragging does. With *Medir trecho*, the
+  dragged stretch gets, for every channel: mean, σ, min, max, peak to peak,
+  drift (slope of a fitted line, per second), the value at the start and at
+  the end (interpolated) and their difference. Computed on the whole
+  processed signal, not on the decimated plot; "Copiar" puts the table on the
+  clipboard for a spreadsheet; Esc clears it.
+
+Plot shortcuts (outside text fields): 1 / 2 separate or same plot, D relative
+to the start, B raw signal, M measure, Z zoom, Esc clear the measurement.
+
 **Temperature compensation** (last step of the Séries temporais pipeline) —
 reference-grating method: each sensing FBG loses the thermal part measured by
 the reference, `Δλ_comp = Δλ_s − (K_T,s/K_T,r)·Δλ_r`. Enter the thermal

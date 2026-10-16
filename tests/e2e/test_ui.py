@@ -307,3 +307,99 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
     app.click('#tabs .tab[data-tab="spectra"]')
     expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
     assert arquivos_da_evolucao() == nomes_a
+
+
+# ── disposição do gráfico e medição de trechos ───────────────────────────────
+
+def layout_do_grafico(page: Page) -> dict:
+    return page.evaluate(r"""() => {
+        const gd = document.getElementById('plot');
+        const ys = Object.keys(gd.layout).filter((k) => /^yaxis\d*$/.test(k)).sort();
+        const efbg = gd.data.find((t) => t.name === 'EFBG1');
+        return {
+            grade: Boolean(gd.layout.grid), eixosY: ys.length,
+            faixa: gd.layout.yaxis.range,
+            primeiro: efbg.y.find((v) => v !== null),
+            eixoDoEfbg2: gd.data.find((t) => t.name === 'EFBG2').yaxis || 'y',
+        };
+    }""")
+
+
+def test_plot_shows_channels_apart_or_together(app):
+    novo_projeto(app, "Vistas")
+    adicionar_serie(app, "ensaio_a.asc")
+
+    vista = layout_do_grafico(app)
+    assert vista["grade"] and vista["eixosY"] == 3, "padrão: um painel por canal"
+    assert vista["eixoDoEfbg2"] == "y2"
+    assert vista["faixa"][1] - vista["faixa"][0] < 0.2, "escala pelo processado, não pelos picos do bruto"
+
+    app.keyboard.press("2")                                  # mesmo gráfico
+    expect(app.locator('input[name="plot-layout"][value="overlay"]')).to_be_checked()
+    vista = layout_do_grafico(app)
+    assert not vista["grade"] and vista["eixosY"] == 1 and vista["eixoDoEfbg2"] == "y"
+    assert vista["primeiro"] == pytest.approx(1550.0, abs=0.01)
+
+    app.check("#plot-relative")                              # só a exibição muda
+    vista = layout_do_grafico(app)
+    assert vista["primeiro"] == 0
+    assert "Δλ" in app.evaluate("document.getElementById('plot').layout.yaxis.title.text")
+
+    app.reload()                                             # a preferência fica
+    expect(app.locator("#project-gate")).to_be_visible()
+    novo_projeto(app, "Vistas 2")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator('input[name="plot-layout"][value="overlay"]')).to_be_checked()
+    expect(app.locator("#plot-relative")).to_be_checked()
+
+
+def arrastar_no_grafico(page: Page, de: float, ate: float) -> None:
+    """Arrasta no 1º painel, de ``de`` a ``ate`` (frações da largura)."""
+    caixa = page.locator("#plot .nsewdrag").first.bounding_box()
+    y = caixa["y"] + caixa["height"] / 2
+    page.mouse.move(caixa["x"] + caixa["width"] * de, y)
+    page.mouse.down()
+    page.mouse.move(caixa["x"] + caixa["width"] * ate, y, steps=8)
+    page.mouse.up()
+
+
+def test_dragging_measures_a_stretch_of_every_channel(app):
+    novo_projeto(app, "Medir")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.keyboard.press("m")
+    expect(app.locator('input[name="plot-tool"][value="select"]')).to_be_checked()
+    expect(app.locator("#plot-hint")).to_contain_text("medir trecho")
+
+    arrastar_no_grafico(app, 1 / 3, 1 / 2)                   # ≈ 300–450 s
+    linhas = app.locator("#selection-table tbody tr")
+    expect(linhas).to_have_count(3)
+    expect(app.locator("#selection-range")).to_contain_text("Δt")
+    expect(app.locator("#selection-note")).to_contain_text("Sinal processado inteiro")
+    assert linhas.nth(0).locator("td").first.inner_text() == "EFBG1"
+    assert app.evaluate("document.getElementById('plot').layout.shapes[0].type") == "rect"
+
+    # mudar o processamento mede de novo o mesmo trecho
+    app.uncheck("#savgol-enabled")
+    app.uncheck("#movavg-enabled")
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    expect(linhas).to_have_count(3)
+
+    app.keyboard.press("Escape")
+    expect(app.locator("#selection-panel")).to_be_hidden()
+    assert not app.evaluate("(document.getElementById('plot').layout.shapes || []).some((s) => s.type === 'rect')")
+
+
+def test_switching_file_clears_the_measured_stretch(app):
+    novo_projeto(app, "Trocar")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.keyboard.press("m")
+    arrastar_no_grafico(app, 0.2, 0.4)
+    expect(app.locator("#selection-table tbody tr")).to_have_count(3)
+
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    app.locator("#series-files .file-name", has_text="ensaio_a.asc").click()
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    expect(app.locator("#selection-panel")).to_be_hidden()

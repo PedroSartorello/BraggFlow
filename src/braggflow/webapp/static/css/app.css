@@ -228,7 +228,7 @@ button { font-family: var(--font); cursor: pointer; }
 /* ── Começo vazio: soltar arquivos ou escolher um já enviado ─────────── */
 .needs-series, .needs-spectra { display: contents; }
 body.no-series .needs-series, body.no-spectra .needs-spectra { display: none !important; }
-body.no-series #status, body.no-series #plot,
+body.no-series #status, body.no-series #plot, body.no-series #plot-toolbar, body.no-series #selection-panel,
 body.no-spectra #status-spectra, body.no-spectra #spectra-plot { display: none !important; }
 body.no-series #btn-copy-series { display: none; }
 body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { display: none !important; }
@@ -279,6 +279,25 @@ body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { displ
 /* ── Barra do gráfico ────────────────────────────────────────────────── */
 #status-text { flex: 1; min-width: 0; }
 .plot-toggle { flex: 0 0 auto; font-size: 11.5px; color: var(--text); white-space: nowrap; }
+.plot-toolbar {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+  font-size: 12px; color: var(--muted);
+}
+.segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.segmented label {
+  position: relative; padding: 4px 10px; font-size: 11.5px; color: var(--text); cursor: pointer;
+  background: var(--surface); white-space: nowrap;
+}
+.segmented label + label { border-left: 1px solid var(--border); }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented label:has(input:checked) { background: var(--accent-soft); color: var(--accent); }
+.segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.selection-panel {
+  flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow-sm); max-height: 34vh; overflow: auto;
+}
+.selection-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 12px; }
+.selection-head .hint { flex: 1; }
 .plot-hint { flex: 0 0 auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .status-link {
   flex: 0 0 auto; padding: 3px 9px; font-size: 11.5px; font-weight: 600; white-space: nowrap;

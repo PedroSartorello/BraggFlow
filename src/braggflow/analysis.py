@@ -12,6 +12,8 @@ Duas leituras do mesmo sinal:
 Tudo opera sobre o tempo em segundos e sobre os valores como aparecem na
 figura (Δλ em pm, por exemplo), para que tabela e gráfico contem a mesma
 história.
+
+:func:`selection_statistics` mede um trecho escolhido à mão no gráfico.
 """
 
 from dataclasses import dataclass
@@ -117,6 +119,49 @@ def interval_statistics(time: np.ndarray, values: np.ndarray, interval: Interval
         regime = _window_mean(t, y, max(interval.start, interval.end - settle_window), interval.end)
         linha.update({"settle_mean": regime["mean"], "settle_std": regime["std"],
                       "settle_n": regime["n"]})
+    return linha
+
+
+def selection_statistics(time: np.ndarray, values: np.ndarray, start: float, end: float,
+                         relative: bool = False) -> dict:
+    """
+    Estatísticas do trecho ``[start, end)`` de uma curva, escolhido no gráfico.
+
+    Traz o mesmo que :func:`interval_statistics` (média, desvio, extremos,
+    pico a pico, deriva da reta ajustada e ruído em torno dela) e mais o valor
+    da curva nas duas bordas do trecho, interpolado entre as amostras, a
+    diferença entre eles (``delta`` = fim − início) e essa diferença por
+    segundo (``delta_rate``): é a medição de "quanto variou daqui até ali".
+
+    Com ``relative``, os níveis (média, mediana, extremos, bordas) ficam
+    relativos ao primeiro valor válido da curva inteira, como no gráfico
+    "relativo ao início"; dispersão, deriva e diferenças não mudam.
+    """
+    time = np.asarray(time, dtype=float)
+    values = np.asarray(values, dtype=float)
+    if not end > start:
+        raise ValueError("O fim do trecho precisa ser maior que o início.")
+    linha = interval_statistics(time, values, Interval("seleção", float(start), float(end)))
+
+    validos = np.isfinite(time) & np.isfinite(values)
+    t, y = time[validos], values[validos]
+    ordem = np.argsort(t)
+    t, y = t[ordem], y[ordem]
+    borda = {"value_start": None, "value_end": None, "delta": None, "delta_rate": None}
+    if len(t) >= 2 and t[0] <= end and t[-1] >= start:
+        inicio = float(np.interp(max(start, t[0]), t, y))
+        fim = float(np.interp(min(end, t[-1]), t, y))
+        duracao = min(end, t[-1]) - max(start, t[0])
+        borda = {"value_start": inicio, "value_end": fim, "delta": fim - inicio,
+                 "delta_rate": (fim - inicio) / duracao if duracao > 0 else None}
+    linha.update(borda)
+
+    if relative and len(y):
+        origem = float(y[0])
+        for chave in ("mean", "median", "min", "max", "value_start", "value_end"):
+            if linha[chave] is not None:
+                linha[chave] -= origem
+    linha["relative"] = bool(relative)
     return linha
 
 

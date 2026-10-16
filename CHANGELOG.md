@@ -51,6 +51,13 @@ itself did not change: the same input gives the same output as before.
   trend removal (`remove_trend`), and the evolution of valleys or peaks across
   files (`spectra_evolution`, `/api/spectra/evolution`) with plot, table and
   CSV.
+- Séries temporais plot: one panel per channel (default) or all on the same
+  plot, values relative to the start, and the y scale follows the processed
+  signal instead of the raw spikes. "Medir trecho": dragging a stretch gives
+  mean, σ, extremes, drift, start/end values and their difference for every
+  channel, on the full-resolution processed signal (`selection_statistics`,
+  `/api/series/stats`, reusing the processing just shown). Keyboard shortcuts
+  for the plot.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.

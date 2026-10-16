@@ -6,6 +6,7 @@ Cada app criado por ``create_app`` tem o seu ``AppState`` (em
 nunca compartilham pasta nem cache.
 """
 
+import json
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -90,6 +91,44 @@ class FileCache:
         return entry
 
 
+class ResultCache:
+    """
+    Últimos resultados do processamento, pela receita e pelos arquivos de
+    origem (caminho, data e tamanho): medir um trecho do gráfico não refaz o
+    processamento que acabou de ser mostrado.
+    """
+
+    # Opções que não mudam o sinal processado (só onde e se ele é gravado)
+    IGNORED = ("save", "include_raw", "project")
+
+    def __init__(self, size: int = 4):
+        self._size = size
+        self._entries: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+
+    def key(self, options: dict, files) -> str:
+        receita = {k: v for k, v in options.items() if k not in self.IGNORED}
+        origem = []
+        for path in files:
+            stat = Path(path).stat()
+            origem.append([str(path), stat.st_mtime_ns, stat.st_size])
+        return json.dumps([receita, origem], sort_keys=True, default=str)
+
+    def get(self, key: str):
+        with self._lock:
+            if key in self._entries:
+                self._entries.move_to_end(key)
+                return self._entries[key]
+        return None
+
+    def put(self, key: str, value) -> None:
+        with self._lock:
+            self._entries[key] = value
+            self._entries.move_to_end(key)
+            while len(self._entries) > self._size:
+                self._entries.popitem(last=False)
+
+
 # Arquivos do interrogador já lidos (reprocessar não relê o disco)
 FILE_CACHE_SIZE = 2
 
@@ -114,3 +153,4 @@ class AppState:
     processed: FileCache = field(default_factory=lambda: FileCache(_load_processed, FILE_CACHE_SIZE * 3))
     spectra: FileCache = field(default_factory=lambda: FileCache(load_spectra, FILE_CACHE_SIZE * 3))
     kinds: FileCache = field(default_factory=lambda: FileCache(_classify, None))
+    results: ResultCache = field(default_factory=ResultCache)

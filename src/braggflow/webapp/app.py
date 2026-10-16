@@ -30,7 +30,7 @@ from flask import Blueprint, Flask, current_app, jsonify, render_template, reque
 import matplotlib
 matplotlib.use("Agg")  # backend sem janela — obrigatório em servidor
 
-from braggflow.analysis import analyse_curve
+from braggflow.analysis import analyse_curve, selection_statistics
 from braggflow.io.processed import (
     channel_quantities,
     metadata_path_for,
@@ -277,6 +277,24 @@ def _run_pipeline(options: dict):
     cache de leitura do app. Retorna (pipeline, (raw_time, raw_signals), messages).
     """
     return run_recipe(_requested_files(options), options, load=_state().interrogator.get)
+
+
+def _remember_result(options: dict, pipeline) -> None:
+    """Guarda o sinal processado para medir trechos sem reprocessar."""
+    t, sig, channels = pipeline.get_data()
+    _state().results.put(_state().results.key(options, _requested_files(options)),
+                         (t.copy(), sig.copy(), list(channels), list(pipeline.units)))
+
+
+def _processed_result(options: dict):
+    """``(tempo, sinais, canais, unidades)`` da receita; do cache quando já foi processada."""
+    chave = _state().results.key(options, _requested_files(options))
+    resultado = _state().results.get(chave)
+    if resultado is None:
+        pipeline, _, _ = _run_pipeline(options)
+        _remember_result(options, pipeline)
+        resultado = _state().results.get(chave)
+    return resultado
 
 
 def _requested_files(options: dict) -> list[Path]:
@@ -962,6 +980,7 @@ def api_process():
 
     try:
         pipeline, (raw_time, raw_signals), messages = _run_pipeline(options)
+        _remember_result(options, pipeline)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -1006,6 +1025,32 @@ def api_process():
         }
 
     return jsonify(payload)
+
+
+@bp.route("/api/series/stats", methods=["POST"])
+def api_series_stats():
+    """
+    Estatísticas de um trecho escolhido no gráfico, para cada canal, medidas
+    no sinal processado inteiro (não no decimado da tela).
+    Corpo: ``{options, start, end, relative}``; ``options`` é a mesma receita
+    de ``/api/process``.
+    """
+    corpo = request.get_json(silent=True) or {}
+    options = corpo.get("options") or {}
+    try:
+        inicio, fim = as_float(corpo.get("start")), as_float(corpo.get("end"))
+        if inicio is None or fim is None or not fim > inicio:
+            raise ValueError("Escolha um trecho com início e fim diferentes.")
+        if not (options.get("file") or options.get("files")):
+            raise ValueError("Requisição sem arquivo selecionado.")
+        t, sig, channels, units = _processed_result(options)
+        relativo = bool(corpo.get("relative"))
+        linhas = [{"channel": ch, "unit": unit,
+                   **selection_statistics(t, sig[:, i], inicio, fim, relative=relativo)}
+                  for i, (ch, unit) in enumerate(zip(channels, units))]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"start": inicio, "end": fim, "duration": fim - inicio, "channels": linhas})
 
 
 @bp.route("/api/download", methods=["POST"])
