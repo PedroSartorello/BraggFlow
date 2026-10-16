@@ -3,7 +3,7 @@
 
 import { $, fmtNum, showError } from "./core.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectraStateFor } from "./state.js";
-import { makeInput } from "./series.js";
+import { makeInput, plotDecorations } from "./series.js";
 import { saveCurrentSpectrumState } from "./spectra.js";
 import { applyVizChannelSelection, markProjectDirty } from "./projects.js";
 
@@ -461,7 +461,7 @@ export function drawPlotMarkers() {
   $("viz-marker-count").textContent = n
     ? `${n} marcação(ões), feitas na aba Séries temporais.`
     : "Nenhuma marcação: clique no gráfico da aba Séries temporais para criar.";
-  if ($("plot").data) Plotly.relayout($("plot"), markerLayout());
+  if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
 }
 
 // Um clique marca; o duplo clique (que reajusta o zoom) não

@@ -5,6 +5,7 @@ import { $, fmtNum, setBusy, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { renderSpectraFiles } from "./spectra.js";
 import { markerLayout, onPlotClick } from "./viz.js";
+import { numeroOuTraco } from "./analysis.js";
 import { switchTab } from "./tabs.js";
 import { addFileToProject, fileRow, markProjectDirty, renderEmptyFiles, renderFilePicker } from "./projects.js";
 
@@ -74,49 +75,290 @@ const plotResizer = new ResizeObserver((entries) => {
 export const PALETTE = ["#000000", "#800000", "#003366", "#2E8B57", "#8B008B",
                  "#B8860B", "#4B0082", "#006400", "#8B0000", "#00008B"];
 
+// ── Gráfico: disposição, valores relativos e medição de trechos ─────────────
+const PLOT_VIEW_KEY = "braggflow.plotView";
+let lastPlotData = null;      // último resultado mostrado (redesenha sem reprocessar)
+let lastPlotOptions = null;   // opções que geraram esse resultado
+let selection = null;         // {start, end} do trecho medido
+let statsRequest = 0;
+let lastStats = null;
+
+const plotLayout = () => document.querySelector('input[name="plot-layout"]:checked')?.value || "separate";
+const plotTool = () => document.querySelector('input[name="plot-tool"]:checked')?.value || "zoom";
+const plotRelative = () => $("plot-relative").checked;
+
+try {
+  const salvo = JSON.parse(localStorage.getItem(PLOT_VIEW_KEY) || "{}");
+  if (salvo.layout) document.querySelector(`input[name="plot-layout"][value="${salvo.layout}"]`)?.click();
+  $("plot-relative").checked = Boolean(salvo.relative);
+} catch { /* sem armazenamento */ }
+
+function rememberPlotView() {
+  try {
+    localStorage.setItem(PLOT_VIEW_KEY, JSON.stringify({ layout: plotLayout(), relative: plotRelative() }));
+  } catch { /* sem armazenamento */ }
+}
+
+// Primeiro valor válido de cada canal processado: a origem do "relativo ao início"
+function channelOrigins(data) {
+  const origem = {};
+  data.channels.forEach((ch) => {
+    origem[ch] = plotRelative() ? (data.signals[ch].find((v) => v !== null && Number.isFinite(v)) ?? 0) : 0;
+  });
+  return origem;
+}
+
+const shift = (values, offset) => (offset ? values.map((v) => (v === null ? null : v - offset)) : values);
+
+// Escala y pelo processado: os picos do bruto (justamente o que o
+// processamento tira) não podem achatar a curva que interessa
+function yRange(series) {
+  let lo = Infinity, hi = -Infinity;
+  series.forEach((values) => values.forEach((v) => {
+    if (v !== null && Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  }));
+  if (!Number.isFinite(lo)) return undefined;
+  const folga = (hi - lo) * 0.08 || Math.max(Math.abs(hi) * 1e-6, 1e-6);
+  return [lo - folga, hi + folga];
+}
+
+// Faixa do trecho medido, junto com as marcações
+export function plotDecorations() {
+  const { shapes, annotations } = markerLayout();
+  if (selection) {
+    shapes.unshift({
+      type: "rect", xref: "x", yref: "paper", x0: selection.start, x1: selection.end, y0: 0, y1: 1,
+      fillcolor: "rgba(31, 111, 178, 0.10)", line: { width: 0 }, layer: "below",
+    });
+  }
+  return { shapes, annotations };
+}
+
 function renderPlot(data) {
+  lastPlotData = data;
   const unit = Object.values(data.units || {})[0] || "nm";
-  const yTitle = `${data.quantity === "wavelength_shift" ? "Δλ" : "λ"} (${unit})`;
+  const grandeza = data.quantity === "wavelength_shift" || plotRelative() ? "Δλ" : "λ";
+  const separado = plotLayout() === "separate" && data.channels.length > 1;
+  const origem = channelOrigins(data);
+  const eixos = (i) => (separado ? { xaxis: `x${i + 1}`, yaxis: `y${i + 1}` } : {});
   const traces = [];
 
   if (data.raw) {
     data.channels.forEach((ch, i) => {
       traces.push({
-        x: data.raw.time, y: data.raw.signals[ch],
-        name: ch + " (bruto)", mode: "lines",
+        x: data.raw.time, y: shift(data.raw.signals[ch], origem[ch]),
+        name: ch + " (bruto)", mode: "lines", legendgroup: ch, showlegend: !separado,
         line: { color: PALETTE[i % PALETTE.length], width: 1 },
-        opacity: 0.3,
+        opacity: 0.3, ...eixos(i),
       });
     });
   }
 
   data.channels.forEach((ch, i) => {
     traces.push({
-      x: data.time, y: data.signals[ch],
-      name: ch, mode: "lines",
+      x: data.time, y: shift(data.signals[ch], origem[ch]),
+      name: ch, mode: "lines", legendgroup: ch, showlegend: !separado,
       line: { color: PALETTE[i % PALETTE.length], width: 1.5 },
+      ...eixos(i),
     });
   });
 
-  Plotly.react($("plot"), traces, {
-    ...markerLayout(),
+  const eixo = { gridcolor: "#eceff3", zerolinecolor: "#e2e7ee", exponentformat: "e", automargin: true };
+  const layout = {
+    ...plotDecorations(),
     separators: ",.",                   // 1.551,45 como no resto do app
-    margin: { l: 60, r: 20, t: 30, b: 45 },
+    margin: { l: 60, r: 20, t: separado ? 14 : 30, b: 45 },
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
-    xaxis: { title: "Tempo (s)", gridcolor: "#eceff3", zerolinecolor: "#e2e7ee" },
-    yaxis: { title: yTitle, gridcolor: "#eceff3", zerolinecolor: "#e2e7ee", exponentformat: "e" },
     hovermode: "x unified",
     legend: { orientation: "h", y: 1.08 },
+    dragmode: plotTool() === "select" ? "select" : "zoom",
+    selectdirection: "h",
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-  }, { responsive: true });
+  };
+  if (separado) {
+    const n = data.channels.length;
+    layout.grid = { rows: n, columns: 1, pattern: "independent", roworder: "top to bottom", ygap: 0.12 };
+    data.channels.forEach((ch, i) => {
+      const sufixo = i ? String(i + 1) : "";
+      layout[`xaxis${sufixo}`] = {
+        ...eixo, matches: i ? "x" : undefined, showticklabels: i === n - 1,
+        title: i === n - 1 ? "Tempo (s)" : undefined,
+      };
+      layout[`yaxis${sufixo}`] = {
+        ...eixo, title: { text: `${ch}<br><span style="font-size:11px">${grandeza} (${unit})</span>`, font: { size: 12 } },
+        range: yRange([shift(data.signals[ch], origem[ch])]),
+      };
+    });
+  } else {
+    layout.xaxis = { ...eixo, title: "Tempo (s)" };
+    layout.yaxis = { ...eixo, title: `${grandeza} (${unit})`,
+                     range: yRange(data.channels.map((ch) => shift(data.signals[ch], origem[ch]))) };
+  }
+
+  Plotly.react($("plot"), traces, layout, { responsive: true });
 
   const gd = $("plot");             // o purge de um projeto anterior tira os eventos
-  gd.removeAllListeners?.("plotly_click");
-  gd.removeAllListeners?.("plotly_doubleclick");
+  ["plotly_click", "plotly_doubleclick", "plotly_selected"].forEach((ev) => gd.removeAllListeners?.(ev));
   gd.on("plotly_click", onPlotClick);
   gd.on("plotly_doubleclick", () => clearTimeout(shared.markerClickTimer));
+  gd.on("plotly_selected", onPlotSelected);
 }
+
+function onPlotSelected(event) {
+  const chave = Object.keys(event?.range || {}).find((k) => k.startsWith("x"));
+  if (!chave) return;                       // clique sem arrastar
+  const [a, b] = event.range[chave];
+  Plotly.relayout($("plot"), { selections: [] });   // a faixa própria substitui o retângulo do Plotly
+  selectRange(Math.min(a, b), Math.max(a, b));
+}
+
+function selectRange(start, end) {
+  selection = { start, end };
+  Plotly.relayout($("plot"), plotDecorations());
+  measureSelection();
+}
+
+// ``redraw: false`` quando o gráfico vai ser redesenhado ou apagado em seguida
+// (outro arquivo, outro projeto): um relayout no meio disso quebra o Plotly
+export function clearSelection({ redraw = true } = {}) {
+  const tinha = selection !== null;
+  selection = null;
+  lastStats = null;
+  statsRequest++;
+  $("selection-panel").classList.add("hidden");
+  if (tinha && redraw && $("plot").data) Plotly.relayout($("plot"), plotDecorations());
+}
+
+// Números da tabela: 4 casas para níveis absolutos, 4 algarismos para o resto
+function fmtStat(v) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return Math.abs(v) >= 100
+    ? v.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
+    : v.toLocaleString("pt-BR", { maximumSignificantDigits: 4 });
+}
+
+const STAT_COLUNAS = [
+  ["Canal", (l) => l.channel],
+  ["Média", (l) => fmtStat(l.mean)],
+  ["σ", (l) => fmtStat(l.std)],
+  ["Mín", (l) => fmtStat(l.min)],
+  ["Máx", (l) => fmtStat(l.max)],
+  ["Pico a pico", (l) => fmtStat(l.peak_to_peak)],
+  ["Deriva (/s)", (l) => fmtStat(l.slope)],
+  ["Início", (l) => fmtStat(l.value_start)],
+  ["Fim", (l) => fmtStat(l.value_end)],
+  ["Δ (fim − início)", (l) => fmtStat(l.delta)],
+  ["n", (l) => numeroOuTraco(l.n, 0)],
+];
+
+async function measureSelection() {
+  if (!selection || !lastPlotOptions) return;
+  const request = ++statsRequest;
+  $("selection-panel").classList.remove("hidden");
+  $("selection-range").textContent =
+    `${fmtNum(selection.start, 2)} – ${fmtNum(selection.end, 2)} s · Δt ${fmtNum(selection.end - selection.start, 2)} s`;
+  $("selection-note").textContent = "Medindo…";
+  try {
+    const resp = await fetch("/api/series/stats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ options: lastPlotOptions, start: selection.start, end: selection.end,
+                             relative: plotRelative() }),
+    });
+    const data = await resp.json();
+    if (request !== statsRequest) return;
+    if (!resp.ok) throw new Error(data.error || "Erro ao medir o trecho.");
+    lastStats = data;
+    const unidade = data.channels[0]?.unit || "";
+    $("selection-note").textContent =
+      `Sinal processado inteiro, não o decimado da tela · ${unidade}${plotRelative() ? " · relativo ao início" : ""}`;
+    renderSelectionTable(data);
+  } catch (err) {
+    if (request !== statsRequest) return;
+    lastStats = null;
+    $("selection-note").textContent = `Falha: ${err.message}`;
+    $("selection-table").innerHTML = "";
+  }
+}
+
+function renderSelectionTable(data) {
+  const tabelaEl = $("selection-table");
+  tabelaEl.innerHTML = "";
+  const cabeca = tabelaEl.createTHead().insertRow();
+  STAT_COLUNAS.forEach(([nome]) => {
+    const th = document.createElement("th");
+    th.textContent = nome;
+    cabeca.appendChild(th);
+  });
+  const corpo = tabelaEl.createTBody();
+  data.channels.forEach((linha) => {
+    const tr = corpo.insertRow();
+    STAT_COLUNAS.forEach(([, valor]) => { tr.insertCell().textContent = valor(linha); });
+  });
+}
+
+function selectionText() {
+  if (!lastStats) return "";
+  const linhas = [STAT_COLUNAS.map(([nome]) => nome).join("\t"),
+                  ...lastStats.channels.map((l) => STAT_COLUNAS.map(([, v]) => v(l).replace("—", "")).join("\t"))];
+  return `Trecho ${fmtNum(lastStats.start, 2)}–${fmtNum(lastStats.end, 2)} s\n` + linhas.join("\n");
+}
+
+function setPlotTool(tool) {
+  document.querySelector(`input[name="plot-tool"][value="${tool}"]`).checked = true;
+  $("plot-hint").textContent = tool === "select"
+    ? "arraste = medir trecho · clique = marcação · Esc limpa"
+    : "arraste = zoom · duplo clique = ver tudo · clique = marcação";
+  if ($("plot").data) Plotly.relayout($("plot"), { dragmode: tool === "select" ? "select" : "zoom" });
+}
+
+document.querySelectorAll('input[name="plot-layout"]').forEach((el) => el.addEventListener("change", () => {
+  rememberPlotView();
+  if (lastPlotData) renderPlot(lastPlotData);
+}));
+$("plot-relative").addEventListener("change", () => {
+  rememberPlotView();
+  if (lastPlotData) renderPlot(lastPlotData);
+  if (selection) measureSelection();       // os níveis mudam com a origem
+});
+document.querySelectorAll('input[name="plot-tool"]').forEach((el) =>
+  el.addEventListener("change", () => setPlotTool(el.value)));
+$("btn-selection-clear").addEventListener("click", () => clearSelection());
+$("btn-selection-copy").addEventListener("click", async () => {
+  const texto = selectionText();
+  if (!texto) return;
+  try {
+    await navigator.clipboard.writeText(texto);
+    $("selection-note").textContent = "Tabela copiada: cole numa planilha.";
+  } catch {
+    showError("O navegador não deixou copiar; selecione a tabela e use Ctrl+C.");
+  }
+});
+
+// Atalhos do gráfico (fora de campos de texto, só na aba Séries)
+document.addEventListener("keydown", (e) => {
+  // Campos onde se digita ficam com as teclas; caixas de marcar e botões não
+  const digitando = e.target.closest(
+    "textarea, select, [contenteditable], input:not([type=checkbox]):not([type=radio]):not([type=button])");
+  if (e.ctrlKey || e.metaKey || e.altKey || digitando) return;
+  if ($("tab-series-main").classList.contains("hidden") || !lastPlotData) return;
+  const k = e.key.toLowerCase();
+  if (k === "1" || k === "2") {
+    document.querySelector(`input[name="plot-layout"][value="${k === "1" ? "separate" : "overlay"}"]`).click();
+  } else if (k === "d") {
+    $("plot-relative").click();
+  } else if (k === "b") {
+    $("show-raw").click();
+  } else if (k === "m" || k === "z") {
+    setPlotTool(k === "m" ? "select" : "zoom");
+  } else if (k === "escape" && selection) {
+    clearSelection();
+  } else {
+    return;
+  }
+  e.preventDefault();
+});
 
 function updateChannelDropdown(channels) {
   if (JSON.stringify(channels) === JSON.stringify(shared.lastChannels)) return;
@@ -152,7 +394,9 @@ export async function processData({ save = true, files = null } = {}) {
     if (!resp.ok) throw new Error(data.error || "Erro no processamento.");
 
     updateChannelDropdown(data.channels);
+    lastPlotOptions = opts;
     renderPlot(data);
+    if (selection) measureSelection();       // o processamento mudou: a medição também
     if (data.processed_file) shared.vizPendingFile = data.processed_file;
     if (data.existing_file) {
       (opts.files || [opts.file]).forEach((path) => {
@@ -558,7 +802,10 @@ async function showSeriesFile(path) {
 }
 
 export async function selectSeriesFile(path) {
-  if (path !== $("file-select").value) saveCurrentSeriesState();
+  if (path !== $("file-select").value) {
+    saveCurrentSeriesState();
+    clearSelection({ redraw: false });
+  }
   const novo = !(path in seriesState);
   seriesStateFor(path);          // entra no projeto, se ainda não estava
   syncSeriesOptions();

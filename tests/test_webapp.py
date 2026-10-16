@@ -933,3 +933,51 @@ def test_preview_converts_raw_counts_with_source_and_dark(webapp):
     resp = client.post("/api/spectra/preview", json={
         "file": "data/raw/amostra.txt", "settings": {"reference_file": "data/../fora.txt"}})
     assert resp.status_code == 400 and "fora de data/" in resp.get_json()["error"]
+
+
+# ── medição de um trecho do gráfico ───────────────────────────────────────────
+
+def test_series_stats_measures_the_processed_signal_without_reprocessing(webapp, monkeypatch):
+    import braggflow.webapp.app as app_module
+    from braggflow.analysis import selection_statistics
+
+    dados, client = webapp
+    opcoes = {"file": "data/raw/ensaio.ASC", "sensors": SENSORS,
+              "cleaning": {"enabled": True}, "nulls": {"enabled": True},
+              "savgol": {"enabled": True, "window_length": "11", "polyorder": "2"}}
+    processado = client.post("/api/process", json={**opcoes, "save": False}).get_json()
+
+    chamadas = []
+    original = app_module.run_recipe
+    monkeypatch.setattr(app_module, "run_recipe", lambda *a, **k: chamadas.append(1) or original(*a, **k))
+    resp = client.post("/api/series/stats", json={"options": {**opcoes, "save": True, "include_raw": True},
+                                                  "start": 2.0, "end": 6.0})
+    data = resp.get_json()
+    assert resp.status_code == 200, data
+    assert chamadas == [], "o resultado mostrado no gráfico é reaproveitado"
+    assert [c["channel"] for c in data["channels"]] == processado["channels"]
+    assert data["duration"] == pytest.approx(4.0)
+    s1 = data["channels"][0]
+    assert s1["unit"] == "nm" and s1["n"] > 150, "medido no sinal inteiro, não no decimado"
+    assert s1["mean"] == pytest.approx(1550.0, abs=0.01)
+
+    # outra receita: processa uma vez e confere com o cálculo direto
+    outra = {**opcoes, "savgol": {"enabled": False}}
+    resp = client.post("/api/series/stats", json={"options": outra, "start": 2.0, "end": 6.0,
+                                                  "relative": True}).get_json()
+    assert chamadas == [1]
+    pipeline, _, _ = original([dados.raw / "ensaio.ASC"], outra)
+    t, sig, _ = pipeline.get_data()
+    esperado = selection_statistics(t, sig[:, 1], 2.0, 6.0, relative=True)
+    s2 = resp["channels"][1]
+    for chave in ("mean", "std", "delta", "value_start", "slope", "n"):
+        assert s2[chave] == pytest.approx(esperado[chave]), chave
+
+
+def test_series_stats_rejects_bad_ranges(webapp):
+    _, client = webapp
+    resp = client.post("/api/series/stats", json={"options": {"file": "data/raw/ensaio.ASC"},
+                                                  "start": 5, "end": 5})
+    assert resp.status_code == 400 and "início e fim" in resp.get_json()["error"]
+    resp = client.post("/api/series/stats", json={"options": {}, "start": 1, "end": 5})
+    assert resp.status_code == 400

@@ -151,3 +151,41 @@ def test_analyse_curve_ignores_missing_samples():
     resultado = analyse_curve(t, y, [{"time": 50, "label": "meio"}])
     assert all(linha["mean"] == pytest.approx(5.0) for linha in resultado["intervals"])
     assert resultado["intervals"][0]["n"] == 400     # 500 amostras menos as 100 ausentes
+
+
+# ── trecho escolhido no gráfico ───────────────────────────────────────────────
+
+def test_selection_statistics_measures_the_edges_and_the_variation():
+    from braggflow.analysis import selection_statistics
+
+    t = np.arange(0.0, 100.0, 0.5)
+    y = 1550.0 + 0.01 * t                          # rampa de 10 pm/s
+    linha = selection_statistics(t, y, 20.25, 60.25)
+    assert linha["value_start"] == pytest.approx(1550.2025)   # interpolado entre amostras
+    assert linha["value_end"] == pytest.approx(1550.6025)
+    assert linha["delta"] == pytest.approx(0.4)
+    assert linha["delta_rate"] == pytest.approx(0.01)
+    assert linha["slope"] == pytest.approx(0.01)
+    assert linha["n"] == 80                        # [20,25; 60,25): 20,5 … 60,0
+    assert linha["mean"] == pytest.approx(np.mean(y[(t >= 20.25) & (t < 60.25)]))
+
+
+def test_selection_statistics_relative_shifts_levels_only():
+    from braggflow.analysis import selection_statistics
+
+    t = np.arange(0.0, 10.0, 0.1)
+    y = np.where(t < 5, 1545.0, 1545.05) + np.where(np.arange(t.size) == 0, np.nan, 0.0)
+    absoluto = selection_statistics(t, y, 4.0, 6.0)
+    relativo = selection_statistics(t, y, 4.0, 6.0, relative=True)
+    assert relativo["mean"] == pytest.approx(absoluto["mean"] - 1545.0)   # 1º valor válido
+    assert relativo["value_start"] == pytest.approx(absoluto["value_start"] - 1545.0)
+    for chave in ("std", "peak_to_peak", "delta", "slope"):
+        assert relativo[chave] == pytest.approx(absoluto[chave])
+    assert relativo["relative"] and not absoluto["relative"]
+
+
+def test_selection_statistics_rejects_an_empty_range():
+    from braggflow.analysis import selection_statistics
+
+    with pytest.raises(ValueError, match="maior que o início"):
+        selection_statistics(np.arange(5.0), np.arange(5.0), 3.0, 3.0)

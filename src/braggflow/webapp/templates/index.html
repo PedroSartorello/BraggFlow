@@ -738,12 +738,37 @@
               aria-expanded="false" aria-controls="status-details">detalhes</button>
       <button type="button" id="btn-open-viz" class="status-link hidden"
               title="Abre este CSV processado na aba Visualização">Abrir na Visualização →</button>
-      <span class="plot-hint">clique no gráfico = marcação</span>
-      <label class="check-row plot-toggle" title="Mostra o sinal antes do processamento, por baixo do processado">
-        <input type="checkbox" id="show-raw" checked> Sinal bruto</label>
     </div>
     <ul id="status-details" class="status-details hidden"></ul>
+    <div id="plot-toolbar" class="plot-toolbar">
+      <div class="segmented" role="radiogroup" aria-label="Disposição dos canais">
+        <label title="Um painel por canal, cada um com a sua escala; o tempo é o mesmo em todos (atalho 1)">
+          <input type="radio" name="plot-layout" value="separate" checked> Canais separados</label>
+        <label title="Todos os canais no mesmo eixo (atalho 2)">
+          <input type="radio" name="plot-layout" value="overlay"> Mesmo gráfico</label>
+      </div>
+      <label class="check-row plot-toggle" title="Mostra cada canal menos o seu primeiro valor (só a exibição; o processamento não muda). Atalho D">
+        <input type="checkbox" id="plot-relative"> Relativo ao início</label>
+      <label class="check-row plot-toggle" title="Mostra o sinal antes do processamento, por baixo do processado. Atalho B">
+        <input type="checkbox" id="show-raw" checked> Sinal bruto</label>
+      <div class="segmented" role="radiogroup" aria-label="O que o arraste do mouse faz">
+        <label title="Arrastar aproxima; duplo clique mostra tudo (atalho Z)">
+          <input type="radio" name="plot-tool" value="zoom" checked> Zoom</label>
+        <label title="Arrastar mede o trecho: média, desvio, deriva e variação de cada canal (atalho M)">
+          <input type="radio" name="plot-tool" value="select"> Medir trecho</label>
+      </div>
+      <span class="plot-hint" id="plot-hint">arraste = zoom · clique = marcação</span>
+    </div>
     <div id="plot"></div>
+    <div id="selection-panel" class="selection-panel hidden" aria-live="polite">
+      <div class="selection-head">
+        <strong id="selection-range"></strong>
+        <span class="hint" id="selection-note"></span>
+        <button type="button" id="btn-selection-copy" class="status-link" title="Copia a tabela para colar numa planilha">Copiar</button>
+        <button type="button" id="btn-selection-clear" class="status-link" title="Tira a seleção (Esc)" aria-label="Limpar seleção">×</button>
+      </div>
+      <div class="table-wrap"><table class="data-table" id="selection-table"></table></div>
+    </div>
     <div id="series-empty" class="empty-state">
       <h2>Comece pelos arquivos do interrogador</h2>
       <div class="dropzone" data-kind="series">
