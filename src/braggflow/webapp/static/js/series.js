@@ -1,11 +1,11 @@
 // Aba Séries temporais: opções de processamento, sensores, setups, lista
 // de arquivos, gráfico, processamento (um, em lote ou juntos) e concatenação.
 
-import { $, fmtNum, setBusy, showError, syncCardStyles } from "./core.js";
+import { $, fmtNum, fmtSig, setBusy, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { renderSpectraFiles } from "./spectra.js";
 import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
-import { numeroOuTraco } from "./analysis.js";
+import { numeroOuTraco, resetAnalysis, scheduleAnalysis } from "./analysis.js";
 import { switchTab } from "./tabs.js";
 import { addFileToProject, fileRow, markProjectDirty, renderEmptyFiles, renderFilePicker } from "./projects.js";
 
@@ -85,7 +85,9 @@ let lastStats = null;
 
 const plotLayout = () => document.querySelector('input[name="plot-layout"]:checked')?.value || "separate";
 export const plotTool = () => document.querySelector('input[name="plot-tool"]:checked')?.value || "zoom";
-const plotRelative = () => $("plot-relative").checked;
+export const plotRelative = () => $("plot-relative").checked;
+// Opções que geraram o gráfico atual (a medição e as estatísticas usam as mesmas)
+export const currentPlotOptions = () => lastPlotOptions;
 
 try {
   const salvo = JSON.parse(localStorage.getItem(PLOT_VIEW_KEY) || "{}");
@@ -201,7 +203,13 @@ function renderPlot(data) {
   const gd = $("plot");             // o purge de um projeto anterior tira os eventos
   ["plotly_click", "plotly_doubleclick", "plotly_selected"].forEach((ev) => gd.removeAllListeners?.(ev));
   // Só a ferramenta Marcar cria marcações: um clique ao dar zoom não marca nada
-  gd.on("plotly_click", (event) => { if (plotTool() === "mark") onPlotClick(event); });
+  // O instante vem da posição do clique, não do ponto do hover (que atrasa
+  // quando o mouse anda rápido e marcava o lugar anterior)
+  gd.on("plotly_click", (event) => {
+    if (plotTool() !== "mark") return;
+    const t = event?.event ? markerNear(event.event)?.t : undefined;
+    onPlotClick(Number.isFinite(t) ? { points: [{ x: t }] } : event);
+  });
   gd.on("plotly_doubleclick", () => clearTimeout(shared.markerClickTimer));
   gd.on("plotly_selected", onPlotSelected);
 }
@@ -283,13 +291,7 @@ export function clearSelection({ redraw = true } = {}) {
   if (tinha && redraw && $("plot").data) Plotly.relayout($("plot"), plotDecorations());
 }
 
-// Números da tabela: 4 casas para níveis absolutos, 4 algarismos para o resto
-function fmtStat(v) {
-  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return Math.abs(v) >= 100
-    ? v.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
-    : v.toLocaleString("pt-BR", { maximumSignificantDigits: 4 });
-}
+const fmtStat = fmtSig;
 
 const STAT_COLUNAS = [
   ["Canal", (l) => l.channel],
@@ -381,6 +383,7 @@ $("plot-relative").addEventListener("change", () => {
   rememberPlotView();
   if (lastPlotData) renderPlot(lastPlotData);
   if (selection) measureSelection();       // os níveis mudam com a origem
+  scheduleAnalysis();
 });
 document.querySelectorAll('input[name="plot-tool"]').forEach((el) =>
   el.addEventListener("change", () => setPlotTool(el.value)));
@@ -457,6 +460,7 @@ export async function processData({ save = true, files = null } = {}) {
     lastPlotOptions = opts;
     renderPlot(data);
     if (selection) measureSelection();       // o processamento mudou: a medição também
+    scheduleAnalysis();                      // e as estatísticas por intervalo
     if (data.processed_file) shared.vizPendingFile = data.processed_file;
     if (data.existing_file) {
       (opts.files || [opts.file]).forEach((path) => {
@@ -866,6 +870,7 @@ export async function selectSeriesFile(path) {
   if (path !== $("file-select").value) {
     saveCurrentSeriesState();
     clearSelection({ redraw: false });
+    resetAnalysis();
   }
   const novo = !(path in seriesState);
   seriesStateFor(path);          // entra no projeto, se ainda não estava

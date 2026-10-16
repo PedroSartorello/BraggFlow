@@ -1,13 +1,14 @@
-// Aba Visualização: fontes de dados, estilo por canal, estilos salvos,
+// Aba Figura: fontes de dados, estilo por canal, estilos salvos,
 // marcações, geração e download da figura.
 
 import { $, fmtNum, showError } from "./core.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectraStateFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
 import { saveCurrentSpectrumState } from "./spectra.js";
+import { scheduleAnalysis } from "./analysis.js";
 import { applyVizChannelSelection, markProjectDirty } from "./projects.js";
 
-// ── Aba Visualização ─────────────────────────────────────────────────────────
+// ── Aba Figura ─────────────────────────────────────────────────────────
 let lastFigureInfo = null;       // tamanho da última figura gerada
 let figureRequest = 0;           // descarta respostas de edições anteriores
 export const channelStyleMemory = {};   // estilo por canal, preservado entre CSVs
@@ -86,6 +87,7 @@ async function loadSpectrumCurves() {
 export async function refreshVizCurves() {
   if (vizSource() === "spectra") await loadSpectrumCurves();
   else await loadSeriesCurves();
+  refreshStyleState();
 }
 
 // Recarrega a lista a cada entrada na aba; se houve processamento novo,
@@ -310,6 +312,7 @@ export function applyStyle(style) {
     row.querySelector(".ch-marker").value = s.marker;
     if (s.color) row.querySelector(".ch-color").value = s.color;
   });
+  refreshStyleState();
 }
 
 function applyPreset(key) {
@@ -340,6 +343,7 @@ function fillFontSelect(fonts) {
 export async function loadFigureOptions() {
   const resp = await fetch("/api/figure/options");
   shared.figureOptions = await resp.json();
+  styleBaseline = shared.figureOptions.style;
   fillFontSelect(shared.figureOptions.fonts);
   applyStyle(shared.figureOptions.style);
   applySourceMode();
@@ -349,6 +353,157 @@ export async function loadFigureOptions() {
   } catch { /* estilo salvo ilegível ou armazenamento indisponível */ }
   await loadStyleList();
 }
+
+// ── O que mudou, resumo dos cartões e busca ──────────────────────────────────
+let styleBaseline = null;        // estilo de referência: o padrão ou o estilo salvo carregado
+
+function baselineValue(el) {
+  const [section, key] = el.dataset.style.split(".");
+  return styleBaseline?.[section]?.[key];
+}
+
+// Igual ao que applyStyle mostraria? Números comparados como números, cores sem caixa
+function differsFromBaseline(el) {
+  if (!styleBaseline) return false;
+  const base = baselineValue(el);
+  if (base === undefined) return false;
+  if (el.type === "checkbox") return el.checked !== Boolean(base);
+  const atual = String(el.value ?? "").trim().toLowerCase();
+  const ref = String(base ?? "").trim().toLowerCase();
+  const na = Number(atual), nb = Number(ref);
+  if (atual !== "" && ref !== "" && Number.isFinite(na) && Number.isFinite(nb)) return na !== nb;
+  return atual !== ref;
+}
+
+const PLURAL = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+const opcaoEscolhida = (sel) => sel?.selectedOptions?.[0]?.textContent.split("(")[0].trim() || "";
+
+// Resumo que aparece no título de cada cartão (para não precisar abrir)
+const CARD_SUMMARIES = {
+  dados: () => {
+    if (vizSource() === "spectra") {
+      return PLURAL(document.querySelectorAll(".viz-spectrum-source:checked").length, "espectro", "espectros");
+    }
+    const partes = [PLURAL(document.querySelectorAll(".viz-series-source:checked").length, "CSV", "CSVs"),
+                    `x em ${styleInput("data.time_unit")?.value || "s"}`];
+    if (styleInput("data.relative_first")?.checked) partes.push("Δ");
+    if (styleInput("data.to_pm")?.checked) partes.push("pm");
+    return partes.join(" · ");
+  },
+  curvas: () => {
+    const partes = [PLURAL(document.querySelectorAll(".viz-channel:checked").length, "curva", "curvas")];
+    partes.push(styleInput("legend.show")?.checked ? `legenda ${opcaoEscolhida(styleInput("legend.position")).toLowerCase()}` : "sem legenda");
+    return partes.join(" · ");
+  },
+  figura: () => {
+    const unidade = styleInput("figure.unit")?.value || "cm";
+    const largura = fmtNum(styleInput("figure.width")?.value || 0, 2);
+    const altura = styleInput("figure.height")?.value ? fmtNum(styleInput("figure.height").value, 2) : "auto";
+    return `${largura} × ${altura} ${unidade} · ${opcaoEscolhida(styleInput("figure.layout")).toLowerCase()}`;
+  },
+  marcacoes: () => {
+    const partes = [PLURAL(collectMarkers().filter((m) => String(m.time).trim() !== "").length, "marcação", "marcações")];
+    if (styleInput("markers.shade")?.checked) partes.push("faixas");
+    if (styleInput("axes.grid")?.checked) partes.push("grade");
+    return partes.join(" · ");
+  },
+};
+
+export function refreshStyleState() {
+  document.querySelectorAll("#tab-viz-sidebar [data-style]").forEach((el) => {
+    el.closest(".field, .check-row")?.classList.toggle("changed", differsFromBaseline(el));
+  });
+  document.querySelectorAll("#tab-viz-sidebar details[data-card]").forEach((card) => {
+    const alvo = card.querySelector(":scope > summary [data-summary]");
+    if (!alvo) return;
+    const resumo = CARD_SUMMARIES[card.dataset.card]?.() || "";
+    const alteradas = card.querySelectorAll(".changed").length;
+    alvo.innerHTML = "";
+    alvo.append(resumo);
+    if (alteradas) {
+      const marca = document.createElement("span");
+      marca.className = "alteradas";
+      marca.textContent = ` · ${PLURAL(alteradas, "alterada", "alteradas")}`;
+      alvo.appendChild(marca);
+    }
+  });
+}
+
+// "Restaurar este cartão": volta os campos dele ao estilo de referência
+document.querySelectorAll("#tab-viz-sidebar .card-reset").forEach((botao) => {
+  botao.addEventListener("click", () => {
+    const card = botao.closest("details[data-card]");
+    card.querySelectorAll("[data-style]").forEach((el) => {
+      const base = baselineValue(el);
+      if (base === undefined) return;
+      if (el.type === "checkbox") el.checked = Boolean(base);
+      else el.value = base ?? "";
+    });
+    if (card.dataset.card === "figura") $("viz-preset").value = "";
+    refreshStyleState();
+    markProjectDirty();
+    scheduleFigure(true);
+  });
+});
+
+// Busca: mostra só as opções cujo rótulo (ou as escolhas) tem o texto digitado
+const semAcento = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+let abertosAntesDaBusca = null;
+
+// Nome da seção (sub-rótulo "Ticks", "Legenda"…) e do cartão de um campo: buscar
+// "tick" acha também "Direção" e "Comprimento", que ficam na seção Ticks
+function secaoDe(el) {
+  let secao = "";
+  for (let irmao = el.previousElementSibling; irmao; irmao = irmao.previousElementSibling) {
+    if (irmao.classList.contains("sub-label")) { secao = irmao.textContent; break; }
+  }
+  const cartao = el.closest("details[data-card]")?.querySelector(":scope > summary > span")?.textContent || "";
+  return `${secao} ${cartao}`;
+}
+
+function filterVizOptions(texto) {
+  const q = semAcento(texto.trim());
+  const sidebar = $("tab-viz-sidebar");
+  const itens = [...sidebar.querySelectorAll(".field, .check-row, .inline-row")]
+    .filter((el) => !el.closest(".viz-search") && !el.parentElement.closest(".field, .check-row, .inline-row"));
+  const cartoes = [...sidebar.querySelectorAll("details[data-card]")];
+  const extras = sidebar.querySelectorAll(".hint:not(#viz-search-empty), .sub-label, .card-reset, #viz-channels, .advanced > summary");
+  if (!q) {
+    itens.forEach((el) => el.classList.remove("search-hidden"));
+    cartoes.forEach((c) => c.classList.remove("search-hidden"));
+    extras.forEach((el) => el.classList.remove("search-hidden"));
+    if (abertosAntesDaBusca) {
+      sidebar.querySelectorAll("details").forEach((d) => { d.open = abertosAntesDaBusca.has(d); });
+      abertosAntesDaBusca = null;
+    }
+    $("viz-search-empty").classList.add("hidden");
+    return;
+  }
+  if (!abertosAntesDaBusca) abertosAntesDaBusca = new Set([...sidebar.querySelectorAll("details")].filter((d) => d.open));
+  extras.forEach((el) => el.classList.add("search-hidden"));
+  let achados = 0;
+  itens.forEach((el) => {
+    const texto = semAcento(`${secaoDe(el)} ${el.textContent} ` +
+                            [...el.querySelectorAll("input")].map((i) => i.placeholder).join(" "));
+    const casa = texto.includes(q);
+    el.classList.toggle("search-hidden", !casa);
+    if (casa) {
+      achados++;
+      for (let d = el.closest("details"); d; d = d.parentElement.closest("details")) d.open = true;
+    }
+  });
+  cartoes.forEach((c) => c.classList.toggle("search-hidden", !c.querySelector(".field:not(.search-hidden), .check-row:not(.search-hidden), .inline-row:not(.search-hidden)")));
+  $("viz-search-empty").classList.toggle("hidden", achados > 0);
+}
+
+$("viz-search").addEventListener("input", (e) => filterVizOptions(e.target.value));
+$("viz-search").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { e.target.value = ""; filterVizOptions(""); }
+  if (e.key === "Enter") {      // vai para o primeiro campo encontrado
+    e.preventDefault();
+    $("tab-viz-sidebar").querySelector(".field:not(.search-hidden) :is(input, select), .check-row:not(.search-hidden) input")?.focus();
+  }
+});
 
 // ── Estilos salvos ───────────────────────────────────────────────────────────
 async function loadStyleList(selectValue) {
@@ -366,6 +521,7 @@ async function loadStyle(name) {
   const resp = await fetch("/api/styles/" + encodeURIComponent(name));
   const data = await resp.json();
   if (!resp.ok) throw new Error(data.error || "Erro ao carregar estilo.");
+  styleBaseline = data.style;
   applyStyle(data.style);
   $("style-name").value = data.name;
   $("viz-preset").value = "";
@@ -400,6 +556,7 @@ function resetStyle() {
   });
   $("viz-palette").value = "publicacao";
   applyPalette();
+  styleBaseline = shared.figureOptions.style;
   applyStyle(shared.figureOptions.style);
   $("style-select").value = "";
   $("viz-preset").value = "";
@@ -476,6 +633,7 @@ export function moveMarker(indice, x) {
 }
 
 export function drawPlotMarkers() {
+  scheduleAnalysis();
   const n = collectMarkers().length;
   $("marker-count").textContent = n ? `(${n})` : "";
   $("viz-marker-count").textContent = n
@@ -483,6 +641,7 @@ export function drawPlotMarkers() {
     : "Nenhuma marcação: clique no gráfico da aba Séries temporais para criar.";
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
   if (!n) $("card-markers").open = false;
+  refreshStyleState();
 }
 
 // Um clique marca; o duplo clique (que reajusta o zoom) não
@@ -613,7 +772,32 @@ export async function onVizChange(el) {
   if (["figure.unit", "figure.width", "figure.height", "figure.font_size"].includes(el.dataset.style)) {
     $("viz-preset").value = "";
   }
+  refreshStyleState();
   scheduleFigure();
+}
+
+async function copyFigure() {
+  const opts = collectVizOptions();
+  const curvas = opts.source === "spectra" ? opts.spectra : opts.series;
+  if (!curvas.length) { showError("Marque pelo menos uma curva."); return; }
+  const dpi = Math.min(Number(opts.style.export?.dpi) || 300, 300);
+  opts.style.export = { ...opts.style.export, preview_dpi: dpi };
+  $("viz-status").textContent = "Copiando figura…";
+  try {
+    const resp = await fetch("/api/figure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Erro ao gerar a figura.");
+    const bytes = Uint8Array.from(atob(data.image), (c) => c.charCodeAt(0));
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": new Blob([bytes], { type: "image/png" }) })]);
+    $("viz-status").textContent = `Figura copiada (PNG, ${dpi} dpi): cole num slide ou documento.`;
+  } catch (err) {
+    showError(`Não foi possível copiar a figura: ${err.message}. Use "Baixar figura".`);
+    $("viz-status").textContent = "Falha ao copiar a figura.";
+  }
 }
 
 async function downloadFigure() {
@@ -655,6 +839,7 @@ $("btn-add-marker").addEventListener("click", () => {
 });
 $("btn-figure").addEventListener("click", generateFigure);
 $("btn-fig-download").addEventListener("click", downloadFigure);
+$("btn-fig-copy").addEventListener("click", copyFigure);
 $("btn-apply-palette").addEventListener("click", () => { applyPalette(); markProjectDirty(); scheduleFigure(); });
 $("btn-style-save").addEventListener("click", saveStyle);
 $("btn-style-reset").addEventListener("click", resetStyle);

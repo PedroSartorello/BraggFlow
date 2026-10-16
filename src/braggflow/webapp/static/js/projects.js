@@ -7,6 +7,7 @@ import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collect
 import { renderSpectraFiles, resetSpectraAnalyses, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
 import { addMarkerRow, applySourceMode, applyStyle, channelStyleMemory, collectMarkers, collectStyle, drawPlotMarkers, loadVizSources, refreshVizCurves, rememberChannelStyles, vizSource } from "./viz.js";
 import { switchTab } from "./tabs.js";
+import { resetAnalysis } from "./analysis.js";
 
 export function fileRow(path, { selected, onSelect, checkbox, note }) {
   const row = document.createElement("div");
@@ -49,6 +50,7 @@ function clearProjectState() {
   renderSpectraFiles();
   resetSpectraAnalyses();
   clearSelection({ redraw: false });
+  resetAnalysis();
   Plotly.purge($("plot"));
   Plotly.purge($("spectra-plot"));
   $("status-text").textContent = "Adicione arquivos de série temporal.";

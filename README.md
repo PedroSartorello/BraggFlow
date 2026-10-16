@@ -264,9 +264,11 @@ Three tabs, each with its own data and settings:
   maxima and minima with position, prominence, FWHM or 3-dB band, Q factor,
   centroid and spacing, and the evolution of the valleys (or peaks) from file
   to file in acquisition order.
-* **Visualização** — build the figure from either source: channels from one or
+* **Figura** — build the figure from either source: channels from one or
   several processed CSVs, or traces from one or several spectra. Curves from
-  more than one file are named `arquivo · canal`.
+  more than one file are named `arquivo · canal`. Saved style, size and font
+  come first; changed options are marked and searchable; the figure can be
+  copied to the clipboard.
 
 A project saves all of it: every file with its own settings, the markers, the
 selected curves and the figure style.

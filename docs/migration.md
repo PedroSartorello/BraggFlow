@@ -66,6 +66,6 @@ covers them).
 |---|---|
 | `mainPlot.py`, `mainPlotFluke.py`, `mainPlotVazao.py` | publication figures with gas-event bands; flow and Fluke temperature variants |
 | `scripts/plotarCSV.py`, `scripts/plotarCSV2.py` | figure of one or more concatenated CSVs with gas events (the second added an uncompensated EFBG2 overlay) |
-| `scripts/calcular_medias.py`, `scripts/media_ciclos.py`, `scripts/calcular_media_ciclos.py` | mean of the last N seconds of each gas cycle (now: interval statistics in the Visualização tab, `braggflow.analysis`) |
+| `scripts/calcular_medias.py`, `scripts/media_ciclos.py`, `scripts/calcular_media_ciclos.py` | mean of the last N seconds of each gas cycle (now: interval statistics under the Séries temporais plot, `braggflow.analysis`) |
 | `notebooks/01_exploracao.ipynb` | empty file |
 | `gasMarker.html` | standalone page to click the gas changes on a processed CSV and export the event table; no longer used (the table format is still read, see [`data-formats.md`](data-formats.md#3-gas-event-table)) |

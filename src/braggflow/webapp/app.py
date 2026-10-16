@@ -359,7 +359,7 @@ def _save_processed(pipeline: OpticalPipeline, source_rel: str,
     """
     Grava o resultado completo em <pasta>/<nome>_processado.csv (mesmo nome
     de main.py), junto com o JSON de rastreabilidade, para que apareça na aba
-    Visualização. Escreve em arquivos temporários e substitui no fim, para
+    Figura. Escreve em arquivos temporários e substitui no fim, para
     que a figura nunca leia um CSV pela metade durante um reprocessamento.
     """
     folder = folder or _data().processed
@@ -394,7 +394,7 @@ def _to_jsonable(arr: np.ndarray) -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Figuras de publicação (aba Visualização)
+# Figuras de publicação (aba Figura)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_spectrum_request(options: dict) -> bool:
@@ -913,7 +913,7 @@ def api_project_get(name):
     try:
         _adopt_legacy_processed(project)
     except OSError:
-        pass    # sem a cópia, a aba Visualização só não lista os CSVs antigos
+        pass    # sem a cópia, a aba Figura só não lista os CSVs antigos
     return jsonify(project.to_dict())
 
 
@@ -1051,6 +1051,41 @@ def api_series_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"start": inicio, "end": fim, "duration": fim - inicio, "channels": linhas})
+
+
+@bp.route("/api/series/intervals", methods=["POST"])
+def api_series_intervals():
+    """
+    Estatísticas por intervalo entre as marcações e o degrau em cada uma,
+    para cada canal do sinal processado mostrado na aba Séries temporais.
+    Corpo: ``{options, markers, analysis, relative}``; mesma resposta de
+    ``/api/analysis`` (``unit``, ``curves``, ``n_markers``).
+    """
+    corpo = request.get_json(silent=True) or {}
+    options = corpo.get("options") or {}
+    try:
+        if not (options.get("file") or options.get("files")):
+            raise ValueError("Processe um arquivo antes de calcular as estatísticas.")
+        markers = parse_markers(corpo.get("markers"))
+        settings = corpo.get("analysis") or {}
+        t, sig, channels, units = _processed_result(options)
+        relativo = bool(corpo.get("relative"))
+        curvas = []
+        for i, ch in enumerate(channels):
+            valores = sig[:, i]
+            if relativo:                       # como no gráfico "relativo ao início"
+                validos = valores[np.isfinite(valores)]
+                valores = valores - (validos[0] if len(validos) else 0.0)
+            curvas.append({"key": ch, **analyse_curve(
+                t, valores, markers,
+                settle_window=as_float(settings.get("settle_window")),
+                reference=str(settings.get("reference") or "previous"),
+                step_window=as_float(settings.get("step_window"), 10.0),
+            )})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"unit": units[0] if units else "", "curves": curvas,
+                    "n_markers": len(markers), "relative": relativo})
 
 
 @bp.route("/api/download", methods=["POST"])

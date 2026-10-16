@@ -981,3 +981,25 @@ def test_series_stats_rejects_bad_ranges(webapp):
     assert resp.status_code == 400 and "início e fim" in resp.get_json()["error"]
     resp = client.post("/api/series/stats", json={"options": {}, "start": 1, "end": 5})
     assert resp.status_code == 400
+
+
+def test_series_intervals_uses_the_markers_on_the_processed_signal(webapp):
+    _, client = webapp
+    opcoes = {"file": "data/raw/ensaio.ASC", "sensors": SENSORS,
+              "cleaning": {"enabled": True}, "nulls": {"enabled": True}}
+    corpo = {"options": opcoes, "markers": [{"time": "6", "label": "salto"}],
+             "analysis": {"step_window": "1"}}
+    data = client.post("/api/series/intervals", json=corpo).get_json()
+    assert data["unit"] == "nm" and data["n_markers"] == 1 and data["relative"] is False
+    assert [c["key"] for c in data["curves"]] == ["S1", "S2"]
+    s2 = data["curves"][1]
+    assert [i["label"] for i in s2["intervals"]] == ["antes da 1ª marcação", "salto"]
+    assert s2["intervals"][0]["mean"] == pytest.approx(1545.0, abs=0.05)
+    assert len(s2["steps"]) == 1
+
+    relativo = client.post("/api/series/intervals", json={**corpo, "relative": True}).get_json()
+    assert relativo["curves"][1]["intervals"][0]["mean"] == pytest.approx(
+        s2["intervals"][0]["mean"] - 1545.0, abs=0.01)
+
+    resp = client.post("/api/series/intervals", json={"options": {}, "markers": []})
+    assert resp.status_code == 400 and "Processe" in resp.get_json()["error"]

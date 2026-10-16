@@ -110,11 +110,25 @@ file (each keeps the nearest valley of the next file, up to a maximum jump).
 Plot λ, Δλ to the first file, intensity, depth or width against elapsed time or
 file order; table and CSV with every value.
 
-**Visualização** — publication figures from processed CSVs or spectra: size
-presets (IEEE, Elsevier, A4, slide), fonts, stacked or overlaid curves, legend,
-axes and ticks, marker bands, export to PDF/PNG/SVG/EPS/TIFF. Below the figure,
-statistics per interval between markers (mean, deviation, drift, noise,
-steady-state mean, steps).
+**Interval statistics** (Séries temporais, under the markers) — for every
+channel of the processed signal on the plot: mean, deviation, extremes, drift,
+noise and steady-state mean of each interval between markers, the difference
+to the previous (or first) interval, and the step at each marker. Recomputed
+when the markers, the processing or the "relative to the start" view change;
+CSV export.
+
+**Figura** — publication figures from processed CSVs or spectra. The sidebar
+starts with what changes the figure the most, *Estilo e tamanho* (saved
+style, size preset — IEEE, Elsevier, A4, slide —, font and base size), then
+*Dados*, *Curvas*, *Figura* and *Marcações e eixos*. Each card shows a
+summary in its title, so closed cards can be read without opening them; a
+blue dot marks every option that differs from the loaded style (or the
+default), the card title counts them, and "Restaurar este cartão" brings that
+card back. The search box at the top filters the options by name or section
+("fonte", "legenda", "tick"; Enter jumps to the first, Esc clears). "Ajustar à
+tela" shows the whole figure; "Copiar figura" puts it on the clipboard as a PNG
+(export resolution, up to 300 dpi) for slides and documents; "Baixar figura"
+exports PDF/PNG/SVG/EPS/TIFF.
 
 ## For developers
 
@@ -142,8 +156,8 @@ build step. `main.js` is the entry point; the modules are:
 | `state.js` | files of the project and what each one keeps; `shared`, the variables read and changed by more than one module |
 | `series.js` | Séries temporais tab: processing options, sensors, setups, file list, plot, processing (one, batch, joined), concatenation |
 | `spectra.js` | Espectros tab: preparation, plot, peaks and valleys |
-| `viz.js` | Visualização tab: data sources, styles, markers, figure |
-| `analysis.js` | interval statistics |
+| `viz.js` | Figura tab: data sources, styles (changed options, card summaries, search), markers, figure, copy |
+| `analysis.js` | interval statistics under the Séries temporais plot |
 | `projects.js` | project screen, adding/removing files, save, open, delete, unsaved-changes dialog |
 | `tabs.js` | switching tabs |
 | `main.js` | events that cross tabs (sidebar, keyboard shortcuts) and startup |
