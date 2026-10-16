@@ -80,6 +80,15 @@ export function syncCardStyles() {
 export const fmtNum = (v, digits = 3) =>
   Number(v).toLocaleString("pt-BR", { maximumFractionDigits: digits });
 
+// Medidas: 4 casas para níveis absolutos (1.550,0123), 4 algarismos para o
+// resto (0,0541; 0,0008834), para que valores pequenos não virem 0
+export function fmtSig(v) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return Math.abs(v) >= 100
+    ? v.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
+    : v.toLocaleString("pt-BR", { maximumSignificantDigits: 4 });
+}
+
 // ── Começo vazio: arquivos já enviados, do mais novo para o mais antigo ─────
 export const fmtBytes = (n) => (n >= 1024 ** 2
   ? `${(n / 1024 ** 2).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`

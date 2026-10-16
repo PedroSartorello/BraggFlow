@@ -65,6 +65,14 @@ itself did not change: the same input gives the same output as before.
 - Markers moved from the sidebar to the plot: the *Marcar* tool (shortcut A)
   adds one per click and drags existing ones; the list is a panel under the
   plot. A click with the zoom or measure tool no longer adds a marker.
+- Figura tab (formerly Visualização): "Estilo e tamanho" first (saved style,
+  size preset, font), a summary in each card title, a dot on every option that
+  differs from the loaded style or the default with a per-card "Restaurar",
+  a search box for the options, "Ajustar à tela" that fits the whole figure
+  (it fitted only the width), and "Copiar figura" (PNG to the clipboard).
+- Interval statistics moved from the figure tab to Séries temporais, under the
+  markers, computed on the processed signal shown on the plot
+  (`/api/series/intervals`); they follow the markers and the processing.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.

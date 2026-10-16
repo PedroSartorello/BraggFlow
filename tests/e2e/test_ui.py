@@ -1,5 +1,7 @@
 """Fluxos principais da interface, clicando como o usuário clica."""
 
+import re
+
 import pytest
 from playwright.sync_api import Page, expect
 
@@ -467,3 +469,84 @@ def test_concatenation_card_appears_with_two_files(app):
     app.click("#btn-add-series")
     expect(app.locator("#series-files .file-name")).to_have_count(2)
     expect(app.locator("#card-concat")).to_be_visible()
+
+
+# ── aba Figura ───────────────────────────────────────────────────────────────
+
+def abrir_figura(page: Page) -> None:
+    adicionar_serie(page, "ensaio_a.asc")
+    page.click("#btn-process")
+    expect(page.locator("#status-text")).to_contain_text("CSV salvo")
+    page.click('#tabs .tab[data-tab="viz"]')
+    expect(page.locator("#viz-img")).to_be_visible()
+
+
+def test_figure_tab_fits_summarizes_and_finds_options(app):
+    novo_projeto(app, "Figura")
+    abrir_figura(app)
+    expect(app.locator('#tabs .tab[data-tab="viz"]')).to_have_text("Figura")
+
+    app.select_option("#viz-preset", "ieee1")                 # figura alta, uma coluna
+    expect(app.locator("#viz-status")).to_contain_text("8,89")
+    caber = app.evaluate("""() => { const i = document.getElementById('viz-img').getBoundingClientRect(),
+        a = document.getElementById('viz-figure').getBoundingClientRect();
+        return i.height <= a.height && i.width <= a.width; }""")
+    assert caber, "ajustar à tela mostra a figura inteira"
+
+    expect(app.locator('[data-summary="figura"]')).to_contain_text("8,89 × auto cm")
+    expect(app.locator('[data-summary="curvas"]')).to_contain_text("3 curvas")
+    expect(app.locator('details[data-card="figura"]')).not_to_have_attribute("open", "")
+
+    app.locator('[data-style="lines.width"]').fill("2.5")
+    app.keyboard.press("Tab")
+    expect(app.locator('[data-summary="curvas"]')).to_contain_text("1 alterada")
+    expect(app.locator('[data-style="lines.width"]').locator("xpath=ancestor::label[1]")).to_have_class(re.compile("changed"))
+    app.click('.card-reset[data-reset="curvas"]')
+    expect(app.locator('[data-style="lines.width"]')).to_have_value("1.2")
+    expect(app.locator('[data-summary="curvas"]')).not_to_contain_text("alterada")
+
+    app.fill("#viz-search", "tick")                            # acha também a seção Ticks
+    direcao = app.locator('[data-style="ticks.direction"]')
+    expect(direcao).to_be_visible()
+    expect(app.locator('[data-style="legend.position"]')).to_be_hidden()
+    app.press("#viz-search", "Escape")
+    expect(app.locator('[data-style="legend.position"]')).to_be_visible()
+    expect(direcao).to_be_hidden()                             # o "Avançado" volta a fechar
+    app.fill("#viz-search", "xyzw")
+    expect(app.locator("#viz-search-empty")).to_be_visible()
+
+
+def test_copy_figure_puts_a_png_on_the_clipboard(app):
+    app.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    novo_projeto(app, "Copiar")
+    abrir_figura(app)
+    app.click("#btn-fig-copy")
+    expect(app.locator("#viz-status")).to_contain_text("Figura copiada")
+    tipos = app.evaluate("async () => (await navigator.clipboard.read()).flatMap((i) => i.types)")
+    assert "image/png" in tipos
+
+
+def test_interval_statistics_live_under_the_series_plot(app):
+    novo_projeto(app, "Intervalos")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#card-markers > summary").click()             # sem marcações, o painel começa fechado
+    app.click("#btn-add-marker")
+    app.locator(".marker-time").fill("300")
+    app.keyboard.press("Tab")
+    app.locator("#analysis-panel > summary").click()
+    tabela = app.locator("#analysis-result table").first
+    expect(tabela.locator("tbody tr")).to_have_count(6)       # 2 intervalos × 3 canais
+    expect(app.locator("#analysis-result")).to_contain_text("Intervalos (nm)")
+
+    app.click("#btn-add-marker")                               # nova marcação: recalcula
+    app.locator(".marker-time").nth(1).fill("660")
+    app.keyboard.press("Tab")
+    expect(tabela.locator("tbody tr")).to_have_count(9)
+
+    app.check("#plot-relative")
+    expect(app.locator("#analysis-result")).to_contain_text("relativo ao início")
+
+    app.click("#btn-projects")
+    app.click("#leave-discard")
+    novo_projeto(app, "Outro")
+    expect(app.locator("#analysis-result table")).to_have_count(0)

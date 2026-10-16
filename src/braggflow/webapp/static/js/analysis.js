@@ -1,7 +1,9 @@
-// Estatísticas por intervalo entre marcações (cartão da aba Visualização).
+// Estatísticas por intervalo entre marcações, abaixo do gráfico da aba Séries
+// temporais: do sinal processado que está no gráfico, um canal por linha.
 
-import { $, fmtNum, showError } from "./core.js";
-import { collectVizOptions } from "./viz.js";
+import { $, fmtNum, fmtSig, showError } from "./core.js";
+import { currentPlotOptions, plotRelative } from "./series.js";
+import { collectMarkers } from "./viz.js";
 
 // ── Estatísticas por intervalo ───────────────────────────────────────────────
 let analysisData = null;
@@ -14,15 +16,15 @@ const COLUNAS_INTERVALO = [
   ["início (s)", (l) => numeroOuTraco(l.start, 2)],
   ["fim (s)", (l) => numeroOuTraco(l.end, 2)],
   ["n", (l) => l.n.toLocaleString("pt-BR")],
-  ["média", (l) => numeroOuTraco(l.mean, 4)],
-  ["σ", (l) => numeroOuTraco(l.std, 4)],
-  ["mín", (l) => numeroOuTraco(l.min, 4)],
-  ["máx", (l) => numeroOuTraco(l.max, 4)],
-  ["pico a pico", (l) => numeroOuTraco(l.peak_to_peak, 4)],
-  ["deriva (/s)", (l) => numeroOuTraco(l.slope, 5)],
-  ["ruído", (l) => numeroOuTraco(l.noise, 4)],
-  ["regime", (l) => numeroOuTraco(l.settle_mean, 4)],
-  ["Δ vs ref.", (l) => numeroOuTraco(l.delta, 4)],
+  ["média", (l) => fmtSig(l.mean)],
+  ["σ", (l) => fmtSig(l.std)],
+  ["mín", (l) => fmtSig(l.min)],
+  ["máx", (l) => fmtSig(l.max)],
+  ["pico a pico", (l) => fmtSig(l.peak_to_peak)],
+  ["deriva (/s)", (l) => fmtSig(l.slope)],
+  ["ruído", (l) => fmtSig(l.noise)],
+  ["regime", (l) => fmtSig(l.settle_mean)],
+  ["Δ vs ref.", (l) => fmtSig(l.delta)],
   ["referência", (l) => l.reference || "—"],
 ];
 
@@ -30,10 +32,10 @@ const COLUNAS_DEGRAU = [
   ["curva", (l) => l.curva],
   ["marcação", (l) => l.label],
   ["t (s)", (l) => numeroOuTraco(l.time, 2)],
-  ["antes", (l) => numeroOuTraco(l.before, 4)],
-  ["depois", (l) => numeroOuTraco(l.after, 4)],
-  ["degrau", (l) => numeroOuTraco(l.step, 4)],
-  ["dispersão", (l) => numeroOuTraco(l.step_spread, 4)],
+  ["antes", (l) => fmtSig(l.before)],
+  ["depois", (l) => fmtSig(l.after)],
+  ["degrau", (l) => fmtSig(l.step)],
+  ["dispersão", (l) => fmtSig(l.step_spread)],
 ];
 
 export function tabela(titulo, colunas, linhas) {
@@ -55,30 +57,49 @@ function renderAnalysis(dados) {
   analysisData = dados;
   const intervalos = achatar(dados, "intervals");
   const degraus = achatar(dados, "steps");
-  const unidade = dados.unit ? ` (${dados.unit})` : "";
+  const unidade = dados.unit ? ` (${dados.unit}${dados.relative ? ", relativo ao início" : ""})` : "";
   $("analysis-result").innerHTML =
     tabela(`Intervalos${unidade}`, COLUNAS_INTERVALO, intervalos) +
     tabela(`Degrau em cada marcação${unidade}`, COLUNAS_DEGRAU, degraus) +
     (dados.n_markers ? "" :
       '<span class="hint">Sem marcações, o sinal inteiro vira um único intervalo. ' +
-      'Adicione marcações no cartão "Marcações e eixos".</span>');
+      "Marque instantes com a ferramenta Marcar do gráfico.</span>");
+}
+
+let analysisRequest = 0;
+let analysisTimer = null;
+
+// Projeto ou arquivo trocado: nada do anterior fica na tabela
+export function resetAnalysis() {
+  analysisRequest++;
+  clearTimeout(analysisTimer);
+  analysisData = null;
+  $("analysis-result").innerHTML = "";
+}
+
+// Marcações, processamento ou exibição mudaram: recalcula se o cartão está aberto
+export function scheduleAnalysis() {
+  if (!$("analysis-panel").open) { analysisData = null; return; }
+  clearTimeout(analysisTimer);
+  analysisTimer = setTimeout(() => runAnalysis(), 400);
 }
 
 async function runAnalysis() {
-  const opts = collectVizOptions();
-  if (opts.source === "spectra") {
-    showError("A análise estatística é das séries no tempo.");
+  const options = currentPlotOptions();
+  if (!options) {
+    $("analysis-result").innerHTML = '<span class="hint">Escolha um arquivo para ver o sinal processado.</span>';
     return;
   }
-  if (!opts.series.length) { showError("Marque pelo menos uma curva."); return; }
-  showError("");
+  const request = ++analysisRequest;
   $("analysis-result").innerHTML = '<span class="hint">Calculando…</span>';
   try {
-    const resp = await fetch("/api/analysis", {
+    const resp = await fetch("/api/series/intervals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...opts,
+        options,
+        markers: collectMarkers(),
+        relative: plotRelative(),
         analysis: {
           settle_window: $("an-settle").value,
           step_window: $("an-step").value,
@@ -87,9 +108,11 @@ async function runAnalysis() {
       }),
     });
     const dados = await resp.json();
+    if (request !== analysisRequest) return;
     if (!resp.ok) throw new Error(dados.error || "Erro ao calcular as estatísticas.");
     renderAnalysis(dados);
   } catch (err) {
+    if (request !== analysisRequest) return;
     showError(err.message);
     $("analysis-result").innerHTML = `<span class="hint">Falha: ${err.message}</span>`;
   }
@@ -138,6 +161,7 @@ $("btn-analysis-help").addEventListener("click", (e) => {
 $("btn-analyse").addEventListener("click", () => runAnalysis());
 $("btn-analysis-csv").addEventListener("click", downloadAnalysis);
 $("analysis-panel").addEventListener("toggle", () => {
-  const temCurvas = document.querySelectorAll(".viz-channel:checked").length;
-  if ($("analysis-panel").open && !analysisData && temCurvas) runAnalysis();
+  if ($("analysis-panel").open && !analysisData) runAnalysis();
 });
+["an-settle", "an-step", "an-reference"].forEach((id) =>
+  $(id).addEventListener("change", () => { if (analysisData) runAnalysis(); }));

@@ -70,7 +70,7 @@
   <div id="tabs">
     <button type="button" class="tab active" data-tab="series">Séries temporais</button>
     <button type="button" class="tab" data-tab="spectra">Espectros</button>
-    <button type="button" class="tab" data-tab="viz">Visualização</button>
+    <button type="button" class="tab" data-tab="viz">Figura</button>
   </div>
 
   <div id="project-bar">
@@ -320,7 +320,7 @@
   <div class="sidebar-actions">
     <div class="row">
       <button id="btn-process" class="btn-primary"
-              title="Processa e grava o CSV usado na aba Visualização (Ctrl+Enter)">Processar ▶</button>
+              title="Processa e grava o CSV usado na aba Figura (Ctrl+Enter)">Processar ▶</button>
       <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo">Baixar CSV</button>
     </div>
     <div class="row actions-sub">
@@ -452,8 +452,47 @@
 
   <div id="tab-viz-sidebar" class="hidden">
 
-  <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Dados</span></summary>
+  <div class="viz-search">
+    <input type="search" id="viz-search" placeholder="Buscar opção: fonte, legenda, ticks…"
+           aria-label="Buscar uma opção da figura" autocomplete="off">
+    <span class="hint hidden" id="viz-search-empty">Nenhuma opção com esse nome.</span>
+  </div>
+
+  <details class="card enabled collapsible" open data-card="estilo">
+    <summary class="card-header"><span>Estilo e tamanho</span></summary>
+    <div class="card-body">
+      <label class="field span2" title="Aplica de uma vez um estilo salvo (todas as opções, inclusive cores e legendas das curvas)">Estilo salvo
+        <select id="style-select"><option value="">— nenhum —</option></select>
+      </label>
+      <label class="field span2">Tamanho
+        <select id="viz-preset">
+          <option value="">Personalizado</option>
+          <option value="ieee1">IEEE — 1 coluna (8,89 cm, 8 pt)</option>
+          <option value="ieee2">IEEE — 2 colunas (18,19 cm, 9 pt)</option>
+          <option value="els1">Elsevier — 1 coluna (9 cm, 8 pt)</option>
+          <option value="els2">Elsevier — 2 colunas (19 cm, 9 pt)</option>
+          <option value="a4">A4 — largura útil (16 cm, 11 pt)</option>
+          <option value="slide">Apresentação 16:9 (25,4 × 14,29 cm, 16 pt)</option>
+        </select>
+      </label>
+      <label class="field span2">Fonte <select id="viz-font" data-style="figure.font_family"></select></label>
+      <label class="field">Tamanho base (pt) <input type="number" step="0.5" min="4" data-style="figure.font_size" placeholder="auto"></label>
+      <details class="advanced span2">
+        <summary>Salvar ou restaurar estilo</summary>
+        <div class="card-body">
+          <div class="setup-row span2">
+            <input type="text" id="style-name" placeholder="nome do estilo">
+            <button type="button" id="btn-style-save" class="btn-dashed">Salvar estilo</button>
+          </div>
+          <button type="button" id="btn-style-reset" class="btn-dashed span2">Restaurar padrão</button>
+          <span class="hint span2">Guarda todas as opções da figura, inclusive cores e legendas das curvas, em data/styles. Os pontos azuis mostram o que difere do estilo carregado (ou do padrão).</span>
+        </div>
+      </details>
+    </div>
+  </details>
+
+  <details class="card enabled collapsible" open data-card="dados">
+    <summary class="card-header"><span>Dados</span><span class="card-state" data-summary="dados"></span></summary>
     <div class="card-body">
       <label class="field span2">Fonte
         <select id="viz-source">
@@ -489,11 +528,12 @@
       <label class="field">Y mínimo <input type="number" step="any" data-style="data.y_min" placeholder="auto"></label>
       <label class="field">Y máximo <input type="number" step="any" data-style="data.y_max" placeholder="auto"></label>
       <span class="hint span2" id="viz-data-hint">Marque as fontes e escolha as curvas no cartão Curvas.</span>
+      <button type="button" class="btn-link card-reset span2" data-reset="dados">Restaurar este cartão</button>
     </div>
   </details>
 
-  <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Curvas</span></summary>
+  <details class="card enabled collapsible" open data-card="curvas">
+    <summary class="card-header"><span>Curvas</span><span class="card-state" data-summary="curvas"></span></summary>
     <div class="card-body">
       <div class="inline-row span2">
         <label class="field">Paleta
@@ -535,23 +575,13 @@
       <label class="field">Colunas <input type="number" step="1" min="1" data-style="legend.ncol" placeholder="auto"></label>
       <label class="field">Tamanho do texto <input type="number" step="0.5" min="4" data-style="legend.font_size" placeholder="auto"></label>
       <label class="field span2">Título da legenda <input type="text" data-style="legend.title" placeholder="—"></label>
+      <button type="button" class="btn-link card-reset span2" data-reset="curvas">Restaurar este cartão</button>
     </div>
   </details>
 
-  <details class="card enabled collapsible">
-    <summary class="card-header"><span>Figura</span></summary>
+  <details class="card enabled collapsible" data-card="figura">
+    <summary class="card-header"><span>Figura</span><span class="card-state" data-summary="figura"></span></summary>
     <div class="card-body">
-      <label class="field span2">Predefinição de tamanho
-        <select id="viz-preset">
-          <option value="">Personalizado</option>
-          <option value="ieee1">IEEE — 1 coluna (8,89 cm, 8 pt)</option>
-          <option value="ieee2">IEEE — 2 colunas (18,19 cm, 9 pt)</option>
-          <option value="els1">Elsevier — 1 coluna (9 cm, 8 pt)</option>
-          <option value="els2">Elsevier — 2 colunas (19 cm, 9 pt)</option>
-          <option value="a4">A4 — largura útil (16 cm, 11 pt)</option>
-          <option value="slide">Apresentação 16:9 (25,4 × 14,29 cm, 16 pt)</option>
-        </select>
-      </label>
       <label class="field">Layout
         <select data-style="figure.layout">
           <option value="stacked">Separados (subplots)</option>
@@ -566,8 +596,6 @@
       </label>
       <label class="field">Largura <input type="number" step="0.1" min="1" data-style="figure.width"></label>
       <label class="field">Altura <input type="number" step="0.1" min="1" data-style="figure.height" placeholder="auto"></label>
-      <label class="field span2">Fonte <select id="viz-font" data-style="figure.font_family"></select></label>
-      <label class="field">Tamanho base (pt) <input type="number" step="0.5" min="4" data-style="figure.font_size" placeholder="auto"></label>
       <label class="field">Cor de fundo <input type="color" class="color-input" data-style="figure.background"></label>
       <label class="field span2">Título <input type="text" data-style="figure.title" placeholder="(sem título)"></label>
 
@@ -597,13 +625,14 @@
           </label>
         </div>
       </details>
+      <button type="button" class="btn-link card-reset span2" data-reset="figura">Restaurar este cartão</button>
     </div>
   </details>
 
-  <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Marcações e eixos</span></summary>
+  <details class="card enabled collapsible" data-card="marcacoes">
+    <summary class="card-header"><span>Marcações e eixos</span><span class="card-state" data-summary="marcacoes"></span></summary>
     <div class="card-body">
-      <span class="hint span2" id="viz-marker-count">As marcações são feitas na aba Séries temporais.</span>
+      <span class="hint span2" id="viz-marker-count">As marcações são feitas na aba Séries temporais (ferramenta Marcar).</span>
       <label class="check-row span2"><input type="checkbox" data-style="data.t0_first_marker"> t = 0 na primeira marcação</label>
       <label class="check-row span2"><input type="checkbox" data-style="markers.shade"> Faixas alternadas entre marcações</label>
       <label class="check-row span2" title="Ignora a cor de cada marcação; útil para impressão sem cor">
@@ -698,23 +727,10 @@
           <label class="field span2">Opacidade das faixas <input type="number" step="0.05" min="0" max="1" data-style="markers.shade_alpha"></label>
         </div>
       </details>
+      <button type="button" class="btn-link card-reset span2" data-reset="marcacoes">Restaurar este cartão</button>
     </div>
   </details>
 
-  <details class="card enabled collapsible">
-    <summary class="card-header"><span>Estilos salvos</span></summary>
-    <div class="card-body">
-      <label class="field span2">Carregar estilo
-        <select id="style-select"><option value="">— nenhum —</option></select>
-      </label>
-      <div class="setup-row span2">
-        <input type="text" id="style-name" placeholder="nome do estilo">
-        <button type="button" id="btn-style-save" class="btn-dashed">Salvar estilo</button>
-      </div>
-      <button type="button" id="btn-style-reset" class="btn-dashed span2">Restaurar padrão</button>
-      <span class="hint span2">Guarda todas as opções acima, inclusive cores e legendas das curvas, em data/styles.</span>
-    </div>
-  </details>
 
   </div><!-- /tab-viz-sidebar -->
 </div>
@@ -727,7 +743,7 @@
       <button type="button" id="btn-status-details" class="status-link hidden"
               aria-expanded="false" aria-controls="status-details">detalhes</button>
       <button type="button" id="btn-open-viz" class="status-link hidden"
-              title="Abre este CSV processado na aba Visualização">Abrir na Visualização →</button>
+              title="Abre este CSV processado na aba Figura">Abrir na Figura →</button>
     </div>
     <ul id="status-details" class="status-details hidden"></ul>
     <div id="plot-toolbar" class="plot-toolbar">
@@ -767,6 +783,90 @@
       <span class="hint" id="marker-hint">t (s) · legenda · cor</span>
       <div id="marker-list"></div>
       <button type="button" id="btn-add-marker" class="btn-dashed">+ Adicionar marcação</button>
+    </details>
+    <details class="card enabled collapsible" id="analysis-panel">
+      <summary class="card-header">
+        <span>Estatísticas por intervalo</span>
+        <button type="button" class="help-toggle" id="btn-analysis-help"
+                title="O que significa cada campo" aria-label="Ajuda">?</button>
+      </summary>
+      <div class="card-body">
+        <div class="analysis-options">
+          <label class="field">Janela de regime (s)
+            <input type="number" step="any" min="0" id="an-settle" placeholder="intervalo todo">
+          </label>
+          <label class="field">Janela do degrau (s)
+            <input type="number" step="any" min="0" id="an-step" value="10">
+          </label>
+          <label class="field">Comparar com
+            <select id="an-reference">
+              <option value="previous">intervalo anterior</option>
+              <option value="first">primeiro intervalo</option>
+              <option value="none">não comparar</option>
+            </select>
+          </label>
+          <button type="button" id="btn-analyse" class="btn-primary btn-sm">Calcular</button>
+          <button type="button" id="btn-analysis-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+        </div>
+        <div id="analysis-help" class="help-box hidden">
+          <strong>O que você escolhe</strong>
+          <dl>
+            <dt>Janela de regime (s)</dt>
+            <dd>Quantos segundos do <em>fim</em> de cada intervalo entram na média de regime.
+                Serve para ignorar o transitório logo depois da marcação. Vazio = o intervalo inteiro.</dd>
+            <dt>Janela do degrau (s)</dt>
+            <dd>Quantos segundos antes e depois de cada marcação entram nas duas médias comparadas.
+                Curta demais fica ruidosa; longa demais invade o patamar vizinho.</dd>
+            <dt>Comparar com</dt>
+            <dd><em>Intervalo anterior</em>: o degrau de um patamar para o seguinte.
+                <em>Primeiro intervalo</em>: a variação acumulada desde a linha de base.
+                <em>Não comparar</em>: só as estatísticas de cada intervalo.</dd>
+          </dl>
+
+          <strong>Tabela de intervalos</strong>
+          <dl>
+            <dt>intervalo</dt>
+            <dd>Vai de uma marcação até a seguinte (a última vai até o fim do sinal).
+                O trecho antes da primeira marcação também entra.</dd>
+            <dt>início, fim</dt><dd>Limites do intervalo, em segundos do arquivo.</dd>
+            <dt>n</dt><dd>Amostras válidas no trecho; leituras ausentes não contam.</dd>
+            <dt>média, σ</dt>
+            <dd>Média e desvio-padrão de todas as amostras do intervalo. Com transitório ou
+                deriva, o σ mistura flutuação e tendência — compare com o ruído.</dd>
+            <dt>mín, máx, pico a pico</dt>
+            <dd>Extremos e a diferença entre eles; sensíveis a um único pico isolado.</dd>
+            <dt>deriva (/s)</dt>
+            <dd>Inclinação de uma reta ajustada ao trecho, na unidade da figura por segundo.
+                Mostra se o sinal ainda está subindo ou caindo.</dd>
+            <dt>ruído</dt>
+            <dd>Dispersão que sobra depois de remover essa reta. É a flutuação do sinal
+                sem a tendência.</dd>
+            <dt>regime</dt>
+            <dd>Média da janela de regime, no fim do intervalo. É o valor que se costuma
+                reportar como patamar.</dd>
+            <dt>Δ vs ref.</dt>
+            <dd>Diferença de amplitude para o intervalo de referência. Usa a média de regime
+                quando há janela definida; senão, a média do intervalo.</dd>
+            <dt>referência</dt><dd>Qual intervalo entrou nessa conta.</dd>
+          </dl>
+
+          <strong>Tabela de degraus</strong>
+          <dl>
+            <dt>antes, depois</dt>
+            <dd>Médias das janelas imediatamente antes e depois da marcação.</dd>
+            <dt>degrau</dt>
+            <dd><em>depois − antes</em>: o quanto o sinal mudou naquela marcação.</dd>
+            <dt>dispersão</dt>
+            <dd>Desvios dos dois lados combinados (√(σ₁² + σ₂²)). Indica se o degrau se
+                destaca da flutuação — não é a incerteza da média.</dd>
+          </dl>
+
+          <span class="hint">Com dados filtrados as amostras vizinhas são parecidas entre si,
+            então σ/√n subestima a incerteza. Para incerteza de verdade, compare ciclos repetidos
+            do mesmo patamar.</span>
+        </div>
+        <div id="analysis-result"><span class="hint">As marcações delimitam os intervalos; o cálculo usa as curvas marcadas e a mesma unidade da figura.</span></div>
+      </div>
     </details>
     <div id="series-empty" class="empty-state">
       <h2>Comece pelos arquivos do interrogador</h2>
@@ -931,6 +1031,7 @@
         <option value="tiff">TIFF</option>
       </select>
       <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)">
+      <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento">Copiar figura</button>
       <button type="button" id="btn-fig-download" class="btn-secondary btn-sm">Baixar figura ⭳</button>
     </div>
     <div id="viz-figure">
@@ -938,90 +1039,6 @@
       <img id="viz-img" class="hidden zoom-fit" alt="Figura gerada">
     </div>
 
-    <details class="card enabled collapsible" id="analysis-panel">
-      <summary class="card-header">
-        <span>Estatísticas por intervalo</span>
-        <button type="button" class="help-toggle" id="btn-analysis-help"
-                title="O que significa cada campo" aria-label="Ajuda">?</button>
-      </summary>
-      <div class="card-body">
-        <div class="analysis-options">
-          <label class="field">Janela de regime (s)
-            <input type="number" step="any" min="0" id="an-settle" placeholder="intervalo todo">
-          </label>
-          <label class="field">Janela do degrau (s)
-            <input type="number" step="any" min="0" id="an-step" value="10">
-          </label>
-          <label class="field">Comparar com
-            <select id="an-reference">
-              <option value="previous">intervalo anterior</option>
-              <option value="first">primeiro intervalo</option>
-              <option value="none">não comparar</option>
-            </select>
-          </label>
-          <button type="button" id="btn-analyse" class="btn-primary btn-sm">Calcular</button>
-          <button type="button" id="btn-analysis-csv" class="btn-secondary btn-sm">Baixar CSV</button>
-        </div>
-        <div id="analysis-help" class="help-box hidden">
-          <strong>O que você escolhe</strong>
-          <dl>
-            <dt>Janela de regime (s)</dt>
-            <dd>Quantos segundos do <em>fim</em> de cada intervalo entram na média de regime.
-                Serve para ignorar o transitório logo depois da marcação. Vazio = o intervalo inteiro.</dd>
-            <dt>Janela do degrau (s)</dt>
-            <dd>Quantos segundos antes e depois de cada marcação entram nas duas médias comparadas.
-                Curta demais fica ruidosa; longa demais invade o patamar vizinho.</dd>
-            <dt>Comparar com</dt>
-            <dd><em>Intervalo anterior</em>: o degrau de um patamar para o seguinte.
-                <em>Primeiro intervalo</em>: a variação acumulada desde a linha de base.
-                <em>Não comparar</em>: só as estatísticas de cada intervalo.</dd>
-          </dl>
-
-          <strong>Tabela de intervalos</strong>
-          <dl>
-            <dt>intervalo</dt>
-            <dd>Vai de uma marcação até a seguinte (a última vai até o fim do sinal).
-                O trecho antes da primeira marcação também entra.</dd>
-            <dt>início, fim</dt><dd>Limites do intervalo, em segundos do arquivo.</dd>
-            <dt>n</dt><dd>Amostras válidas no trecho; leituras ausentes não contam.</dd>
-            <dt>média, σ</dt>
-            <dd>Média e desvio-padrão de todas as amostras do intervalo. Com transitório ou
-                deriva, o σ mistura flutuação e tendência — compare com o ruído.</dd>
-            <dt>mín, máx, pico a pico</dt>
-            <dd>Extremos e a diferença entre eles; sensíveis a um único pico isolado.</dd>
-            <dt>deriva (/s)</dt>
-            <dd>Inclinação de uma reta ajustada ao trecho, na unidade da figura por segundo.
-                Mostra se o sinal ainda está subindo ou caindo.</dd>
-            <dt>ruído</dt>
-            <dd>Dispersão que sobra depois de remover essa reta. É a flutuação do sinal
-                sem a tendência.</dd>
-            <dt>regime</dt>
-            <dd>Média da janela de regime, no fim do intervalo. É o valor que se costuma
-                reportar como patamar.</dd>
-            <dt>Δ vs ref.</dt>
-            <dd>Diferença de amplitude para o intervalo de referência. Usa a média de regime
-                quando há janela definida; senão, a média do intervalo.</dd>
-            <dt>referência</dt><dd>Qual intervalo entrou nessa conta.</dd>
-          </dl>
-
-          <strong>Tabela de degraus</strong>
-          <dl>
-            <dt>antes, depois</dt>
-            <dd>Médias das janelas imediatamente antes e depois da marcação.</dd>
-            <dt>degrau</dt>
-            <dd><em>depois − antes</em>: o quanto o sinal mudou naquela marcação.</dd>
-            <dt>dispersão</dt>
-            <dd>Desvios dos dois lados combinados (√(σ₁² + σ₂²)). Indica se o degrau se
-                destaca da flutuação — não é a incerteza da média.</dd>
-          </dl>
-
-          <span class="hint">Com dados filtrados as amostras vizinhas são parecidas entre si,
-            então σ/√n subestima a incerteza. Para incerteza de verdade, compare ciclos repetidos
-            do mesmo patamar.</span>
-        </div>
-        <div id="analysis-result"><span class="hint">As marcações delimitam os intervalos; o cálculo usa as curvas marcadas e a mesma unidade da figura.</span></div>
-      </div>
-    </details>
   </div>
 </div>
 </div><!-- /content -->

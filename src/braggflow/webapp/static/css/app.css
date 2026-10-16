@@ -304,6 +304,24 @@ body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { displ
   display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px;
   border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 10.5px;
 }
+.viz-search { position: sticky; top: -16px; z-index: 2; background: var(--surface); padding: 2px 0 10px; }
+.viz-search input {
+  width: 100%; padding: 7px 10px; font: inherit; font-size: 12.5px; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface);
+}
+.viz-search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+#tab-series-main { overflow-y: auto; }
+#tab-series-main #plot { min-height: 320px; }   /* os painéis de baixo não espremem o gráfico */
+.viz-search .hint { display: block; margin-top: 6px; }
+.search-hidden { display: none !important; }
+.field.changed, .check-row.changed { position: relative; }
+.field.changed::before, .check-row.changed::before {
+  content: ""; position: absolute; left: -9px; top: 6px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.card-state .alteradas { color: var(--accent); }
+.card-reset { justify-self: start; font-size: 11.5px; }
+#tab-series-main #analysis-panel { max-height: 38vh; }
 .card-state { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--muted); text-transform: none; }
 .markers-panel {
   flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border);
@@ -443,7 +461,7 @@ body.no-series #status-details { display: none !important; }
   height: auto; flex: 0 0 auto;
   border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow-md);
 }
-#viz-figure img.zoom-fit { max-width: 100%; }
+#viz-figure img.zoom-fit { max-width: 100%; max-height: 100%; width: auto; }   /* a figura inteira, em largura e altura */
 #viz-figure:has(img:not(.zoom-fit)) { justify-content: flex-start; }
 
 #status-viz { flex-wrap: wrap; gap: 10px; }
