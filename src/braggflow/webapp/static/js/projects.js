@@ -33,6 +33,7 @@ export function fileRow(path, { selected, onSelect, checkbox, note }) {
 
 function clearProjectState() {
   $("card-concat").open = false;
+  $("card-markers").open = false;
   Object.keys(seriesState).forEach((path) => delete seriesState[path]);
   seriesOrder.length = 0;
   Object.keys(spectraState).forEach((path) => delete spectraState[path]);
@@ -129,6 +130,7 @@ function startNewProject() {
   clearProjectState();
   newProject();
   $("project-name").value = name;
+  resetHistory();
   closeProjectGate();
   switchTab("series");
   $("status-text").textContent = name
@@ -270,10 +272,116 @@ const LAST_PROJECT_KEY = "braggflow.lastProject";
 let projectDirty = false;
 let pendingVizChannels = null;   // canais do projeto, aplicados quando carregarem
 
-export function markProjectDirty(dirty = true) {
-  projectDirty = dirty;
-  $("project-dirty").classList.toggle("hidden", !dirty);
+// ── Salvar sozinho e desfazer ────────────────────────────────────────────────
+const AUTOSAVE_KEY = "braggflow.autosave";
+const AUTOSAVE_MS = 2000;
+const HISTORY_MAX = 50;
+let autosaveTimer = null;
+let snapshotTimer = null;
+let changeSeq = 0;               // conta mudanças: um save só limpa o "não salvo" se nada mudou durante ele
+let saving = Promise.resolve();  // saves em fila, um de cada vez
+let restoring = false;           // aplicando um estado (abrir, desfazer): não é mudança do usuário
+const historico = { states: [], index: -1 };   // estados para desfazer/refazer
+
+const autosaveOn = () => $("autosave").checked;
+try { $("autosave").checked = localStorage.getItem(AUTOSAVE_KEY) !== "0"; } catch { /* sem armazenamento */ }
+
+function setSaveState(texto, erro = false) {
+  $("save-state").textContent = texto;
+  $("save-state").classList.toggle("erro", erro);
 }
+
+const agora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+// ``history: false`` para o nome do projeto (não entra no desfazer);
+// ``autosave: false`` para o projeto que acabou de ser excluído (não recriar)
+export function markProjectDirty(dirty = true, { history: comHistorico = true, autosave = true } = {}) {
+  projectDirty = dirty;
+  $("project-dirty").classList.toggle("hidden", !dirty || autosaveOn());
+  if (!dirty || restoring) return;
+  changeSeq++;
+  if (comHistorico) scheduleSnapshot();
+  if (autosave) scheduleAutosave();
+}
+
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer);
+  if (!autosaveOn()) { setSaveState(""); return; }
+  setSaveState("alterações…");
+  autosaveTimer = setTimeout(autosaveNow, AUTOSAVE_MS);
+}
+
+async function autosaveNow() {
+  if (!projectDirty || !autosaveOn()) return;
+  if (document.activeElement === $("project-name")) return;   // salva quando sair do campo
+  if (!$("project-name").value.trim()) { setSaveState("dê um nome ao projeto para salvar"); return; }
+  await saveProject({ silent: true });
+}
+
+// Salva o que estiver pendente (trocar de projeto, fechar a página)
+async function flushAutosave() {
+  clearTimeout(autosaveTimer);
+  if (projectDirty && autosaveOn() && $("project-name").value.trim()) await saveProject({ silent: true });
+  return !projectDirty;
+}
+
+// O estado do projeto, sem o nome (renomear não se desfaz: criaria cópias)
+function snapshot() {
+  const projeto = collectProject();
+  delete projeto.name;
+  return JSON.stringify(projeto);
+}
+
+function updateUndoButtons() {
+  $("btn-undo").disabled = historico.index <= 0;
+  $("btn-redo").disabled = historico.index >= historico.states.length - 1;
+}
+
+function resetHistory() {
+  clearTimeout(snapshotTimer);
+  historico.states = [snapshot()];
+  historico.index = 0;
+  updateUndoButtons();
+}
+
+function scheduleSnapshot() {
+  clearTimeout(snapshotTimer);
+  snapshotTimer = setTimeout(pushSnapshot, 450);
+}
+
+function pushSnapshot() {
+  snapshotTimer = null;
+  if (historico.index < 0) return;
+  const estado = snapshot();
+  if (estado === historico.states[historico.index]) return;
+  historico.states = historico.states.slice(0, historico.index + 1);
+  historico.states.push(estado);
+  if (historico.states.length > HISTORY_MAX) historico.states.shift();
+  historico.index = historico.states.length - 1;
+  updateUndoButtons();
+}
+
+async function restoreState(indice) {
+  if (snapshotTimer) { clearTimeout(snapshotTimer); pushSnapshot(); }   // a última mudança entra antes
+  if (indice < 0 || indice >= historico.states.length || indice === historico.index) return;
+  historico.index = indice;
+  updateUndoButtons();
+  const projeto = JSON.parse(historico.states[indice]);
+  projeto.name = $("project-name").value.trim();
+  // Painéis abertos continuam abertos: desfazer não muda o que se está vendo
+  const paineis = ["card-markers", "analysis-panel"].filter((id) => $(id).open);
+  restoring = true;
+  try {
+    await applyProjectData(projeto);
+  } finally {
+    restoring = false;
+  }
+  paineis.forEach((id) => { $(id).open = true; });
+  markProjectDirty(true, { history: false });       // estado restaurado: salva sozinho de novo
+}
+
+export const undo = () => restoreState(historico.index - 1);
+export const redo = () => restoreState(historico.index + 1);
 
 // Aceita os dois formatos: o das linhas da tela (band_min/band_max) e o que
 // já veio de um projeto salvo (band), para salvar de novo não estragar nada.
@@ -351,10 +459,24 @@ async function openProject(name) {
   const resp = await fetch("/api/projects/" + encodeURIComponent(name));
   const project = await resp.json();
   if (!resp.ok) throw new Error(project.error || "Erro ao abrir projeto.");
+  try { localStorage.setItem(LAST_PROJECT_KEY, project.name); } catch { /* sem armazenamento */ }
+  restoring = true;                  // abrir não é mudança do usuário
+  try {
+    await applyProjectData(project);
+  } finally {
+    restoring = false;
+  }
+  $("card-markers").open = collectMarkers().length > 0;
+  markProjectDirty(false);
+  setSaveState("");
+  resetHistory();                    // o desfazer começa no estado de quando abriu
+}
 
+// Põe um projeto na tela (abrir, desfazer, refazer): arquivos, opções de
+// cada um, sensores, marcações, estilo e o que estava marcado na figura
+async function applyProjectData(project) {
   clearProjectState();               // nada do projeto anterior fica para trás
   $("project-name").value = project.name;
-  try { localStorage.setItem(LAST_PROJECT_KEY, project.name); } catch { /* sem armazenamento */ }
 
   // Estados por arquivo
   (project.series || []).forEach((entry) => {
@@ -411,10 +533,21 @@ async function openProject(name) {
   await processData({ save: false });   // abrir só mostra; quem grava é o Processar
 }
 
-export async function saveProject() {
+// ``silent``: o salvar automático só atualiza o indicador do cabeçalho
+export function saveProject({ silent = false } = {}) {
+  saving = saving.then(() => saveProjectNow(silent));
+  return saving;
+}
+
+async function saveProjectNow(silent) {
+  clearTimeout(autosaveTimer);
   const name = $("project-name").value.trim();
-  if (!name) { showError("Informe um nome para o projeto."); return; }
-  showError("");
+  if (!name) {
+    if (!silent) showError("Informe um nome para o projeto.");
+    return false;
+  }
+  const seq = changeSeq;
+  setSaveState("salvando…");
   try {
     const resp = await fetch("/api/projects", {
       method: "POST",
@@ -424,11 +557,18 @@ export async function saveProject() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Erro ao salvar projeto.");
     try { localStorage.setItem(LAST_PROJECT_KEY, data.name); } catch { /* sem armazenamento */ }
-    markProjectDirty(false);
-    $("status-text").textContent = `Projeto "${data.name}" salvo em data/projects.`;
-    $("viz-status").textContent = `Projeto "${data.name}" salvo.`;
+    if (seq === changeSeq) markProjectDirty(false);   // mudou durante o envio: o próximo save leva
+    setSaveState(`salvo às ${agora()}`);
+    if (!silent) {
+      showError("");
+      $("status-text").textContent = `Projeto "${data.name}" salvo em data/projects.`;
+      $("viz-status").textContent = `Projeto "${data.name}" salvo.`;
+    }
+    return true;
   } catch (err) {
-    showError(err.message);
+    setSaveState("erro ao salvar — clique para tentar de novo", true);
+    if (!silent) showError(err.message);
+    return false;
   }
 }
 
@@ -450,14 +590,21 @@ async function deleteProject(name, button) {
   try {
     if (localStorage.getItem(LAST_PROJECT_KEY) === name) localStorage.removeItem(LAST_PROJECT_KEY);
   } catch { /* sem armazenamento */ }
-  // O projeto aberto continua na tela, mas agora sem cópia salva
-  if ($("project-name").value.trim() === name) markProjectDirty();
+  // O projeto aberto continua na tela, mas agora sem cópia salva (e o salvar
+  // sozinho não o recria: só um "Salvar" explícito)
+  if ($("project-name").value.trim() === name) {
+    clearTimeout(autosaveTimer);
+    markProjectDirty(true, { history: false, autosave: false });
+    $("project-dirty").classList.remove("hidden");
+    setSaveState("projeto excluído: Salvar recria");
+  }
   await openProjectGate({ canReturn: Boolean($("project-gate").dataset.canReturn) });
 }
 
 function newProject() {
   $("project-name").value = "";
   markProjectDirty(false);
+  setSaveState("");
   try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* sem armazenamento */ }
   $("status-text").textContent = "Projeto novo: ajuste as opções e clique em Salvar projeto.";
 }
@@ -508,14 +655,41 @@ function askLeaveProject() {
   });
 }
 
-const confirmLeaveProject = async () => !projectDirty || askLeaveProject();
+// Com o salvar sozinho, trocar de projeto só salva o que falta; sem ele (ou
+// se o save falhar), pergunta
+const confirmLeaveProject = async () => {
+  if (!projectDirty) return true;
+  if (autosaveOn() && await flushAutosave()) return true;
+  return askLeaveProject();
+};
 
 window.addEventListener("beforeunload", (e) => {
   if (!projectDirty) return;
+  if (autosaveOn() && $("project-name").value.trim()) {
+    // A página está fechando: envia o projeto mesmo assim (keepalive) e não pergunta
+    fetch("/api/projects", {
+      method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectProject()),
+    }).catch(() => {});
+    return;
+  }
   e.preventDefault();
   e.returnValue = "";
 });
 
-$("btn-project-save").addEventListener("click", saveProject);
-$("project-name").addEventListener("input", () => markProjectDirty());
-$("project-name").addEventListener("keydown", (e) => { if (e.key === "Enter") saveProject(); });
+$("btn-project-save").addEventListener("click", () => saveProject());
+// O nome entra no projeto ao sair do campo (ou Enter), não a cada letra:
+// salvar com outro nome cria uma cópia
+$("project-name").addEventListener("input", () => markProjectDirty(true, { history: false, autosave: false }));
+$("project-name").addEventListener("change", () => { if (autosaveOn()) saveProject({ silent: true }); });
+$("project-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); saveProject(); } });
+$("save-state").addEventListener("click", () => { if ($("save-state").classList.contains("erro")) saveProject(); });
+$("autosave").addEventListener("change", () => {
+  try { localStorage.setItem(AUTOSAVE_KEY, autosaveOn() ? "1" : "0"); } catch { /* sem armazenamento */ }
+  $("project-dirty").classList.toggle("hidden", !projectDirty || autosaveOn());
+  if (autosaveOn() && projectDirty) scheduleAutosave();
+  else setSaveState("");
+});
+$("btn-undo").addEventListener("click", () => undo().catch((err) => showError(err.message)));
+$("btn-redo").addEventListener("click", () => redo().catch((err) => showError(err.message)));

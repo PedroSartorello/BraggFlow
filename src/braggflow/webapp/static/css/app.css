@@ -51,7 +51,7 @@ header {
   font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--muted);
 }
-#project-bar select, #project-bar input { height: 30px; width: auto; min-width: 140px; }
+#project-bar select, #project-bar input:not([type=checkbox]) { height: 30px; width: auto; min-width: 140px; }
 #project-bar .btn-sm { white-space: nowrap; }
 #project-bar .danger { color: var(--danger); border-color: #f3c1bd; background: var(--danger-bg); }
 #project-bar .project-title {
@@ -60,6 +60,11 @@ header {
 }
 #project-bar .project-title:hover { border-color: var(--border); background: #fff; }
 #project-bar .project-title:focus { border-color: var(--accent); background: #fff; }
+.save-state { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.save-state.erro { color: var(--danger); cursor: pointer; text-decoration: underline; }
+.btn-icon { min-width: 30px; padding-left: 8px; padding-right: 8px; font-size: 14px; line-height: 1; }
+.btn-icon:disabled { opacity: .4; cursor: default; }
+.autosave-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 #project-dirty {
   font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 99px;
   color: #8a5a00; background: #fff4d6; border: 1px solid #f1d58a; white-space: nowrap;

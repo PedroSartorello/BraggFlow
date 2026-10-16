@@ -203,10 +203,11 @@ result["steps"][0]["step"]           # degrau na primeira marcação
 A project bundles one analysis under a name: the interrogator file, the
 sensors and their bands, every processing step with its parameters, the time
 markers, the channels in the figure and the figure style. Projects live in
-`data/projects/*.json`; the header bar saves them and the "Projetos…" screen
-opens, creates and deletes them (the last one opened comes first). The app
-asks before leaving a project with unsaved changes, and each project keeps its
-processed CSVs in `data/processed/<project>/`.
+`data/projects/*.json`; they save themselves a moment after each change (or
+with "Salvar", if "Salvar sozinho" is off), changes can be undone and redone
+(Ctrl+Z / Ctrl+Shift+Z), and the "Projetos…" screen opens, creates and deletes
+them (the last one opened comes first). Each project keeps its processed CSVs
+in `data/processed/<project>/`.
 
 ```python
 from braggflow.projects import Project

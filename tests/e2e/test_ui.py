@@ -111,6 +111,7 @@ def test_switching_projects_does_not_mix_their_files(app):
 
 def test_unsaved_changes_ask_before_leaving_the_project(app):
     novo_projeto(app, "Rascunho")
+    app.uncheck("#autosave")                     # sem salvar sozinho, a pergunta volta
     adicionar_serie(app, "ensaio_a.asc")
     expect(app.locator("#project-dirty")).to_be_visible()
 
@@ -452,7 +453,7 @@ def test_markers_are_made_and_moved_with_the_mark_tool(app):
     app.locator(".marker-time").fill("600")                  # editar no painel move a linha
     app.keyboard.press("Tab")
     app.wait_for_function("document.getElementById('plot').layout.shapes.some((s) => s.x0 === 600)")
-    expect(app.locator("#project-dirty")).to_be_visible()
+    expect(app.locator("#save-state")).to_contain_text("salvo às")      # salvo sozinho
 
     app.click("#btn-process")
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
@@ -546,7 +547,98 @@ def test_interval_statistics_live_under_the_series_plot(app):
     app.check("#plot-relative")
     expect(app.locator("#analysis-result")).to_contain_text("relativo ao início")
 
-    app.click("#btn-projects")
-    app.click("#leave-discard")
+    app.click("#btn-projects")                                  # salva sozinho e troca, sem perguntar
     novo_projeto(app, "Outro")
     expect(app.locator("#analysis-result table")).to_have_count(0)
+
+
+# ── salvar sozinho e desfazer ────────────────────────────────────────────────
+
+def projeto_no_disco(data_dir, nome: str) -> dict:
+    import json
+    caminho = data_dir / "projects" / f"{nome}.json"
+    return json.loads(caminho.read_text(encoding="utf-8")) if caminho.exists() else {}
+
+
+def test_project_saves_itself_and_switching_does_not_ask(app, data_dir):
+    novo_projeto(app, "Sozinho")
+    expect(app.locator("#autosave")).to_be_checked()
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    expect(app.locator("#project-dirty")).to_be_hidden()
+    assert projeto_no_disco(data_dir, "Sozinho")["series"][0]["file"] == "data/raw/ensaio_a.asc"
+
+    app.uncheck("#movavg-enabled")
+    expect(app.locator("#save-state")).to_contain_text("alterações")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert projeto_no_disco(data_dir, "Sozinho")["series"][0]["processing"]["moving_average"]["enabled"] is False
+
+    app.click("#btn-projects")                                  # nada pendente: não pergunta
+    expect(app.locator("#leave-dialog")).to_be_hidden()
+    expect(app.locator("#project-gate")).to_be_visible()
+
+
+def test_typing_a_new_name_saves_once_when_leaving_the_field(app, data_dir):
+    novo_projeto(app, "Nome")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    app.locator("#project-name").click()
+    app.locator("#project-name").press("End")
+    app.locator("#project-name").type(" final", delay=60)
+    app.wait_for_timeout(2600)                                  # mais que o atraso do salvar sozinho
+    assert not (data_dir / "projects" / "Nome f.json").exists(), "nenhuma cópia por letra"
+    app.locator("#project-name").press("Enter")
+    expect(app.locator("#status-text")).to_contain_text('Projeto "Nome final" salvo')
+    nomes = sorted(p.stem for p in (data_dir / "projects").glob("*.json"))
+    assert nomes == ["Nome", "Nome final"]
+
+
+def test_undo_and_redo_walk_through_the_project_changes(app, data_dir):
+    novo_projeto(app, "Desfazer")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#btn-undo")).to_be_enabled()
+    expect(app.locator("#btn-redo")).to_be_disabled()
+
+    app.uncheck("#savgol-enabled")
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    app.wait_for_timeout(700)      # mudanças a menos de ~0,5 s viram um passo só (digitar um valor)
+    app.locator("#card-markers > summary").click()
+    app.click("#btn-add-marker")
+    app.locator(".marker-time").fill("300")
+    app.keyboard.press("Tab")
+    expect(app.locator(".marker-row")).to_have_count(1)
+    app.wait_for_timeout(700)                                   # a mudança entra no histórico
+
+    app.locator("body").click(position={"x": 5, "y": 400})       # fora dos campos
+    app.keyboard.press("Control+z")                             # tira a marcação
+    expect(app.locator(".marker-row")).to_have_count(0)
+    expect(app.locator("#savgol-enabled")).not_to_be_checked()
+    app.click("#btn-undo")                                      # volta o Savitzky-Golay
+    expect(app.locator("#savgol-enabled")).to_be_checked()
+    expect(app.locator("#project-name")).to_have_value("Desfazer")
+
+    app.keyboard.press("Control+Shift+z")                       # refaz
+    expect(app.locator("#savgol-enabled")).not_to_be_checked()
+    app.keyboard.press("Control+y")
+    expect(app.locator(".marker-row")).to_have_count(1)
+    expect(app.locator("#btn-redo")).to_be_disabled()
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert len(projeto_no_disco(data_dir, "Desfazer")["markers"]) == 1
+
+    # num campo de texto, Ctrl+Z é o do campo, não o do projeto
+    app.locator(".marker-label").fill("evento")
+    app.locator(".marker-label").press("Control+z")
+    expect(app.locator(".marker-row")).to_have_count(1)
+
+
+def test_deleting_the_open_project_does_not_bring_it_back(app, data_dir):
+    novo_projeto(app, "Apagar")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    app.click("#btn-projects")
+    linha = app.locator("#gate-projects .gate-item", has_text="Apagar")
+    linha.locator(".gate-delete").click()
+    linha.locator(".gate-delete").click()
+    expect(app.locator("#gate-projects .gate-item", has_text="Apagar")).to_have_count(0)
+    app.wait_for_timeout(2600)
+    assert not (data_dir / "projects" / "Apagar.json").exists()

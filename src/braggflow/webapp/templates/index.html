@@ -78,7 +78,14 @@
     <input type="text" id="project-name" class="project-title" placeholder="nome do projeto"
            title="Nome do projeto. Salvar com outro nome cria uma cópia.">
     <span id="project-dirty" class="hidden" title="Há alterações que ainda não foram salvas">não salvo</span>
-    <button type="button" id="btn-project-save" class="btn-primary btn-sm" title="Salvar projeto (Ctrl+S)">Salvar</button>
+    <span id="save-state" class="save-state" aria-live="polite"></span>
+    <button type="button" id="btn-undo" class="btn-secondary btn-sm btn-icon" title="Desfazer (Ctrl+Z)"
+            aria-label="Desfazer" disabled>↶</button>
+    <button type="button" id="btn-redo" class="btn-secondary btn-sm btn-icon" title="Refazer (Ctrl+Shift+Z)"
+            aria-label="Refazer" disabled>↷</button>
+    <label class="autosave-toggle" title="Salva o projeto sozinho, alguns segundos depois de cada mudança">
+      <input type="checkbox" id="autosave" checked> Salvar sozinho</label>
+    <button type="button" id="btn-project-save" class="btn-primary btn-sm" title="Salvar agora (Ctrl+S)">Salvar</button>
     <button type="button" id="btn-projects" class="btn-secondary btn-sm"
             title="Abrir, criar ou excluir projetos">Projetos…</button>
   </div>

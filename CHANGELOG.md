@@ -73,6 +73,11 @@ itself did not change: the same input gives the same output as before.
 - Interval statistics moved from the figure tab to Séries temporais, under the
   markers, computed on the processed signal shown on the plot
   (`/api/series/intervals`); they follow the markers and the processing.
+- Projects save themselves ("Salvar sozinho", on by default) about 2 s after
+  each change, with the state in the header; switching projects or closing
+  the page saves what is pending instead of asking. Undo and redo (↶ ↷,
+  Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) walk through up to 50 states of the project
+  since it was opened.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.

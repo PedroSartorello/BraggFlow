@@ -640,7 +640,6 @@ export function drawPlotMarkers() {
     ? `${n} marcação(ões), feitas na aba Séries temporais.`
     : "Nenhuma marcação: clique no gráfico da aba Séries temporais para criar.";
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
-  if (!n) $("card-markers").open = false;
   refreshStyleState();
 }
 
