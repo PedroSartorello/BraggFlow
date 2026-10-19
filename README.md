@@ -251,7 +251,7 @@ and every step applied with its parameters and invalid-sample counts.
 Three tabs, each with its own data and settings:
 
 * **Séries temporais** — import several interrogator files; each keeps its own
-  sensors (names, bands and thermal sensitivity K_T) and its own pipeline settings, so changing one
+  sensors (names, bands, thermal sensitivity K_T and columns to hide) and its own pipeline settings, so changing one
   never touches another. Process the selected file, or every marked file in
   one go; "Copiar opções" replicates the current settings to the other files.
   The plot shows one panel per channel or all on the same plot (optionally

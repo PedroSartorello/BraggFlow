@@ -84,6 +84,27 @@ class OpticalPipeline:
         self._record("apply_setup", "setup", {"setup": setup.name}, None)
         return self
 
+    def drop_channels(self, channels) -> 'OpticalPipeline':
+        """
+        Removes file channels (by their original column name) from the data,
+        as if the file never had them: later steps, the CSV and the provenance
+        only see the remaining channels. Recorded as a ``drop_channels`` step.
+        """
+        self._check_loaded()
+        fora = [ch for ch in self.source_channels if ch in set(channels)]
+        if not fora:
+            return self
+        manter = [i for i, ch in enumerate(self.source_channels) if ch not in fora]
+        if not manter:
+            raise ValueError("Dropping these channels would leave no channel.")
+        self.signals_array = self.signals_array[:, manter]
+        self.channels = [self.channels[i] for i in manter]
+        self.source_channels = [self.source_channels[i] for i in manter]
+        self.units = [self.units[i] for i in manter]
+        self.quantities = [self.quantities[i] for i in manter]
+        self._record("drop_channels", "setup", {"channels": fora}, None)
+        return self
+
     def sensor_bands(self) -> List[Optional[Tuple[float, float]]]:
         """Allowed band of each channel from the attached setup (None if absent)."""
         self._check_loaded()

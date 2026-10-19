@@ -110,7 +110,7 @@ def test_setup_save_list_and_load(webapp):
     setup = client.get("/api/setups/Bancada 1").get_json()
     assert setup["sensors"][0] == {"channel": "CH_1 Sensor_1 [nm]", "name": "S1",
                                    "nominal_wavelength": None, "band": [1548.0, 1552.0],
-                                   "temp_sensitivity": None}
+                                   "temp_sensitivity": None, "hidden": False}
     assert client.get("/api/setups/..%2Fsecret").status_code == 404
 
 
@@ -1003,3 +1003,14 @@ def test_series_intervals_uses_the_markers_on_the_processed_signal(webapp):
 
     resp = client.post("/api/series/intervals", json={"options": {}, "markers": []})
     assert resp.status_code == 400 and "Processe" in resp.get_json()["error"]
+
+
+def test_process_leaves_hidden_columns_out_of_the_csv(webapp):
+    dados, client = webapp
+    sensores = [dict(SENSORS[0]), dict(SENSORS[1], hidden=True)]
+    data = _process(client, sensors=sensores).get_json()
+    assert data["channels"] == ["S1"]
+    csv = dados.processed / "ensaio_processado.csv"
+    assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],S1 [nm]"
+    meta = read_metadata(csv)
+    assert [s["hidden"] for s in meta["setup"]["sensors"]] == [False, True]

@@ -21,6 +21,7 @@ class Sensor:
     nominal_wavelength: Optional[float] = None   # λ0 [nm]
     band: Optional[Tuple[float, float]] = None   # allowed peak range [nm]
     temp_sensitivity: Optional[float] = None     # K_T [pm/°C], from a temperature calibration
+    hidden: bool = False                         # column left out of everything, as if absent
 
     def __post_init__(self):
         if self.nominal_wavelength in ("", None):
@@ -61,6 +62,7 @@ class Sensor:
             "nominal_wavelength": self.nominal_wavelength,
             "band": list(self.band) if self.band else None,
             "temp_sensitivity": self.temp_sensitivity,
+            "hidden": self.hidden,
         }
 
     @classmethod
@@ -74,6 +76,7 @@ class Sensor:
             nominal_wavelength=data.get("nominal_wavelength"),
             band=tuple(band) if band else None,
             temp_sensitivity=data.get("temp_sensitivity"),
+            hidden=bool(data.get("hidden", False)),
         )
 
 
@@ -94,6 +97,10 @@ class SensorSetup:
     def bands(self, channels: Sequence[str]) -> List[Optional[Tuple[float, float]]]:
         """Allowed band for each file channel (None when not configured)."""
         return [self.get(ch).band if self.get(ch) else None for ch in channels]
+
+    def hidden_channels(self, channels: Sequence[str]) -> List[str]:
+        """File channels marked as hidden (left out of the processing)."""
+        return [ch for ch in channels if self.get(ch) and self.get(ch).hidden]
 
     def temp_sensitivities(self, channels: Sequence[str]) -> List[Optional[float]]:
         """Thermal sensitivity K_T of each file channel (None when not configured)."""

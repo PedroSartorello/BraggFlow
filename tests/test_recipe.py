@@ -156,3 +156,35 @@ def test_reference_without_thermal_sensitivity_is_explained():
 def test_unknown_reference_channel_is_explained():
     with pytest.raises(ValueError, match="Canal de referência 'X'"):
         run_recipe([EXAMPLE], {**COMP, "temp_comp": {"enabled": True, "channel": "X"}})
+
+
+# ── colunas ocultas ──────────────────────────────────────────────────────────
+
+def _setup_com_oculto(*ocultos):
+    return setup_from_options({"sensors": [
+        {"channel": "CH_1 Sensor_1 [nm]", "name": "EFBG1", "hidden": "CH_1" in ocultos},
+        {"channel": "CH_2 Sensor_1 [nm]", "name": "EFBG2", "hidden": "CH_2" in ocultos},
+        {"channel": "CH_3 Sensor_1 [nm]", "name": "FBG", "hidden": "CH_3" in ocultos},
+    ]})
+
+
+def test_hidden_columns_are_left_out_of_everything(tmp_path):
+    pipeline, (_, raw), messages = run_recipe([EXAMPLE], COMP | {"temp_comp": {"enabled": False}},
+                                               setup=_setup_com_oculto("CH_2"))
+    assert pipeline.channels == ["EFBG1", "FBG"]
+    assert raw.shape[1] == 2, "o bruto do gráfico também não tem a coluna"
+    assert "Colunas ocultas, fora do processamento: EFBG2" in messages["report"]
+    assert pipeline.history[0]["step"] == "drop_channels"
+    out = tmp_path / "x.csv"
+    pipeline.save_processed_data(out)
+    assert out.read_text(encoding="utf-8").splitlines()[0] == "Time [s],EFBG1 [nm],FBG [nm]"
+
+
+def test_all_columns_hidden_is_explained():
+    with pytest.raises(ValueError, match="Todas as colunas estão ocultas"):
+        run_recipe([EXAMPLE], {}, setup=_setup_com_oculto("CH_1", "CH_2", "CH_3"))
+
+
+def test_hidden_reference_is_explained():
+    with pytest.raises(ValueError, match="referência 'FBG' está oculto"):
+        run_recipe([EXAMPLE], COMP, setup=_setup_com_oculto("CH_3"))

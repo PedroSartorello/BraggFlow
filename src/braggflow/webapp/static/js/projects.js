@@ -312,7 +312,7 @@ function scheduleAutosave() {
 }
 
 async function autosaveNow() {
-  if (!projectDirty || !autosaveOn()) return;
+  if (restoring || !projectDirty || !autosaveOn()) return;   // tela pela metade: nada de salvar
   if (document.activeElement === $("project-name")) return;   // salva quando sair do campo
   if (!$("project-name").value.trim()) { setSaveState("dê um nome ao projeto para salvar"); return; }
   await saveProject({ silent: true });
@@ -344,6 +344,12 @@ function resetHistory() {
   updateUndoButtons();
 }
 
+function cancelPendingTimers() {
+  clearTimeout(autosaveTimer);
+  clearTimeout(snapshotTimer);
+  snapshotTimer = null;
+}
+
 function scheduleSnapshot() {
   clearTimeout(snapshotTimer);
   snapshotTimer = setTimeout(pushSnapshot, 450);
@@ -351,7 +357,7 @@ function scheduleSnapshot() {
 
 function pushSnapshot() {
   snapshotTimer = null;
-  if (historico.index < 0) return;
+  if (restoring || historico.index < 0) return;
   const estado = snapshot();
   if (estado === historico.states[historico.index]) return;
   historico.states = historico.states.slice(0, historico.index + 1);
@@ -370,6 +376,7 @@ async function restoreState(indice) {
   projeto.name = $("project-name").value.trim();
   // Painéis abertos continuam abertos: desfazer não muda o que se está vendo
   const paineis = ["card-markers", "analysis-panel"].filter((id) => $(id).open);
+  clearTimeout(autosaveTimer);
   restoring = true;
   try {
     await applyProjectData(projeto);
@@ -396,6 +403,7 @@ function sensorsForProject(sensors) {
       nominal_wavelength: s.nominal_wavelength ?? null,
       band: temBanda ? [low, high] : null,
       temp_sensitivity: [undefined, null, ""].includes(s.temp_sensitivity) ? null : s.temp_sensitivity,
+      hidden: Boolean(s.hidden),
     };
   });
 }
@@ -460,6 +468,7 @@ async function openProject(name) {
   const project = await resp.json();
   if (!resp.ok) throw new Error(project.error || "Erro ao abrir projeto.");
   try { localStorage.setItem(LAST_PROJECT_KEY, project.name); } catch { /* sem armazenamento */ }
+  cancelPendingTimers();             // timers do projeto anterior não disparam com a tela pela metade
   restoring = true;                  // abrir não é mudança do usuário
   try {
     await applyProjectData(project);
@@ -525,8 +534,10 @@ async function applyProjectData(project) {
   markProjectDirty(false);
 
   if (!hasFile) {
-    showError(`O arquivo "${project.file}" do projeto não está em data/. ` +
-              "Envie-o novamente ou escolha outro arquivo.");
+    if (project.file) {               // projeto só de espectros não tem série: não falta nada
+      showError(`O arquivo "${project.file}" do projeto não está em data/. ` +
+                "Envie-o novamente ou escolha outro arquivo.");
+    }
     return;
   }
   drawPlotMarkers();

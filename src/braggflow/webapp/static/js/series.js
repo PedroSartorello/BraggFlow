@@ -18,7 +18,35 @@ export function collectSensors() {
     band_min: row.querySelector(".sensor-band-min").value,
     band_max: row.querySelector(".sensor-band-max").value,
     temp_sensitivity: row.querySelector(".sensor-kt").value,
+    hidden: row.dataset.hidden === "1",
   }));
+}
+
+// ── Colunas ocultas: ficam num grupo recolhido no fim do cartão Sensores ────
+const visibleSensorRows = () => [...document.querySelectorAll("#sensor-list > .sensor-row")];
+
+function setSensorHidden(row, oculto) {
+  row.dataset.hidden = oculto ? "1" : "0";
+  row.classList.toggle("is-hidden", oculto);
+  const botao = row.querySelector(".sensor-hide");
+  botao.textContent = oculto ? "mostrar" : "ocultar";
+  botao.title = oculto
+    ? "Volta a usar esta coluna no processamento"
+    : "Tira esta coluna de tudo (processamento, gráfico, CSV, figura), como se o arquivo não a tivesse";
+  const destino = oculto ? $("hidden-sensor-list") : $("sensor-list");
+  if (destino && row.parentElement !== destino) {
+    if (oculto) destino.appendChild(row);
+    else $("sensor-list").insertBefore(row, $("hidden-sensors"));
+  }
+  updateHiddenSummary();
+}
+
+function updateHiddenSummary() {
+  const grupo = $("hidden-sensors");
+  if (!grupo) return;
+  const n = grupo.querySelectorAll(".sensor-row").length;
+  grupo.classList.toggle("hidden", n === 0);
+  grupo.querySelector("summary").textContent = n === 1 ? "1 coluna oculta" : `${n} colunas ocultas`;
 }
 
 export function collectProcessing() {
@@ -575,9 +603,20 @@ function sensorRow(ch, data, previous) {
 
   const caption = document.createElement("span");
   caption.className = "sensor-caption";
-  caption.textContent = nominal != null
+  const texto = document.createElement("span");
+  texto.textContent = nominal != null
     ? `${ch} · λ₀ ≈ ${fmtNum(nominal)} ${data.units[ch] || "nm"}`
     : `${ch} · sem leituras válidas`;
+  const ocultar = document.createElement("button");
+  ocultar.type = "button";
+  ocultar.className = "btn-link sensor-hide";
+  ocultar.addEventListener("click", () => {
+    setSensorHidden(row, row.dataset.hidden !== "1");
+    syncTempChannels();
+    markProjectDirty();
+    scheduleAutoProcess();
+  });
+  caption.append(texto, ocultar);
 
   row.append(
     caption,
@@ -595,6 +634,7 @@ function sensorRow(ch, data, previous) {
     "Usada pela compensação de temperatura: k = K_T do sensor / K_T da referência.";
   kt.min = "0";
   kt.step = "any";
+  row.dataset.hidden = (previous?.hidden ?? fromSetup?.hidden) ? "1" : "0";
   return row;
 }
 
@@ -615,6 +655,7 @@ export async function loadChannels() {
         min: row.querySelector(".sensor-band-min").value,
         max: row.querySelector(".sensor-band-max").value,
         kt: row.querySelector(".sensor-kt").value,
+        hidden: row.dataset.hidden === "1",
       };
     });
 
@@ -628,7 +669,16 @@ export async function loadChannels() {
     });
     cabecalho.lastChild.title = "Sensibilidade térmica de cada rede (calibração em temperatura)";
     list.appendChild(cabecalho);
-    data.channels.forEach((ch) => list.appendChild(sensorRow(ch, data, previous[ch])));
+    const grupo = document.createElement("details");
+    grupo.className = "hidden-sensors hidden";
+    grupo.id = "hidden-sensors";
+    grupo.innerHTML = '<summary></summary><div id="hidden-sensor-list"></div>';
+    list.appendChild(grupo);
+    data.channels.forEach((ch) => {
+      const row = sensorRow(ch, data, previous[ch]);
+      list.insertBefore(row, grupo);
+      setSensorHidden(row, row.dataset.hidden === "1");
+    });
 
     const info = [`${data.n_samples.toLocaleString("pt-BR")} amostras`];
     if (data.fs) info.push(`≈ ${fmtNum(data.fs, 4)} Hz`);
@@ -644,7 +694,7 @@ export async function loadChannels() {
 }
 
 export function syncTempChannels() {
-  const names = Array.from(document.querySelectorAll(".sensor-row"))
+  const names = visibleSensorRows()                 // coluna oculta não serve de referência
     .map((row) => row.querySelector(".sensor-name").value.trim() || row.dataset.channel);
   if (names.length) updateChannelDropdown(names);
 }
@@ -678,6 +728,7 @@ export async function applySetup(name) {
     row.querySelector(".sensor-band-min").value = sensor.band ? sensor.band[0] : "";
     row.querySelector(".sensor-band-max").value = sensor.band ? sensor.band[1] : "";
     row.querySelector(".sensor-kt").value = sensor.temp_sensitivity ?? "";
+    setSensorHidden(row, Boolean(sensor.hidden));
   });
   syncTempChannels();
 }
@@ -705,7 +756,7 @@ async function saveSetup() {
 // Banda = λ₀ ± maxHalfWidth, limitada à metade da distância até a grade
 // vizinha para que bandas de grades próximas nunca se sobreponham.
 function suggestBands(maxHalfWidth = 2.0) {
-  const rows = Array.from(document.querySelectorAll(".sensor-row"));
+  const rows = visibleSensorRows();
   const nominals = rows.filter((r) => r.dataset.nominal).map((r) => Number(r.dataset.nominal));
   rows.forEach((row) => {
     const min = row.querySelector(".sensor-band-min");
@@ -816,6 +867,7 @@ export function applySensors(sensors) {
     row.querySelector(".sensor-band-min").value = low ?? "";
     row.querySelector(".sensor-band-max").value = high ?? "";
     row.querySelector(".sensor-kt").value = sensor.temp_sensitivity ?? "";
+    setSensorHidden(row, Boolean(sensor.hidden));
   });
   syncTempChannels();
 }

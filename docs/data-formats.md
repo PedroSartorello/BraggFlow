@@ -180,6 +180,7 @@ What is connected to each interrogator channel. Saved by the web app in
 | `sensors[].name` | name used in the processed CSV and in the figures |
 | `sensors[].nominal_wavelength` | nominal Bragg wavelength (nm), optional |
 | `sensors[].band` | `[min, max]` allowed band (nm), optional; readings outside it are invalid |
+| `sensors[].hidden` | `true` leaves the column out of the processing, as if the file did not have it (default `false`) |
 | `sensors[].temp_sensitivity` | thermal sensitivity K_T (pm/°C) from a temperature calibration, optional; the temperature compensation uses `k = K_T,s / K_T,r` |
 
 ```json

@@ -578,5 +578,11 @@ body.no-spectra #spectra-results { display: none !important; }
 .evolution-options { flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
 .evolution-options .field { min-width: 120px; }
 #evolution-plot { min-height: 320px; }
-.sensor-caption { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.sensor-caption { grid-column: 1 / -1; font-size: 11px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.sensor-caption .sensor-hide { margin-left: auto; font-size: 11px; }
+.sensor-row.is-hidden > input { display: none; }
+.sensor-row.is-hidden .sensor-caption > span { text-decoration: line-through; }
+.hidden-sensors { border-top: 1px solid var(--border); padding-top: 6px; font-size: 11.5px; color: var(--muted); }
+.hidden-sensors > summary { cursor: pointer; }
+#hidden-sensor-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .step-note { grid-column: 1 / -1; }

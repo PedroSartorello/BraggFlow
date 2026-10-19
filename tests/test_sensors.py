@@ -67,3 +67,12 @@ def test_old_setup_without_thermal_sensitivity_still_loads():
 def test_non_positive_thermal_sensitivity_raises(valor):
     with pytest.raises(ValueError, match="K_T"):
         Sensor("CH_1", temp_sensitivity=valor)
+
+
+def test_hidden_flag_roundtrip_and_lookup(tmp_path):
+    setup = SensorSetup(name="b", sensors=[Sensor("CH_1", "A"), Sensor("CH_2", "B", hidden=True)])
+    path = tmp_path / "s.json"
+    setup.save(path)
+    loaded = SensorSetup.load(path)
+    assert loaded.hidden_channels(["CH_1", "CH_2", "CH_3"]) == ["CH_2"]
+    assert Sensor.from_dict({"channel": "CH_9"}).hidden is False, "setups antigos: nada oculto"
