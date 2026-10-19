@@ -313,6 +313,7 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
     app.click('#tabs .tab[data-tab="spectra"]')
     expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
     assert arquivos_da_evolucao() == nomes_a
+    expect(app.locator("#error-bar")).to_be_empty()            # projeto só de espectros: nada faltando
 
 
 # ── disposição do gráfico e medição de trechos ───────────────────────────────
