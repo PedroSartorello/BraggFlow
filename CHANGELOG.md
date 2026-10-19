@@ -78,6 +78,10 @@ itself did not change: the same input gives the same output as before.
   the page saves what is pending instead of asking. Undo and redo (↶ ↷,
   Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) walk through up to 50 states of the project
   since it was opened.
+- Hide columns: "ocultar" in the Sensores card leaves an interrogator column
+  out of everything, as if absent (`Sensor.hidden`, `OpticalPipeline.drop_channels`,
+  applied first by `run_recipe`; recorded in the provenance). Saved with the
+  setup and the project.
 - `braggflow.recipe`: the processing recipe as a dict of options
   (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
   app.

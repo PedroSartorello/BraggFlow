@@ -149,3 +149,16 @@ def test_temperature_compensation_refuses_absolute_wavelengths(asc_file):
     pipeline.apply_filter(temperature_compensation, temp_channel_idx=1,
                           thermal_sensitivities=[12.0, 10.0])
     assert pipeline.history[-1]["params"]["thermal_sensitivities"] == [12.0, 10.0]
+
+
+def test_drop_channels_removes_columns_as_if_absent(asc_file):
+    pipeline = OpticalPipeline(str(asc_file)).load_data().apply_setup(_setup())
+    pipeline.drop_channels(["CH_2 Sensor_1 [nm]", "não existe"])
+    assert pipeline.channels == ["S1"]
+    assert pipeline.source_channels == ["CH_1 Sensor_1 [nm]"]
+    assert pipeline.signals_array.shape[1] == 1 and len(pipeline.units) == 1
+    assert pipeline.history[-1] == {"step": "drop_channels", "kind": "setup",
+                                    "params": {"channels": ["CH_2 Sensor_1 [nm]"]}}
+    assert pipeline.csv_header() == "Time [s],S1 [nm]"
+    with pytest.raises(ValueError, match="no channel"):
+        pipeline.drop_channels(["CH_1 Sensor_1 [nm]"])

@@ -642,3 +642,39 @@ def test_deleting_the_open_project_does_not_bring_it_back(app, data_dir):
     expect(app.locator("#gate-projects .gate-item", has_text="Apagar")).to_have_count(0)
     app.wait_for_timeout(2600)
     assert not (data_dir / "projects" / "Apagar.json").exists()
+
+
+# ── colunas ocultas ──────────────────────────────────────────────────────────
+
+def test_hidden_column_disappears_from_the_program(app, data_dir):
+    novo_projeto(app, "Ocultar")
+    adicionar_serie(app, "ensaio_a.asc")
+    linha = app.locator('.sensor-row[data-channel="CH_3 Sensor_1 [nm]"]')
+    expect(app.locator("#hidden-sensors")).to_be_hidden()
+
+    linha.locator(".sensor-hide").click()
+    expect(app.locator("#hidden-sensors summary")).to_have_text("1 coluna oculta")
+    expect(linha).to_be_hidden()                               # grupo recolhido
+    app.wait_for_function("!document.getElementById('plot').data.some((t) => t.name.startsWith('FBG'))")
+    assert set(curvas(app)) == {"EFBG1", "EFBG2", "EFBG1 (bruto)", "EFBG2 (bruto)"}
+    opcoes = app.locator("#tempcomp-channel option").all_inner_texts()
+    assert "FBG" not in opcoes, "coluna oculta não serve de referência"
+    expect(app.locator("#status-details")).to_contain_text("Colunas ocultas, fora do processamento: FBG")
+
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    csv = data_dir / "processed" / "Ocultar" / "ensaio_a_processado.csv"
+    assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],EFBG1 [nm],EFBG2 [nm]"
+    app.click('#tabs .tab[data-tab="viz"]')
+    expect(app.locator('[data-summary="curvas"]')).to_contain_text("2 curvas")
+
+    app.click('#tabs .tab[data-tab="series"]')
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    app.reload()                                               # o projeto lembra
+    abrir_projeto(app, "Ocultar")
+    expect(app.locator("#hidden-sensors summary")).to_have_text("1 coluna oculta")
+    app.locator("#hidden-sensors summary").click()
+    linha.locator(".sensor-hide").click()                      # mostrar de novo
+    expect(app.locator("#hidden-sensors")).to_be_hidden()
+    expect(linha.locator(".sensor-name")).to_be_visible()
+    app.wait_for_function("document.getElementById('plot').data.some((t) => t.name === 'FBG')")

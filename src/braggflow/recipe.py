@@ -103,6 +103,7 @@ def setup_from_options(options: dict) -> SensorSetup:
             nominal_wavelength=as_float(s.get("nominal_wavelength")),
             band=(low, high) if low is not None else None,
             temp_sensitivity=as_float(s.get("temp_sensitivity")),
+            hidden=s.get("hidden") in (True, "true", "1", 1),
         ))
     return SensorSetup(name=str(options.get("setup_name") or ""), sensors=sensors)
 
@@ -158,7 +159,17 @@ def run_recipe(files: Sequence[Path], options: dict, *,
 
     pipeline = OpticalPipeline.from_data(data, str(caminhos[0]), source)
     pipeline.joins = juncoes
-    pipeline.apply_setup(setup if setup is not None else setup_from_options(options))
+    setup = setup if setup is not None else setup_from_options(options)
+
+    # Colunas ocultas saem antes de tudo: para o resto, é como se não existissem
+    ocultos = setup.hidden_channels(pipeline.source_channels)
+    if ocultos:
+        if len(ocultos) == len(pipeline.source_channels):
+            raise ValueError("Todas as colunas estão ocultas: mostre pelo menos uma no cartão Sensores.")
+        pipeline.drop_channels(ocultos)
+        messages["report"].append("Colunas ocultas, fora do processamento: "
+                                  + ", ".join(setup.names(ocultos)))
+    pipeline.apply_setup(setup)
 
     # Recorte temporal
     window = options.get("window") or {}
@@ -303,6 +314,12 @@ def _compensate_temperature(pipeline: OpticalPipeline, tempcomp: dict, messages:
     """
     referencia = tempcomp.get("channel", "FBG")
     if referencia not in pipeline.channels:
+        ocultos = []
+        if pipeline.setup:
+            ocultos = [s.label for s in pipeline.setup.sensors if s.hidden]
+        if referencia in ocultos:
+            raise ValueError(f"O canal de referência '{referencia}' está oculto: mostre-o no cartão "
+                             "Sensores ou escolha outra referência.")
         raise ValueError(f"Canal de referência '{referencia}' não existe: "
                          f"{', '.join(pipeline.channels)}.")
     k_padrao = as_float(tempcomp.get("k_coeff"), 1.0)

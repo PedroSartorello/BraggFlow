@@ -64,6 +64,14 @@ over the raw one. Several files of one run can be joined in the "Concatenação"
 card, which appears once the project has two or more files. Shortcuts:
 Ctrl+Enter processes, Ctrl+S saves the project.
 
+*Hiding a column.* "ocultar" on a sensor row leaves that column out of
+everything — processing, plot, processed CSV, measurements, statistics,
+figure and the temperature-compensation reference — as if the file did not
+have it. Hidden columns are grouped, collapsed, at the end of the Sensores
+card ("N colunas ocultas"), where "mostrar" brings them back. The choice is
+saved with the setup and the project, and the JSON of the processed CSV
+records it (a `drop_channels` step and `hidden` in the setup).
+
 *Markers* (instants that split the run, used by the figure and the interval
 statistics) are made on the plot with the *Marcar* tool: a click adds one, and
 dragging a marker line changes its instant. With the other tools a click adds
