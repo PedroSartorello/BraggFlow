@@ -59,8 +59,12 @@ def write_oceanview(path: Path, intensity: np.ndarray, when: datetime | None = N
 
 
 def lmr_series(folder: Path, resonances=(870.0, 868.0, 780.0, 778.0), header: bool = True,
-               start=datetime(2026, 3, 2, 9, 30, 15), step_s: float = 75.5) -> list[Path]:
-    """Uma série de arquivos ``amostra_Transmission__NN__HH-MM-SS-mmm.txt``, um por ressonância."""
+               start=datetime(2026, 3, 2, 9, 30, 15), step_s: float = 75.5,
+               extra: np.ndarray | None = None) -> list[Path]:
+    """
+    Uma série de arquivos ``amostra_Transmission__NN__HH-MM-SS-mmm.txt``, um por
+    ressonância; ``extra`` (na grade ``WAVELENGTH``) é subtraído de todos.
+    """
     from datetime import timedelta
 
     folder = Path(folder)
@@ -69,5 +73,6 @@ def lmr_series(folder: Path, resonances=(870.0, 868.0, 780.0, 778.0), header: bo
     for i, lam in enumerate(resonances):
         quando = start + timedelta(seconds=i * step_s)
         nome = f"amostra_Transmission__{1 + i:02d}__{quando:%H-%M-%S}-{quando.microsecond // 1000:03d}.txt"
-        caminhos.append(write_oceanview(folder / nome, transmission(lam, seed=i), quando, header))
+        t = transmission(lam, seed=i) - (0.0 if extra is None else extra)
+        caminhos.append(write_oceanview(folder / nome, t, quando, header))
     return caminhos

@@ -3,7 +3,7 @@
 
 import { $, fmtNum, fmtSig, setBusy, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
-import { renderSpectraFiles } from "./spectra.js";
+import { addSpectraToProject, renderSpectraFiles } from "./spectra.js";
 import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
 import { numeroOuTraco, resetAnalysis, scheduleAnalysis } from "./analysis.js";
 import { switchTab } from "./tabs.js";
@@ -789,36 +789,58 @@ export async function loadFileList(selectValue) {
   renderSpectraFiles();
 }
 
+// Extensões que o servidor aceita (RAW_EXTENSIONS em webapp/app.py): de uma
+// pasta enviada inteira, o resto (fotos, anotações) fica de fora sem erro
+const DATA_EXTENSIONS = [".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec"];
+const UPLOAD_BATCH = 25;     // arquivos por requisição
+
+// `fileList`: os arquivos de um <input> (os de uma pasta trazem o caminho em
+// webkitRelativePath) ou [{file, path}] de uma pasta solta na área
 export async function uploadFiles(fileList) {
-  const arquivos = [...(fileList || [])];
-  if (!arquivos.length) return;
+  const todos = [...(fileList || [])].map((f) => (f instanceof File ? { file: f, path: f.webkitRelativePath || f.name } : f));
+  const daPasta = (a) => a.path.includes("/");
+  const extensao = (nome) => nome.slice(nome.lastIndexOf(".")).toLowerCase();
+  const arquivos = todos.filter((a) => !daPasta(a)
+    || (!a.file.name.startsWith(".") && DATA_EXTENSIONS.includes(extensao(a.file.name))));
+  const ignorados = todos.length - arquivos.length;
+  if (!arquivos.length) {
+    if (todos.length) showError("Nenhum arquivo de dados na pasta (aceito: " + DATA_EXTENSIONS.join(", ") + ").");
+    return;
+  }
   showError("");
   const enviados = [];
   const erros = [];
-  for (const [i, file] of arquivos.entries()) {
-    $("status-text").textContent = $("spectra-status").textContent =
-      `Enviando ${i + 1} de ${arquivos.length}: ${file.name}…`;
+  for (let i = 0; i < arquivos.length; i += UPLOAD_BATCH) {
+    const lote = arquivos.slice(i, i + UPLOAD_BATCH);
+    $("status-text").textContent = $("spectra-status").textContent = arquivos.length > 1
+      ? `Enviando ${Math.min(i + lote.length, arquivos.length)} de ${arquivos.length}…`
+      : `Enviando ${lote[0].file.name}…`;
     const form = new FormData();
-    form.append("file", file);
+    lote.forEach(({ file, path }) => form.append("file", file, path));
     try {
       const resp = await fetch("/api/upload", { method: "POST", body: form });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Erro no envio.");
-      enviados.push(data.file);
+      enviados.push(...(data.files || [data.file]));
+      erros.push(...(data.errors || []));
     } catch (err) {
-      erros.push(`${file.name}: ${err.message}`);
+      erros.push(err.message);
     }
   }
 
   await loadFileList();
   await addFilesAndShow(enviados);
-  if (erros.length) showError(erros.join(" · "));
+  if (ignorados) $("spectra-status").textContent += ` · ${ignorados} arquivo(s) da pasta não são de dados e ficaram de fora`;
+  if (erros.length) showError(erros.slice(0, 5).join(" · ") + (erros.length > 5 ? ` · e mais ${erros.length - 5}` : ""));
 }
 
-// Põe os arquivos no projeto e já mostra o último de cada tipo
+// Põe os arquivos no projeto e já mostra um de cada tipo; os espectros
+// entram de uma vez (centenas de arquivos não abrem um por um)
 export async function addFilesAndShow(paths) {
   if (!paths.length) return;
-  for (const path of paths) await addFileToProject(path);
+  const espectrosNovos = paths.filter((path) => fileKind(path) === "spectrum");
+  if (espectrosNovos.length) await addSpectraToProject(espectrosNovos);
+  for (const path of paths.filter((p) => fileKind(p) !== "spectrum")) await addFileToProject(path);
   markProjectDirty();
 
   const series = paths.filter((path) => fileKind(path) !== "spectrum");

@@ -108,8 +108,23 @@ it on turns Δλ on too. The status details list the k used for each channel,
 and the JSON records the K_T values.
 
 **Espectros** — optical spectra (OSA, or spectrometers such as OceanView
-exports with or without header). Each file has its own preparation, applied in
-this order:
+exports with or without header), from one file to hundreds.
+
+*Files.* "Importar pasta" (or dropping a folder on the empty page) sends a
+whole folder at once, kept as `data/uploads/<folder>/`; files of other types
+in it (notes, photos) are left out without an error. A subfolder of
+`data/raw` or `data/uploads` shows up as one button, "N arquivo(s) ·
+adicionar todos", and as a group in "Adicionar arquivos ao projeto", which
+also has a name filter. The project list is sorted by name (01, 02… 10),
+counts the spectra and gets a filter when it grows; adding many files draws
+the list once and opens only the first.
+
+*Preparation.* "Mesmo preparo para todos os espectros" (on by default) makes
+the sidebar edit one preparation used by every file of the project — the
+usual case for a series from the same experiment. Turned off, each file gets
+a copy and is prepared on its own ("Aplicar este preparo a todos" copies the
+selected one). The source and dark files are shown as they are, without being
+converted with themselves. The preparation is applied in this order:
 
 1. *Transmission (raw data)*, optional (the card stays closed, and says "não
    usada", until a source or a dark is chosen): choose the source spectrum R and/or
@@ -122,16 +137,48 @@ this order:
    so shallow valleys on a sloping baseline (LMR, SPR, fringes) stand out.
 4. Normalisation and vertical offset.
 
-Detection of maxima and minima with position (sub-sample), prominence, FWHM or
-3-dB band, Q factor, centroid and spacing; results table with CSV export.
+Detection of maxima and minima with position (3-point vertex and the vertex
+of a least-squares parabola fitted to the bottom, "λ ajuste"), prominence,
+FWHM or 3-dB band, Q factor, centroid and spacing; results table with CSV
+export.
 
-*Evolução entre arquivos* follows the valleys (or peaks) across the spectra of
-the project, in acquisition order (header `Date:` or time in the file name),
-each with its own preparation; source and dark files are left out. Two modes:
-the most prominent valley of each file, or one track per valley of the first
-file (each keeps the nearest valley of the next file, up to a maximum jump).
-Plot λ, Δλ to the first file, intensity, depth or width against elapsed time or
-file order; table and CSV with every value.
+*Evolução entre arquivos* (under the spectrum plot) follows a valley (or
+peak) across the spectra of the project, in acquisition order (header `Date:`
+or time in the file name). Source and dark files, and files taken out of the
+evolution, are left out. Modes:
+
+* *perto do λ de referência* — the valley you want: "Marcar no gráfico" and a
+  click on it in the spectrum plot (the click goes to the nearest detected
+  valley), or type λ. Each file keeps the valley nearest the search centre,
+  within "Janela ±" nm (empty: no limit). With "seguir a deriva" the centre
+  moves to the valley found in the previous file, so a resonance that shifts
+  more than the window along the run (air → water → glycerol) is not lost;
+  without it, the search stays at λ ref. The plot shows λ ref (dashed line),
+  the window where the search looked in that file, and a ring on the valley
+  found.
+* *o mais proeminente* — the main resonance of each file.
+* *todos os do 1º arquivo* — one track per valley of the first file, each
+  keeping the nearest valley of the next file up to a maximum jump.
+
+"Posição" sets the λ of each point: *ajuste no fundo* (default) is the vertex
+of a parabola fitted to the points within ⅓ of the width on each side of the
+valley, which uses tens of points and is several times less noisy than the
+*vértice* of 3 points on broad valleys (LMR, SPR); *centroide* is the centre
+of mass above half depth. Where the fit is not possible, the 3-point vertex is
+used and a warning says how many points.
+
+Clicking a point of the evolution opens that spectrum above; ◀ ▶ walk through
+the files in evolution order, and "Tirar da evolução" leaves an outlier out
+(the file stays in the project, struck through in the list; "Devolver todos"
+brings them back). Files that cannot be read are skipped with a warning
+instead of stopping the calculation, and so are files without a valley in the
+window (an empty point). The prepared spectra and their valleys are cached by
+file, preparation, source and dark: changing λ ref, the window or the mode
+recomputes hundreds of files at once. Plot λ, Δλ to the first file,
+intensity, depth or width against elapsed time or file order; table and CSV
+with every value; "Fazer figura" opens it in the Figura tab. All of it — the
+common preparation, λ ref, window, mode and the files left out — is saved
+with the project.
 
 **Interval statistics** (Séries temporais, under the markers) — for every
 channel of the processed signal on the plot: mean, deviation, extremes, drift,
@@ -140,7 +187,12 @@ to the previous (or first) interval, and the step at each marker. Recomputed
 when the markers, the processing or the "relative to the start" view change;
 CSV export.
 
-**Figura** — publication figures from processed CSVs or spectra. The sidebar
+**Figura** — publication figures from processed CSVs, spectra or the
+evolution of a valley between spectra. With *Evolução entre espectros*, each
+track is a curve; "Grandeza no eixo Y" (λ, Δλ, intensity, depth, width) is
+the same choice as the y axis of the Espectros tab, x is the time since the
+first spectrum in the chosen unit (or the spectrum number when the files have
+no time), and markers are in seconds since the first spectrum. The sidebar
 starts with what changes the figure the most, *Estilo e tamanho* (saved
 style, size preset — IEEE, Elsevier, A4, slide —, font and base size), then
 *Dados*, *Curvas*, *Figura* and *Marcações e eixos*. Each card shows a
@@ -178,7 +230,7 @@ build step. `main.js` is the entry point; the modules are:
 | `core.js` | `$`, error bar, number formatting, the `fetch` wrapper and the server version check; imports nothing |
 | `state.js` | files of the project and what each one keeps; `shared`, the variables read and changed by more than one module |
 | `series.js` | Séries temporais tab: processing options, sensors, setups, file list, plot, processing (one, batch, joined), concatenation |
-| `spectra.js` | Espectros tab: preparation, plot, peaks and valleys |
+| `spectra.js` | Espectros tab: preparation (common or per file), plot, peaks and valleys, evolution of a valley and λ ref |
 | `viz.js` | Figura tab: data sources, styles (changed options, card summaries, search), markers, figure, copy |
 | `analysis.js` | interval statistics under the Séries temporais plot |
 | `projects.js` | project screen, adding/removing files, save, open, delete, autosave, undo/redo history, unsaved-changes dialog |

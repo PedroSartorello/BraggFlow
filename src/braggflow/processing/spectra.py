@@ -6,9 +6,12 @@ demais: conversão opcional de dados brutos em transmissão (fonte e ruído de
 fundo, :func:`apply_transmission`), recorte de comprimento de onda, suavização
 (Savitzky-Golay ou média móvel), remoção de tendência, normalização e
 deslocamento vertical. :func:`analyse_spectrum` encontra os máximos e mínimos
-e mede, para cada um, a posição refinada, a proeminência, a largura (FWHM ou
-banda de 3 dB), o fator Q, o centroide e o espaçamento ao vizinho (FSR local).
-:func:`spectra_evolution` acompanha esses extremos de arquivo para arquivo.
+e mede, para cada um, a posição refinada (vértice de 3 pontos e parábola
+ajustada ao fundo), a proeminência, a largura (FWHM ou banda de 3 dB), o fator
+Q, o centroide e o espaçamento ao vizinho (FSR local).
+:func:`spectra_evolution` acompanha esses extremos de arquivo para arquivo: o
+mais proeminente, todos os do primeiro arquivo ou o que está perto de um λ de
+referência.
 
 Tudo vale tanto para o espectro bruto quanto para a transmissão: a conversão
 só acontece quando uma fonte ou um ruído de fundo é escolhido.
@@ -30,7 +33,17 @@ AUTO_PROMINENCE = 0.05      # fração da faixa de intensidade quando não infor
 # Onde a fonte (menos o fundo) fica abaixo desta fração do seu máximo, a
 # transmissão vira NaN: dividir por quase zero só amplifica ruído
 MIN_REFERENCE_FRACTION = 0.01
-EVOLUTION_MODES = ("prominent", "follow")
+EVOLUTION_MODES = ("reference", "prominent", "follow")
+# Onde fica o extremo em cada arquivo: vértice da parábola de 3 pontos,
+# parábola ajustada ao fundo (ou ao topo) ou centroide
+LOCATE_METHODS = ("vertex", "fit", "centroid")
+EVOLUTION_QUANTITIES = ("wavelength", "delta", "intensity", "prominence", "fwhm")
+# O ajuste usa os pontos até FIT_HALF_WIDTH × largura de cada lado do
+# extremo (num vale lorentziano, os ~30% mais fundos); sem largura medida, os
+# pontos a menos de FIT_DEPTH da proeminência. Sempre pelo menos FIT_MIN_POINTS.
+FIT_HALF_WIDTH = 1.0 / 3.0
+FIT_DEPTH = 0.3
+FIT_MIN_POINTS = 5
 
 # campo: (tipo, padrão, limites ou opções, nome exibido)
 SPECTRUM_SPEC = {
@@ -54,6 +67,25 @@ SPECTRUM_SPEC = {
     "min_distance": ("float?", None, (0.0, None), "Distância mínima entre extremos"),
     "max_peaks": ("int", 10, (1, 500), "Máximo de extremos por tipo"),
 }
+
+
+# Como a evolução entre arquivos acompanha os extremos (e o que o gráfico mostra)
+EVOLUTION_SPEC = {
+    "kind": ("choice", "min", ("min", "max"), "Acompanhar"),
+    "mode": ("choice", "prominent", EVOLUTION_MODES, "Modo"),
+    "reference": ("float?", None, (0.0, None), "λ de referência"),
+    "window": ("float?", None, (0.0, None), "Janela de busca"),
+    "follow": ("bool", True, None, "Seguir a deriva"),
+    "tolerance": ("float?", None, (0.0, None), "Salto máximo"),
+    "locate": ("choice", "fit", LOCATE_METHODS, "Posição do extremo"),
+    "y": ("choice", "wavelength", EVOLUTION_QUANTITIES, "Eixo y"),
+    "x": ("choice", "time", ("time", "order"), "Eixo x"),
+}
+
+
+def resolve_evolution_options(user: Optional[dict] = None) -> dict:
+    """Valida as opções da evolução e completa com os padrões."""
+    return resolve_section(EVOLUTION_SPEC, user)
 
 
 def default_spectrum_settings() -> dict:
@@ -256,6 +288,64 @@ def _refine_vertex(wl: np.ndarray, z: np.ndarray, i: int) -> Tuple[float, float]
     return float(wl[i] + delta * passo), float(b - 0.25 * (a - c) * delta)
 
 
+def _parabola_vertex(x: np.ndarray, y: np.ndarray, centro: float) -> Optional[float]:
+    """Vértice da parábola de mínimos quadrados por ``(x, y)``, se for um máximo dentro de ``x``."""
+    escala = (x.max() - x.min()) / 2.0 or 1.0        # x em [-1, 1]: ajuste bem condicionado
+    c2, c1, _ = np.polyfit((x - centro) / escala, y, 2)
+    if not c2 < 0:
+        return None
+    vertice = float(centro - c1 / (2.0 * c2) * escala)
+    return vertice if x.min() <= vertice <= x.max() else None
+
+
+def _fit_vertex(wl: np.ndarray, z: np.ndarray, i: int, prominence: float,
+                low: int, high: int, width: Optional[float] = None) -> Optional[float]:
+    """
+    λ do vértice de uma parábola ajustada por mínimos quadrados ao topo de
+    ``z`` em torno do índice ``i`` — o fundo do vale, que chega invertido.
+
+    Com a largura medida (``width``), usa os pontos a até ``FIT_HALF_WIDTH``
+    da largura de cada lado e recentra a janela no vértice ajustado até ele
+    parar de andar; sem ela, os pontos contíguos a menos de ``FIT_DEPTH`` da
+    proeminência. Nunca passa das bases ``low``–``high`` e usa pelo menos
+    ``FIT_MIN_POINTS`` pontos. São dezenas de pontos em vez de três, então o
+    ruído pesa bem menos que no vértice de 3 pontos. ``None`` quando a
+    parábola não tem a concavidade do extremo ou o vértice cai fora dos
+    pontos usados.
+    """
+    if width:
+        meia, centro = FIT_HALF_WIDTH * width, float(wl[i])
+        indices = np.arange(len(wl))
+        dentro_das_bases = (indices >= low) & (indices <= high)
+        for _ in range(5):
+            dentro = dentro_das_bases & (np.abs(wl - centro) <= meia)
+            if dentro.sum() < FIT_MIN_POINTS:
+                break
+            novo = _parabola_vertex(wl[dentro], z[dentro], centro)
+            if novo is None:
+                return None
+            andou, centro = abs(novo - centro), novo
+            if andou <= 1e-3 * meia:
+                break
+        else:
+            return centro
+        if dentro.sum() >= FIT_MIN_POINTS:
+            return centro
+
+    nivel = z[i] - FIT_DEPTH * prominence
+    acima = z[low:high + 1] >= nivel
+    rel = i - low
+    fora_esq = np.flatnonzero(~acima[:rel + 1][::-1])
+    fora_dir = np.flatnonzero(~acima[rel:])
+    a = i - fora_esq[0] + 1 if len(fora_esq) else low
+    b = i + fora_dir[0] - 1 if len(fora_dir) else high
+    while b - a + 1 < FIT_MIN_POINTS and (a > low or b < high):
+        a, b = max(low, a - 1), min(high, b + 1)
+    if b - a + 1 < 3:
+        return None
+    return _parabola_vertex(wl[a:b + 1], z[a:b + 1], float(wl[i]))
+
+
 def _crossing(wl: np.ndarray, z: np.ndarray, i: int, level: float,
               limit: int, step: int) -> Optional[float]:
     """λ onde ``z`` desce abaixo de ``level`` andando de ``i`` até ``limit``
@@ -276,7 +366,8 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
     """
     Máximos e mínimos de um espectro já preparado.
 
-    Para cada extremo: λ refinado (parábola de 3 pontos), intensidade,
+    Para cada extremo: λ refinado (parábola de 3 pontos), ``fit`` (λ do vértice
+    da parábola ajustada ao fundo, :func:`_fit_vertex`), intensidade,
     proeminência (altura do pico ou profundidade do vale em relação à
     vizinhança), largura, Q = λ/largura, centroide da região acima do nível
     da largura e espaçamento ao extremo anterior do mesmo tipo (FSR local).
@@ -364,6 +455,7 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
                 "level": sinal * nivel,
                 "q": abs(lam / largura) if largura else None,
                 "centroid": centroide,
+                "fit": _fit_vertex(wl, z, i, prom, esq_lim, dir_lim, largura),
                 "spacing": None,
             })
         for anterior, atual in zip(do_tipo, do_tipo[1:]):
@@ -384,8 +476,15 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
 # Evolução entre arquivos
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _nm(valor: float) -> str:
+    """λ com uma casa e vírgula decimal, para os nomes das trilhas."""
+    return f"{valor:.1f}".replace(".", ",")
+
+
 def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "prominent",
-                      tolerance: Optional[float] = None) -> dict:
+                      tolerance: Optional[float] = None, reference: Optional[float] = None,
+                      window: Optional[float] = None, follow: bool = True,
+                      locate: str = "fit") -> dict:
     """
     Acompanha os vales (``kind='min'``) ou picos (``'max'``) de uma série de
     espectros, um por arquivo.
@@ -397,6 +496,12 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
     (sem data, ``acquired_from='filename'``) ganha a data dos outros arquivos
     quando todos eles são do mesmo dia.
 
+    * ``mode='reference'``: uma trilha, com o extremo mais próximo de
+      ``reference`` (nm) em cada arquivo, até ``window`` nm dele (``None``:
+      sem limite). Com ``follow``, o centro da busca anda com o extremo
+      encontrado, para acompanhar uma ressonância que se desloca mais que a
+      janela ao longo do ensaio; sem ele, a busca fica sempre em
+      ``reference``. Sem extremo na janela, o ponto fica vazio.
     * ``mode='prominent'``: uma trilha, com o extremo mais proeminente de cada
       arquivo (a ressonância principal).
     * ``mode='follow'``: uma trilha para cada extremo do primeiro arquivo; em
@@ -405,13 +510,27 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
       espaçamento entre os extremos do primeiro arquivo). Sem par, o ponto
       fica vazio.
 
+    ``locate`` escolhe o λ de cada ponto: ``'vertex'`` (parábola de 3 pontos),
+    ``'fit'`` (parábola ajustada ao fundo) ou ``'centroid'``; onde o ajuste ou
+    o centroide não existe, fica o vértice, e ``located`` diz o que foi usado.
+    A busca e o casamento entre arquivos sempre usam o vértice.
+
     Cada ponto traz λ, intensidade, proeminência, largura e ``delta`` (λ menos
-    o λ do primeiro ponto da trilha).
+    o λ do primeiro ponto da trilha). Cada trilha tem ``key`` (estável, para o
+    estilo da figura), ``name`` e ``points``.
     """
     if kind not in ("min", "max"):
         raise ValueError(f"Tipo de extremo desconhecido: {kind}.")
     if mode not in EVOLUTION_MODES:
         raise ValueError(f"Modo desconhecido: {mode}.")
+    if locate not in LOCATE_METHODS:
+        raise ValueError(f"Posição do extremo desconhecida: {locate}.")
+    if mode == "reference":
+        if reference is None:
+            raise ValueError("Marque o λ de referência: clique no vale no gráfico do espectro "
+                             "ou digite o valor.")
+        if window is not None and not window > 0:
+            raise ValueError("A janela de busca deve ser maior que zero (vazio = sem limite).")
     itens = [dict(e) for e in entries]
     if not itens:
         raise ValueError("Nenhum espectro para acompanhar.")
@@ -430,12 +549,27 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
     extremos = [[x for x in e.get("extrema", []) if x["type"] == kind] for e in itens]
 
     def ponto(x):
-        return None if x is None else {k: x.get(k) for k in
-                                       ("wavelength", "intensity", "prominence", "fwhm", "centroid")}
+        if x is None:
+            return None
+        p = {k: x.get(k) for k in ("wavelength", "intensity", "prominence", "fwhm", "centroid")}
+        p["vertex"], p["located"] = p["wavelength"], "vertex"
+        if locate != "vertex" and x.get(locate) is not None:
+            p["wavelength"], p["located"] = x[locate], locate
+        return p
 
     nome = "vale" if kind == "min" else "pico"
-    if mode == "prominent":
-        trilhas = [{"name": f"{nome} mais proeminente",
+    if mode == "reference":
+        centro, pontos = float(reference), []
+        for xs in extremos:
+            perto = [x for x in xs if window is None or abs(x["wavelength"] - centro) <= window]
+            x = min(perto, key=lambda x: abs(x["wavelength"] - centro)) if perto else None
+            pontos.append(ponto(x))
+            if x is not None and follow:
+                centro = x["wavelength"]
+        trilhas = [{"key": f"{nome} em λ ref", "name": f"{nome} perto de {_nm(reference)} nm",
+                    "points": pontos}]
+    elif mode == "prominent":
+        trilhas = [{"key": f"{nome} mais proeminente", "name": f"{nome} mais proeminente",
                     "points": [ponto(max(xs, key=lambda x: x["prominence"])) if xs else None
                                for xs in extremos]}]
     else:
@@ -447,7 +581,7 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
             espacos = np.diff([x["wavelength"] for x in iniciais])
             tolerance = 0.5 * float(espacos.min()) if len(espacos) else np.inf
         posicoes = [x["wavelength"] for x in iniciais]
-        trilhas = [{"name": f"{nome} {i + 1} (≈ {x['wavelength']:.1f} nm no 1º)",
+        trilhas = [{"key": f"{nome} {i + 1}", "name": f"{nome} {i + 1} (≈ {_nm(x['wavelength'])} nm no 1º)",
                     "points": [ponto(x)]} for i, x in enumerate(iniciais)]
         for xs in extremos[1:]:
             livres = list(xs)
@@ -480,4 +614,7 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
             "elapsed_s": (quando - t0).total_seconds() if com_tempo else None,
         })
     return {"kind": kind, "mode": mode, "tolerance": tolerance if mode == "follow" else None,
+            "reference": reference if mode == "reference" else None,
+            "window": window if mode == "reference" else None,
+            "follow": bool(follow) if mode == "reference" else None, "locate": locate,
             "x": "time" if com_tempo else "order", "files": arquivos, "tracks": trilhas}

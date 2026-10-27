@@ -370,9 +370,16 @@ def channel_values(df: pd.DataFrame, units: Dict[str, Optional[str]],
 
 
 _LABELS = {
-    "en": {"time": "Time", "wavelength": "Wavelength", "intensity": "Intensity"},
-    "pt": {"time": "Tempo", "wavelength": "Comprimento de onda", "intensity": "Intensidade"},
+    "en": {"time": "Time", "wavelength": "Wavelength", "intensity": "Intensity",
+           "transmission": "Transmission", "absorbance": "Absorbance", "spectrum": "Spectrum",
+           "depth": "Depth", "height": "Height"},
+    "pt": {"time": "Tempo", "wavelength": "Comprimento de onda", "intensity": "Intensidade",
+           "transmission": "Transmissão", "absorbance": "Absorbância", "spectrum": "Espectro",
+           "depth": "Profundidade", "height": "Altura"},
 }
+# Unidade da intensidade depois do preparo → o que ela mede
+_INTENSITY_NAMES = {"%": "transmission", "": "transmission", "dB": "transmission",
+                    "AU": "absorbance"}
 
 
 def series_labels(unit: str, is_shift: bool, time_unit: str,
@@ -388,6 +395,30 @@ def spectrum_labels(style: dict) -> Tuple[str, str]:
     nomes = _LABELS.get(style["axes"].get("language", "en"), _LABELS["en"])
     return (f"{nomes['wavelength']} (nm)",
             f"{nomes['intensity']} ({style['data']['intensity_unit']})")
+
+
+def evolution_labels(quantity: str, unit: str, kind: str = "min",
+                     time_unit: Optional[str] = None, language: str = "en") -> Tuple[str, str]:
+    """
+    Rótulos de uma figura da evolução de um vale (``kind='min'``) ou pico
+    entre espectros: x é o tempo (``time_unit``) ou, sem ele, o número do
+    espectro; y é a grandeza acompanhada (``wavelength``, ``delta``,
+    ``intensity``, ``prominence`` ou ``fwhm``) na unidade do preparo.
+    """
+    nomes = _LABELS.get(language, _LABELS["en"])
+    xlabel = f"{nomes['time']} ({time_unit})" if time_unit else nomes["spectrum"]
+    unidade = f" ({unit})" if unit and unit != "AU" else ""
+    medida = nomes[_INTENSITY_NAMES.get(unit, "intensity")]
+    ylabels = {
+        "wavelength": r"$\lambda$ (nm)",
+        "delta": r"$\Delta\lambda$ (nm)",
+        "intensity": f"{medida}{unidade}",
+        "prominence": f"{nomes['depth' if kind == 'min' else 'height']}{unidade}",
+        "fwhm": "FWHM (nm)",
+    }
+    if quantity not in ylabels:
+        raise ValueError(f"Grandeza desconhecida: {quantity}.")
+    return xlabel, ylabels[quantity]
 
 
 def _style_axes(ax, style: dict, tick_size: float) -> None:

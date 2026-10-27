@@ -348,23 +348,43 @@
 
   <div class="card enabled">
     <div class="card-body" style="grid-template-columns: 1fr;">
-      <div id="spectra-files" class="file-list"></div>
-      <details class="advanced">
+      <div class="files-head">
+        <span class="hint" id="spectra-files-summary"></span>
+        <input type="search" id="spectra-filter" class="list-filter hidden" placeholder="Filtrar pelo nome…"
+               aria-label="Filtrar os espectros do projeto">
+      </div>
+      <div id="spectra-files" class="file-list scroll-list"></div>
+      <details class="advanced" id="spectra-add">
         <summary>Adicionar arquivos ao projeto</summary>
         <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 8px;">
-          <div id="spectra-picker" class="file-list"></div>
+          <input type="search" id="spectrum-picker-filter" class="list-filter" placeholder="Filtrar pelo nome…"
+                 aria-label="Filtrar os arquivos disponíveis">
+          <div id="spectra-picker" class="file-list scroll-list"></div>
           <button type="button" id="btn-add-spectra" class="btn-dashed">Adicionar marcados</button>
-          <label class="field">Importar do computador
-            <input type="file" id="spectra-upload" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec">
-          </label>
+          <div class="upload-row">
+            <label class="btn-secondary btn-sm">Importar arquivos
+              <input type="file" id="spectra-upload" class="file-hidden" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
+            <label class="btn-secondary btn-sm">Importar pasta
+              <input type="file" id="spectra-upload-dir" class="file-hidden" webkitdirectory multiple></label>
+          </div>
+          <span class="hint">Uma pasta enviada fica em data/uploads/&lt;pasta&gt;. Arquivos em subpastas
+            de data/raw também aparecem agrupados por pasta, com “adicionar todos”.</span>
         </div>
       </details>
-      <span class="hint">Cada arquivo tem o seu próprio preparo.</span>
     </div>
   </div>
 
   <div class="needs-spectra">
-  <div class="section-label step-label"><span class="step-num">2</span> Preparo do espectro selecionado</div>
+  <div class="section-label step-label"><span class="step-num">2</span>
+    <span id="spectra-prep-label">Preparo de todos os espectros</span></div>
+
+  <div class="card enabled">
+    <div class="card-body" style="grid-template-columns: 1fr;">
+      <label class="check-row"><input type="checkbox" id="spectra-common" checked> Mesmo preparo para todos os espectros</label>
+      <span class="hint" id="spectra-common-hint">Recorte, suavização e detecção valem para todos os
+        arquivos do projeto. Desmarque para preparar cada arquivo de um jeito.</span>
+    </div>
+  </div>
 
   <details class="card enabled collapsible" id="card-transmission">
     <summary class="card-header"><span>Transmissão (dados brutos)</span>
@@ -387,8 +407,8 @@
       <span class="hint span2">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
         T = (S − D)/(R − D); só a fonte, T = S/R; só o fundo, S − D. Deixe os dois vazios para
         analisar o espectro como está — bruto ou já em transmissão, como as exportações do OceanView
-        em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima) e ficam
-        fora da evolução entre arquivos.</span>
+        em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima), aparecem
+        sem conversão e ficam fora da evolução entre arquivos.</span>
     </div>
   </details>
 
@@ -424,7 +444,7 @@
         </select>
       </label>
       <label class="field">Deslocamento vertical <input type="number" step="any" data-spec="offset"></label>
-      <button type="button" id="btn-copy-spectrum" class="btn-dashed span2">Aplicar este preparo a todos</button>
+      <button type="button" id="btn-copy-spectrum" class="btn-dashed span2 hidden">Aplicar este preparo a todos</button>
       <span class="hint span2">Savitzky-Golay preserva melhor a altura e a largura de picos estreitos;
         a média móvel suaviza mais, mas alarga e achata os picos. Use janelas bem menores que a FWHM.
         O deslocamento ajuda a empilhar espectros na mesma figura.</span>
@@ -505,29 +525,39 @@
         <select id="viz-source">
           <option value="series">Série no tempo (CSV processado)</option>
           <option value="spectra">Espectros (arquivos brutos)</option>
+          <option value="evolution">Evolução entre espectros (vale no tempo)</option>
         </select>
       </label>
-      <div class="span2 only-timeseries">
+      <div class="span2" data-for="series">
         <span class="hint">CSVs processados:</span>
         <div id="viz-series-sources" class="file-list"></div>
       </div>
-      <div class="span2 only-spectra hidden">
+      <div class="span2 hidden" data-for="spectra">
         <span class="hint">Arquivos de espectro (preparo na aba Espectros):</span>
         <div id="viz-spectra-sources" class="file-list"></div>
       </div>
-      <label class="field only-timeseries">Eixo X em
+      <label class="field span2 hidden" data-for="evolution">Grandeza no eixo Y
+        <select id="viz-evo-y">
+          <option value="wavelength">λ (nm)</option>
+          <option value="delta">Δλ em relação ao 1º (nm)</option>
+          <option value="intensity">intensidade no extremo</option>
+          <option value="prominence">profundidade / altura</option>
+          <option value="fwhm">largura (nm)</option>
+        </select>
+      </label>
+      <label class="field" data-for="series evolution">Eixo X em
         <select data-style="data.time_unit">
           <option value="s">segundos</option>
           <option value="min">minutos</option>
           <option value="h">horas</option>
         </select>
       </label>
-      <label class="field only-timeseries">Referência Δ (s)
+      <label class="field" data-for="series">Referência Δ (s)
         <input type="number" step="any" min="0" data-style="data.relative_window" placeholder="1º ponto">
       </label>
-      <label class="check-row only-timeseries"><input type="checkbox" data-style="data.relative_first"> Δ relativo ao início</label>
-      <label class="check-row only-timeseries"><input type="checkbox" data-style="data.to_pm"> nm → pm</label>
-      <label class="field span2 only-spectra hidden">Unidade da intensidade
+      <label class="check-row" data-for="series"><input type="checkbox" data-style="data.relative_first"> Δ relativo ao início</label>
+      <label class="check-row" data-for="series"><input type="checkbox" data-style="data.to_pm"> nm → pm</label>
+      <label class="field span2 hidden" data-for="spectra">Unidade da intensidade
         <input type="text" data-style="data.intensity_unit" placeholder="a.u.">
       </label>
       <label class="field">X mínimo <input type="number" step="any" data-style="data.x_min" placeholder="auto"></label>
@@ -893,6 +923,78 @@
       <span id="spectra-status">Selecione um arquivo de espectro.</span>
     </div>
     <div id="spectra-plot"></div>
+    <details class="card enabled collapsible" id="spectra-evolution" open>
+      <summary class="card-header"><span>Evolução entre arquivos</span>
+        <span class="card-state" id="evolution-state"></span></summary>
+      <div class="card-body" style="grid-template-columns: minmax(0, 1fr);">
+        <div class="analysis-options evolution-options">
+          <label class="field">Acompanhar
+            <select id="evo-kind" data-evo="kind"><option value="min">vales</option><option value="max">picos</option></select>
+          </label>
+          <label class="field" title="Perto do λ de referência: em cada arquivo, o extremo mais próximo do λ marcado (dentro da janela). Mais proeminente: a ressonância principal de cada arquivo. Todos os do 1º arquivo: cada extremo do 1º arquivo vira uma trilha.">Modo
+            <select id="evo-mode" data-evo="mode">
+              <option value="reference">perto do λ de referência</option>
+              <option value="prominent">o mais proeminente</option>
+              <option value="follow">todos os do 1º arquivo</option>
+            </select>
+          </label>
+          <label class="field" title="O vale a acompanhar. Marcar no gráfico ou digitar o valor passa o modo para “perto do λ de referência”.">λ de referência (nm)
+            <input type="number" id="evo-ref" data-evo="reference" step="any" min="0" placeholder="clique no gráfico">
+          </label>
+          <button type="button" id="btn-evo-pick" class="btn-secondary btn-sm"
+                  title="Depois, clique no gráfico do espectro, no vale que quer acompanhar (Esc cancela)">Marcar no gráfico</button>
+          <label class="field only-reference" title="Só procura o extremo a até esta distância do centro da busca. Vazio: sem limite, fica o mais próximo.">Janela ± (nm)
+            <input type="number" id="evo-window" data-evo="window" step="any" min="0" placeholder="sem limite">
+          </label>
+          <label class="check-row only-reference" title="Ligado: o centro da busca anda com o vale encontrado no arquivo anterior, para acompanhar um deslocamento maior que a janela. Desligado: a busca fica sempre no λ de referência."><input type="checkbox" id="evo-follow" data-evo="follow" checked> seguir a deriva</label>
+          <label class="field only-follow" title="Maior salto (nm) entre arquivos para uma trilha. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo.">Salto máximo (nm)
+            <input type="number" id="evo-tolerance" data-evo="tolerance" step="any" min="0" placeholder="auto">
+          </label>
+          <label class="field" title="Ajuste no fundo: parábola de mínimos quadrados pelos pontos do fundo do vale (±⅓ da largura), a mais precisa para vales largos e ruidosos. Vértice: parábola pelos 3 pontos do extremo. Centroide: centro de massa da região acima da meia altura.">Posição
+            <select id="evo-locate" data-evo="locate">
+              <option value="fit">ajuste no fundo</option>
+              <option value="vertex">vértice (3 pontos)</option>
+              <option value="centroid">centroide</option>
+            </select>
+          </label>
+        </div>
+        <div class="analysis-options evolution-options">
+          <label class="field">Eixo y
+            <select id="evo-y" data-evo="y">
+              <option value="wavelength">λ (nm)</option>
+              <option value="delta">Δλ em relação ao 1º (nm)</option>
+              <option value="intensity">intensidade no extremo</option>
+              <option value="prominence">profundidade / altura</option>
+              <option value="fwhm">largura (nm)</option>
+            </select>
+          </label>
+          <label class="field">Eixo x
+            <select id="evo-x" data-evo="x">
+              <option value="time">tempo decorrido (min)</option>
+              <option value="order">ordem dos arquivos</option>
+            </select>
+          </label>
+          <button type="button" id="btn-evolution" class="btn-secondary btn-sm">Recalcular</button>
+          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+          <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura</button>
+        </div>
+        <span class="hint" id="evolution-status">Usa os espectros do projeto em ordem de aquisição
+          (cabeçalho <code>Date:</code> ou hora no nome do arquivo, <code>..._09-30-15-250</code>).
+          Marque o λ de referência e clique no vale, no gráfico do espectro acima.</span>
+        <div id="evolution-plot"></div>
+        <div class="evolution-focus hidden" id="evolution-focus">
+          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior (na ordem da evolução)" aria-label="Espectro anterior">◀</button>
+          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte (na ordem da evolução)" aria-label="Espectro seguinte">▶</button>
+          <span id="evolution-focus-text"></span>
+          <button type="button" id="btn-evo-exclude" class="btn-link"></button>
+          <button type="button" id="btn-evo-restore" class="btn-link hidden"></button>
+        </div>
+        <details class="advanced" id="evolution-table-box">
+          <summary id="evolution-table-summary">Tabela</summary>
+          <div class="table-wrap"><table class="data-table" id="evolution-table"></table></div>
+        </details>
+      </div>
+    </details>
     <details class="card enabled collapsible hidden" id="spectra-results" open>
       <summary class="card-header">
         <span>Picos e vales</span>
@@ -929,6 +1031,10 @@
             <dt>λ (nm)</dt>
             <dd>Posição do extremo refinada por uma parábola nos 3 pontos em torno dele:
                 resolução abaixo do passo da grade do espectro.</dd>
+            <dt>λ ajuste (nm)</dt>
+            <dd>Vértice da parábola de mínimos quadrados pelos pontos do fundo do vale (ou do topo
+                do pico), a até ⅓ da largura de cada lado. Usa dezenas de pontos, então o ruído
+                pesa bem menos; é a posição padrão da evolução entre arquivos.</dd>
             <dt>Intensidade</dt>
             <dd>Valor no extremo (no pico ou no fundo do vale).</dd>
             <dt>Proeminência</dt>
@@ -964,48 +1070,6 @@
             normalização), não na versão decimada do gráfico.</span>
         </div>
         <div class="table-wrap"><table class="data-table" id="spectra-table"></table></div>
-      </div>
-    </details>
-    <details class="card enabled collapsible" id="spectra-evolution">
-      <summary class="card-header"><span>Evolução entre arquivos</span></summary>
-      <div class="card-body" style="grid-template-columns: 1fr;">
-        <div class="analysis-options evolution-options">
-          <label class="field">Acompanhar
-            <select id="evo-kind"><option value="min">vales</option><option value="max">picos</option></select>
-          </label>
-          <label class="field" title="Mais proeminente: a ressonância principal de cada arquivo. Seguir: cada extremo do 1º arquivo vira uma trilha, que fica com o extremo mais próximo em cada arquivo seguinte.">Modo
-            <select id="evo-mode">
-              <option value="prominent">o mais proeminente</option>
-              <option value="follow">seguir os do 1º arquivo</option>
-            </select>
-          </label>
-          <label class="field" title="Maior salto (nm) entre arquivos para uma trilha no modo seguir. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo.">Salto máximo (nm)
-            <input type="number" id="evo-tolerance" step="any" min="0" placeholder="auto">
-          </label>
-          <label class="field">Eixo y
-            <select id="evo-y">
-              <option value="wavelength">λ (nm)</option>
-              <option value="delta">Δλ em relação ao 1º (nm)</option>
-              <option value="intensity">intensidade no extremo</option>
-              <option value="prominence">profundidade / altura</option>
-              <option value="fwhm">largura (nm)</option>
-            </select>
-          </label>
-          <label class="field">Eixo x
-            <select id="evo-x">
-              <option value="time">tempo decorrido (min)</option>
-              <option value="order">ordem dos arquivos</option>
-            </select>
-          </label>
-          <button type="button" id="btn-evolution" class="btn-primary btn-sm">Calcular</button>
-          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
-        </div>
-        <span class="hint" id="evolution-status">Usa os espectros do projeto, cada um com o seu preparo
-          (recorte, suavização, tendência), em ordem de aquisição: cabeçalho <code>Date:</code> ou hora
-          no nome do arquivo (<code>..._09-30-15-250</code>). Para comparar, aplique o mesmo preparo a
-          todos.</span>
-        <div id="evolution-plot"></div>
-        <div class="table-wrap"><table class="data-table" id="evolution-table"></table></div>
       </div>
     </details>
     <div id="spectra-empty" class="empty-state">

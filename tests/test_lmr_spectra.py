@@ -242,3 +242,80 @@ def test_evolution_errors():
         spectra_evolution([{"key": "a", "acquired": None, "extrema": []}], mode="follow")
     with pytest.raises(ValueError, match="Modo"):
         spectra_evolution([{"key": "a", "acquired": None, "extrema": []}], mode="x")
+
+
+# ── λ de referência e posição do vale ────────────────────────────────────────
+
+def _vale(lam, prom=1.0, fit=None):
+    return {"type": "min", "wavelength": lam, "intensity": -prom, "prominence": prom,
+            "fwhm": 30.0, "fit": fit}
+
+
+def test_reference_mode_takes_the_valley_nearest_the_reference():
+    entradas = [
+        {"key": "a", "acquired": None, "extrema": [_vale(600, prom=5), _vale(800)]},
+        {"key": "b", "acquired": None, "extrema": [_vale(604, prom=5), _vale(796)]},
+        {"key": "c", "acquired": None, "extrema": [_vale(608, prom=5)]},       # o vale sumiu
+        {"key": "d", "acquired": None, "extrema": [_vale(612, prom=5), _vale(789)]},
+    ]
+    ev = spectra_evolution(entradas, mode="reference", reference=801, window=20, locate="vertex")
+    trilha = ev["tracks"][0]
+    assert trilha["key"] == "vale em λ ref" and "801,0" in trilha["name"].replace(".", ",")
+    assert [p and p["wavelength"] for p in trilha["points"]] == [800, 796, None, 789]
+    assert trilha["points"][3]["delta"] == -11
+    assert ev["reference"] == 801 and ev["window"] == 20 and ev["follow"] is True
+
+    # sem janela, o mais perto de 801 no arquivo c é o de 608, o único que existe
+    ev = spectra_evolution(entradas, mode="reference", reference=801, window=None)
+    assert ev["tracks"][0]["points"][2]["wavelength"] == 608
+
+
+def test_reference_mode_follows_a_drift_larger_than_the_window():
+    entradas = [{"key": str(i), "acquired": None, "extrema": [_vale(800 - 8 * i), _vale(600)]}
+                for i in range(6)]                          # anda 40 nm, 8 nm por arquivo
+    seguindo = spectra_evolution(entradas, mode="reference", reference=800, window=10)
+    assert [p["wavelength"] for p in seguindo["tracks"][0]["points"]] == [800, 792, 784, 776, 768, 760]
+
+    parado = spectra_evolution(entradas, mode="reference", reference=800, window=10, follow=False)
+    assert [p and p["wavelength"] for p in parado["tracks"][0]["points"]] == [800, 792, None, None, None, None]
+
+
+def test_reference_mode_needs_a_reference_and_a_positive_window():
+    entradas = [{"key": "a", "acquired": None, "extrema": [_vale(600)]}]
+    with pytest.raises(ValueError, match="λ de referência"):
+        spectra_evolution(entradas, mode="reference")
+    with pytest.raises(ValueError, match="maior que zero"):
+        spectra_evolution(entradas, mode="reference", reference=600, window=0)
+    with pytest.raises(ValueError, match="Posição"):
+        spectra_evolution(entradas, locate="x")
+
+
+def test_located_position_falls_back_to_the_vertex():
+    entradas = [{"key": "a", "acquired": None, "extrema": [_vale(600, fit=600.4)]},
+                {"key": "b", "acquired": None, "extrema": [_vale(610, fit=None)]}]
+    pontos = spectra_evolution(entradas, mode="prominent", locate="fit")["tracks"][0]["points"]
+    assert [(p["wavelength"], p["located"], p["vertex"]) for p in pontos] == [
+        (600.4, "fit", 600), (610, "vertex", 610)]
+    assert pontos[1]["delta"] == pytest.approx(9.6)
+
+
+def test_fit_locates_a_noisy_lmr_valley_better_than_three_points():
+    """O vale do LMR é largo (dezenas de nm): três pontos no fundo valem quase só ruído."""
+    preparo = resolve_spectrum_settings({"find_min": True, "lambda_min": 450, "lambda_max": 950,
+                                         "detrend": 2})
+    erros = {"wavelength": [], "fit": []}
+    for semente in range(30):
+        verdadeiro = 820 + 0.37 * semente
+        wl, y = prepare_spectrum(WAVELENGTH, transmission(verdadeiro, noise=0.05, seed=semente), preparo)
+        vale = max(analyse_spectrum(wl, y, preparo)["extrema"], key=lambda e: e["prominence"])
+        for campo in erros:
+            erros[campo].append(vale[campo] - verdadeiro)
+    assert np.std(erros["fit"]) < 0.25 * np.std(erros["wavelength"])
+    assert np.abs(erros["fit"]).max() < 0.6
+
+
+def test_fit_of_a_narrow_peak_uses_at_least_five_points():
+    wl = np.linspace(1549.0, 1551.0, 201)                   # passo de 10 pm
+    y = np.exp(-0.5 * ((wl - 1550.0123) / 0.08) ** 2)       # FBG: FWHM ≈ 0,19 nm
+    pico = analyse_spectrum(wl, y, resolve_spectrum_settings({"find_max": True}))["extrema"][0]
+    assert pico["fit"] == pytest.approx(1550.0123, abs=0.002)

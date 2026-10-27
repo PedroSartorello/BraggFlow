@@ -577,7 +577,6 @@ body.no-spectra #spectra-results { display: none !important; }
 .sensor-row + .sensor-row { border-top: 1px solid var(--border); padding-top: 8px; }
 .evolution-options { flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
 .evolution-options .field { min-width: 120px; }
-#evolution-plot { min-height: 320px; }
 .sensor-caption { grid-column: 1 / -1; font-size: 11px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
 .sensor-caption .sensor-hide { margin-left: auto; font-size: 11px; }
 .sensor-row.is-hidden > input { display: none; }
@@ -586,3 +585,42 @@ body.no-spectra #spectra-results { display: none !important; }
 .hidden-sensors > summary { cursor: pointer; }
 #hidden-sensor-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .step-note { grid-column: 1 / -1; }
+
+/* ── Espectros: muitos arquivos e a evolução do vale ─────────────────── */
+#tab-spectra-main { overflow-y: auto; }
+#tab-spectra-main #spectra-plot { flex: 0 0 auto; height: 44vh; min-height: 300px; }
+#tab-spectra-main > .card { flex: 0 0 auto; }
+#spectra-results { max-height: none; }
+#spectra-results .table-wrap, #evolution-table-box .table-wrap { max-height: 42vh; overflow: auto; }
+body.no-spectra #spectra-evolution { display: none !important; }
+#evolution-plot { height: 340px; }
+.files-head { display: flex; flex-direction: column; gap: 6px; }
+.files-head .hint:empty { display: none; }
+.list-filter {
+  width: 100%; padding: 6px 9px; font: inherit; font-size: 12px; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface);
+}
+.list-filter:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.scroll-list { max-height: 260px; overflow-y: auto; }
+.file-row.excluded .file-name { color: var(--muted); text-decoration: line-through; }
+.picker-group {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  margin-top: 6px; padding: 3px 2px; font-size: 11.5px; font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.picker-group span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-group .btn-link { flex: 0 0 auto; font-size: 11.5px; }
+.upload-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.upload-row label { cursor: pointer; }
+.file-hidden { display: none; }
+.empty-folder span:first-child { font-weight: 600; }
+#spectra-plot.picking, #spectra-plot.picking .nsewdrag { cursor: crosshair !important; }
+#btn-evo-pick.on { background: #fdf0e6; border-color: #e67e22; color: #a14d0e; }
+.evolution-focus { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
+.evolution-focus #evolution-focus-text { flex: 1 1 260px; min-width: 0; }
+.focus-step {
+  width: 26px; height: 24px; line-height: 1; font-size: 10px; border-radius: 6px;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+}
+.focus-step:hover { border-color: var(--accent); color: var(--accent); }
+

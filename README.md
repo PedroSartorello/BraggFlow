@@ -257,17 +257,22 @@ Three tabs, each with its own data and settings:
   The plot shows one panel per channel or all on the same plot (optionally
   relative to the start), and dragging with "Medir trecho" gives the
   statistics of that stretch for every channel.
-* **Espectros** — import several spectrum files (OSA, or spectrometer exports
-  such as OceanView, with or without header); each has its own preparation
-  (optional transmission from raw sample, source and dark spectra, wavelength
-  window, Savitzky-Golay or moving-average smoothing, trend removal,
-  normalisation and vertical offset), shown in a live plot, plus detection of
-  maxima and minima with position, prominence, FWHM or 3-dB band, Q factor,
-  centroid and spacing, and the evolution of the valleys (or peaks) from file
-  to file in acquisition order.
-* **Figura** — build the figure from either source: channels from one or
-  several processed CSVs, or traces from one or several spectra. Curves from
-  more than one file are named `arquivo · canal`. Saved style, size and font
+* **Espectros** — import spectrum files one by one or a whole folder at once
+  (OSA, or spectrometer exports such as OceanView, with or without header);
+  one preparation for all of them or one per file (optional transmission from
+  raw sample, source and dark spectra, wavelength window, Savitzky-Golay or
+  moving-average smoothing, trend removal, normalisation and vertical offset),
+  shown in a live plot, plus detection of maxima and minima with position,
+  prominence, FWHM or 3-dB band, Q factor, centroid and spacing. The evolution
+  of a valley from file to file, in acquisition order, follows the valley you
+  mark on the plot (reference wavelength, search window, drift), the most
+  prominent one or all of them, with the position from a parabola fitted to
+  the bottom of the valley; click a point to see its spectrum, leave outliers
+  out, and turn it into a figure.
+* **Figura** — build the figure from any source: channels from one or
+  several processed CSVs, traces from one or several spectra, or the
+  evolution of a valley between spectra. Curves from more than one file are
+  named `arquivo · canal`. Saved style, size and font
   come first; changed options are marked and searchable; the figure can be
   copied to the clipboard.
 

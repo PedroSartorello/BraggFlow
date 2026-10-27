@@ -1014,3 +1014,119 @@ def test_process_leaves_hidden_columns_out_of_the_csv(webapp):
     assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],S1 [nm]"
     meta = read_metadata(csv)
     assert [s["hidden"] for s in meta["setup"]["sensors"]] == [False, True]
+
+
+def _dois_vales(pasta, ressonancias, segundo=600.0):
+    """Série LMR com um segundo vale fixo em ``segundo`` nm, mais raso que o principal."""
+    from .lmr_synthetic import WAVELENGTH, lmr_series
+
+    return lmr_series(pasta, resonances=ressonancias,
+                      extra=2.5 / (1.0 + ((WAVELENGTH - segundo) / 15.0) ** 2))
+
+
+def test_evolution_tracks_the_valley_near_the_reference_wavelength(webapp):
+    dados, client = webapp
+    caminhos = _dois_vales(dados.raw, (870.0, 866.0, 862.0))
+    items = [{"file": f"data/raw/{c.name}"} for c in caminhos]
+    pedido = {"items": items, "settings": LMR_PREPARO, "kind": "min"}
+
+    principal = client.post("/api/spectra/evolution", json={**pedido, "mode": "prominent"}).get_json()
+    assert [p["wavelength"] for p in principal["tracks"][0]["points"]] == pytest.approx([870, 866, 862], abs=1)
+
+    data = client.post("/api/spectra/evolution",
+                       json={**pedido, "mode": "reference", "reference": "605", "window": "20"}).get_json()
+    assert data["mode"] == "reference" and data["reference"] == 605 and data["warnings"] == []
+    pontos = data["tracks"][0]["points"]
+    assert [p["wavelength"] for p in pontos] == pytest.approx([600, 600, 600], abs=1)
+    assert {p["located"] for p in pontos} == {"fit"}, "o ajuste no fundo é o padrão"
+
+    data = client.post("/api/spectra/evolution",
+                       json={**pedido, "mode": "reference", "reference": "700", "window": "20"}).get_json()
+    assert data["tracks"][0]["points"] == [None, None, None]
+    assert any("Nenhum vale na janela em 3" in a for a in data["warnings"])
+
+    resp = client.post("/api/spectra/evolution", json={**pedido, "mode": "reference"})
+    assert resp.status_code == 400 and "λ de referência" in resp.get_json()["error"]
+
+
+def test_evolution_ignores_unreadable_files_and_uses_the_common_settings(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    items = ([{"file": f"data/raw/{c.name}"} for c in caminhos]
+             + [{"file": "data/raw/ensaio.ASC"}, {"file": None}, {"file": f"data/raw/{caminhos[0].name}"}])
+    data = client.post("/api/spectra/evolution",
+                       json={"items": items, "settings": LMR_PREPARO, "mode": "prominent"}).get_json()
+    assert len(data["files"]) == 3, "o repetido entra uma vez só"
+    assert [i["file"] for i in data["skipped"]] == ["data/raw/ensaio.ASC", ""]
+    assert any("2 arquivo(s) ignorado(s)" in a for a in data["warnings"])
+    assert [p["wavelength"] for p in data["tracks"][0]["points"]] == pytest.approx([870, 866, 862], abs=1)
+
+    resp = client.post("/api/spectra/evolution", json={"items": items[2:5], "settings": LMR_PREPARO})
+    assert resp.status_code == 400 and "Não deu para ler" in resp.get_json()["error"]
+
+
+def test_evolution_reuses_the_analysed_spectra(webapp, monkeypatch):
+    import braggflow.webapp.app as modulo
+
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    chamadas = []
+    original = modulo.analyse_spectrum
+    monkeypatch.setattr(modulo, "analyse_spectrum", lambda *a, **k: chamadas.append(1) or original(*a, **k))
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "settings": LMR_PREPARO}
+
+    client.post("/api/spectra/evolution", json={**pedido, "mode": "prominent"})
+    client.post("/api/spectra/evolution", json={**pedido, "mode": "reference", "reference": 866})
+    client.post("/api/spectra/evolution", json={**pedido, "mode": "follow", "locate": "centroid"})
+    assert len(chamadas) == 3, "trocar o modo não reanalisa"
+
+    client.post("/api/spectra/evolution", json={**pedido, "settings": {**LMR_PREPARO, "smooth_window": 31}})
+    assert len(chamadas) == 6, "outro preparo, outra análise"
+    caminhos[0].write_text(caminhos[0].read_text(encoding="utf-8") + "\r\n", encoding="utf-8")
+    client.post("/api/spectra/evolution", json={**pedido, "mode": "prominent"})
+    assert len(chamadas) == 7, "arquivo alterado é lido de novo"
+
+
+def test_upload_takes_many_files_and_keeps_the_folder(webapp):
+    dados, client = webapp
+    resp = client.post("/api/upload", content_type="multipart/form-data", data={"file": [
+        (io.BytesIO(b"500\t1\n501\t2\n"), "LMR dia 1/a.txt"),
+        (io.BytesIO(b"500\t1\n501\t2\n"), "LMR dia 1/sub/b.txt"),
+        (io.BytesIO(b"x"), "LMR dia 1/notas.docx"),
+        (io.BytesIO(b"500\t1\n"), "../../fora.txt"),
+    ]})
+    data = resp.get_json()
+    assert resp.status_code == 200, data
+    assert data["files"] == ["data/uploads/LMR dia 1/a.txt", "data/uploads/LMR dia 1/sub/b.txt",
+                             "data/uploads/fora.txt"]
+    assert len(data["errors"]) == 1 and "notas.docx" in data["errors"][0]
+    assert (dados.uploads / "LMR dia 1" / "sub" / "b.txt").is_file()
+
+    listados = [f["path"] for f in client.get("/api/files").get_json()["files"]]
+    assert {"data/uploads/LMR dia 1/a.txt", "data/uploads/LMR dia 1/sub/b.txt"} <= set(listados)
+
+
+def test_evolution_figure(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    evolucao = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos],
+                "settings": LMR_PREPARO, "mode": "prominent", "y": "delta"}
+    pedido = {"source": "evolution", "evolution": evolucao, "markers": [{"time": "100", "label": "água"}],
+              "style": {"data": {"time_unit": "min"}}}
+    resp = client.post("/api/figure", json=pedido)
+    assert resp.status_code == 200, resp.get_json()
+    assert resp.get_json()["image"]
+
+    resp = client.post("/api/figure/download", json={**pedido, "style": {"export": {"format": "svg"}}})
+    assert resp.status_code == 200
+    assert "filename=evolucao_figura.svg" in resp.headers["Content-Disposition"]
+
+    resp = client.post("/api/figure", json={**pedido, "tracks": ["outra"]})
+    assert resp.status_code == 400 and "trilha" in resp.get_json()["error"]
+    assert client.post("/api/analysis", json=pedido).status_code == 400

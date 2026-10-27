@@ -209,6 +209,11 @@ def preparar_lmr(page: Page) -> None:
     page.check('[data-spec="find_min"]')
 
 
+def lambdas_da_evolucao(page: Page) -> list[float]:
+    textos = page.locator("#evolution-table tbody tr td:nth-child(4)").all_text_contents()
+    return [float(t.replace(",", ".")) for t in textos]
+
+
 def test_lmr_valleys_follow_the_files_in_time_order(lmr, app):
     novo_projeto(app, "LMR")
     app.click('#tabs .tab[data-tab="spectra"]')
@@ -220,19 +225,17 @@ def test_lmr_valleys_follow_the_files_in_time_order(lmr, app):
     app.click("#btn-add-spectra")
     expect(app.locator("#spectra-files .file-name")).to_have_count(3)
 
-    preparar_lmr(app)
+    preparar_lmr(app)                          # o mesmo preparo vale para os três
     expect(app.locator("#spectra-results")).to_be_visible()
-    app.click("#btn-copy-spectrum")
-    app.locator("#spectra-evolution > summary").click()
+    expect(app.locator("#btn-copy-spectrum")).to_be_hidden()
 
     expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s) · 1 trilha(s)")
+    app.locator("#evolution-table-box > summary").click()
     linhas = app.locator("#evolution-table tbody tr")
     expect(linhas).to_have_count(3)
     expect(linhas.nth(0)).to_contain_text("09:30:15")
-    lams = [float(t.replace(",", ".")) for t in app.locator(
-        "#evolution-table tbody tr td:nth-child(4)").all_inner_texts()]
-    assert lams == pytest.approx([870, 866, 862], abs=1.5)
-    assert curvas(app, "evolution-plot") == ["vale mais proeminente"]
+    assert lambdas_da_evolucao(app) == pytest.approx([870, 866, 862], abs=1.5)
+    assert curvas(app, "evolution-plot")[0] == "vale mais proeminente"
 
 
 def test_raw_spectrum_becomes_transmission_with_source_and_dark(lmr, app):
@@ -270,15 +273,13 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
             app.click("#btn-add-spectra")
         expect(app.locator("#spectra-files .file-name")).to_have_count(len(nomes))
         preparar_lmr(app)
-        app.click("#btn-copy-spectrum")
 
     def arquivos_da_evolucao():
-        return app.locator("#evolution-table tbody tr td:nth-child(1)").all_inner_texts()
+        return app.locator("#evolution-table tbody tr td:nth-child(1)").all_text_contents()
 
     nomes_a = [c.name for c in lmr]
     novo_projeto(app, "A")
     adicionar_espectros(nomes_a)
-    app.locator("#spectra-evolution > summary").click()
     expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
     salvar_projeto(app)
 
@@ -299,7 +300,6 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
     app.reload()
     novo_projeto(app, "B")
     adicionar_espectros(nomes_b)
-    app.locator("#spectra-evolution > summary").click()          # a página recarregada fecha o cartão
     expect(app.locator("#evolution-table tbody tr")).to_have_count(2)
     assert arquivos_da_evolucao() == nomes_b
     salvar_projeto(app)
@@ -314,6 +314,127 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
     expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
     assert arquivos_da_evolucao() == nomes_a
     expect(app.locator("#error-bar")).to_be_empty()            # projeto só de espectros: nada faltando
+
+
+@pytest.fixture
+def pasta_lmr(data_dir):
+    """Uma pasta de ensaio com três espectros: a ressonância anda e um 2º vale fica em 600 nm."""
+    from ..lmr_synthetic import WAVELENGTH, lmr_series
+    return lmr_series(data_dir / "raw" / "ensaio LMR", resonances=(870.0, 866.0, 862.0),
+                      extra=2.5 / (1.0 + ((WAVELENGTH - 600.0) / 15.0) ** 2))
+
+
+def clicar_no_espectro(page: Page, lam: float) -> None:
+    """Clique no gráfico do espectro na altura de ``lam`` nm."""
+    x, y = page.evaluate("""(lam) => {
+        const gd = document.getElementById('spectra-plot');
+        const xa = gd._fullLayout.xaxis, ya = gd._fullLayout.yaxis, r = gd.getBoundingClientRect();
+        return [r.left + xa._offset + xa.l2p(lam), r.top + ya._offset + ya._length / 2];
+    }""", lam)
+    page.mouse.click(x, y)
+
+
+def test_reference_wavelength_is_marked_on_the_spectrum_and_tracked(pasta_lmr, app):
+    novo_projeto(app, "Referência")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder", has_text="ensaio LMR").click()   # a pasta inteira
+    expect(app.locator("#spectra-files .file-name")).to_have_count(3)
+    expect(app.locator("#spectra-files-summary")).to_have_text("3 espectro(s)")
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+    app.locator("#evolution-table-box > summary").click()
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+    assert lambdas_da_evolucao(app) == pytest.approx([870, 866, 862], abs=1)   # o mais proeminente
+
+    app.click("#btn-evo-pick")
+    expect(app.locator("#spectra-status")).to_contain_text("Clique no vale")
+    clicar_no_espectro(app, 607)              # perto do vale: o clique vai para ele
+    expect(app.locator("#evo-mode")).to_have_value("reference")
+    assert float(app.input_value("#evo-ref")) == pytest.approx(600, abs=1)
+    expect(app.locator("#evolution-state")).to_contain_text("vale perto de")
+    app.wait_for_function("document.getElementById('evolution-status').textContent.includes('Δλ do 1º ao último 0')"
+                          " || document.getElementById('evolution-status').textContent.includes('Δλ do 1º ao último -0')")
+    assert lambdas_da_evolucao(app) == pytest.approx([600, 600, 600], abs=1)
+    linha = "document.getElementById('spectra-plot').layout.shapes.filter((s) => s.type === 'line').length"
+    assert app.evaluate(linha) == 1, "a linha do λ de referência fica no gráfico"
+
+    salvar_projeto(app)
+    app.reload()
+    app.locator("#gate-projects .gate-row", has_text="Referência").click()
+    app.click('#tabs .tab[data-tab="spectra"]')
+    expect(app.locator("#evo-mode")).to_have_value("reference")
+    expect(app.locator("#evolution-state")).to_contain_text("vale perto de")
+    assert float(app.input_value("#evo-ref")) == pytest.approx(600, abs=1)
+    expect(app.locator("#spectra-common")).to_be_checked()
+
+
+def test_evolution_point_opens_its_spectrum_and_can_leave_the_evolution(pasta_lmr, app):
+    novo_projeto(app, "Pontos")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    terceiro = pasta_lmr[2].name
+    x, y = app.evaluate("""() => {
+        const gd = document.getElementById('evolution-plot');
+        const xa = gd._fullLayout.xaxis, ya = gd._fullLayout.yaxis;
+        gd.scrollIntoView({block: 'center'});
+        const r = gd.getBoundingClientRect();
+        return [r.left + xa._offset + xa.l2p(gd.data[0].x[2]), r.top + ya._offset + ya.l2p(gd.data[0].y[2])];
+    }""")
+    app.mouse.click(x, y)
+    expect(app.locator("#spectra-files .file-row.selected .file-name")).to_have_text(terceiro)
+    expect(app.locator("#evolution-focus-text")).to_contain_text(terceiro)
+    expect(app.locator("#evolution-focus-text")).to_contain_text("Δλ")
+
+    app.click("#btn-evo-exclude")                       # tira da evolução, não do projeto
+    expect(app.locator("#evolution-status")).to_contain_text("2 espectro(s)")
+    expect(app.locator("#spectra-files .file-row.excluded")).to_have_count(1)
+    expect(app.locator("#spectra-files-summary")).to_contain_text("1 fora da evolução")
+    expect(app.locator("#btn-evo-exclude")).to_have_text("Devolver à evolução")
+    app.click("#btn-evo-exclude")
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    app.click("#btn-evo-prev")                           # ◀: o anterior, na ordem da evolução
+    expect(app.locator("#spectra-files .file-row.selected .file-name")).to_have_text(pasta_lmr[1].name)
+
+
+def test_evolution_becomes_a_figure(pasta_lmr, app):
+    novo_projeto(app, "Figura da evolução")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    app.click("#btn-evolution-figure")
+    expect(app.locator("#viz-source")).to_have_value("evolution")
+    expect(app.locator("#viz-img")).to_be_visible()
+    expect(app.locator("#viz-status")).to_contain_text("1 curva(s)")
+    expect(app.locator(".viz-ch-row")).to_have_count(1)
+    expect(app.locator("#viz-evo-y")).to_be_visible()
+    expect(app.locator('[data-style="data.to_pm"]')).to_be_hidden()          # só para séries
+
+    antes = app.get_attribute("#viz-img", "src")
+    app.select_option("#viz-evo-y", "delta")                                # o mesmo eixo y da aba Espectros
+    app.wait_for_function("(antes) => document.getElementById('viz-img').src !== antes", arg=antes)
+    expect(app.locator("#evo-y")).to_have_value("delta")
+
+
+def test_a_folder_of_spectra_is_imported_at_once(data_dir, tmp_path, app):
+    from ..lmr_synthetic import lmr_series
+    pasta = tmp_path / "LMR 13-10"
+    lmr_series(pasta, resonances=(870.0, 866.0, 862.0, 858.0))
+    (pasta / "anotacoes.docx").write_bytes(b"x")         # fica de fora sem erro
+
+    novo_projeto(app, "Pasta")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-add > summary").click()
+    app.set_input_files("#spectra-upload-dir", pasta)
+    expect(app.locator("#spectra-files .file-name")).to_have_count(4)
+    expect(app.locator("#spectra-status")).to_contain_text("1 arquivo(s) da pasta não são de dados")
+    assert len(list((data_dir / "uploads" / "LMR 13-10").glob("*.txt"))) == 4
+    expect(app.locator("#evolution-status")).to_contain_text("4 espectro(s)")
 
 
 # ── disposição do gráfico e medição de trechos ───────────────────────────────

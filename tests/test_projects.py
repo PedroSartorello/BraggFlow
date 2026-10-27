@@ -110,10 +110,31 @@ def test_spectrum_settings_are_validated_per_file():
         {"file": "data/raw/H2O.dat"},
     ])
     assert project.spectra_files[0]["settings"]["smooth_window"] == 41
-    assert project.spectra_files[1]["settings"]["normalize"] == "none"
+    assert project.spectra_files[1]["settings"] is None, "sem preparo próprio: usa o comum"
 
     with pytest.raises(ValueError, match=r"\[AR.dat\] Normalização"):
         _project(spectra_files=[{"file": "data/raw/AR.dat", "settings": {"normalize": "x"}}])
+
+
+def test_common_spectrum_settings_exclusions_and_evolution_are_kept():
+    project = _project(
+        spectra_files=[{"file": "data/raw/a.txt", "exclude": True}, {"file": "data/raw/b.txt"}],
+        spectra_common=True, spectra_settings={"smooth_window": "21", "detrend": "2"},
+        evolution={"mode": "reference", "reference": "870,5", "window": "15"},
+        source="evolution",
+    )
+    dados = Project.from_dict(project.to_dict())
+    assert dados.spectra_common is True
+    assert dados.spectra_settings["smooth_window"] == 21 and dados.spectra_settings["detrend"] == 2
+    assert [e["exclude"] for e in dados.spectra_files] == [True, False]
+    assert dados.evolution["reference"] == 870.5 and dados.evolution["window"] == 15
+    assert dados.evolution["locate"] == "fit" and dados.source == "evolution"
+
+    antigo = _project(spectra_files=[{"file": "data/raw/a.txt", "settings": {}}])
+    assert antigo.spectra_common is None, "projeto de antes da opção: a página decide ao abrir"
+
+    with pytest.raises(ValueError, match="Modo"):
+        _project(evolution={"mode": "x"})
 
 
 def test_viz_sources_are_kept():

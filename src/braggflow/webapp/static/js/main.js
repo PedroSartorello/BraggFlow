@@ -19,8 +19,9 @@ $("card-markers").addEventListener("change", (e) => {
 
 $("sidebar").addEventListener("change", async (e) => {
   const el = e.target;
-  if (el.matches(".pick-series, .pick-spectrum, #auto-process, #file-upload, #spectra-upload")) return;
+  if (el.matches(".pick-series, .pick-spectrum, .list-filter, #auto-process, #file-upload, #spectra-upload, #spectra-upload-dir")) return;
   markProjectDirty();
+  if (el.closest("#tab-spectra-sidebar")) return;   // espectros: spectra.js cuida (não reprocessa as séries)
   if (el.closest("#tab-viz-sidebar")) {
     await onVizChange(el);  // aba de visualização: atualiza a figura, não o processamento
     return;
