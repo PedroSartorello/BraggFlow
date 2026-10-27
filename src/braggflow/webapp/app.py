@@ -18,6 +18,7 @@ import base64
 import io
 import json
 import mimetypes
+import re
 import shutil
 import threading
 import uuid
@@ -49,20 +50,22 @@ from braggflow.projects import Project
 from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
 from braggflow.sensors import SensorSetup
 from braggflow.processing.spectra import (
-    EVOLUTION_MODES,
     NORMALIZATIONS,
     TRANSMISSION_OUTPUTS,
     analyse_spectrum,
     apply_transmission,
     default_spectrum_settings,
     prepare_spectrum,
+    resolve_evolution_options,
     resolve_spectrum_settings,
     spectra_evolution,
     transmission_unit,
 )
 from braggflow.visualization.figure import (
     CHANNEL_LINESTYLES,
+    TIME_DIVISORS,
     channel_values,
+    evolution_labels,
     marker_offset,
     render_curve_figure,
     series_labels,
@@ -99,9 +102,16 @@ FIGURE_MIMETYPES = {"pdf": "application/pdf", "png": "image/png", "svg": "image/
 # Máximo de pontos por canal enviados ao gráfico (o processamento usa tudo)
 MAX_PLOT_POINTS = 8000
 
+# Na evolução, todos os extremos de cada espectro entram na busca (o "máximo
+# por tipo" do preparo é para a tabela)
+EVOLUTION_MAX_PEAKS = 500
+
+# Subpastas guardadas quando uma pasta inteira é enviada (pasta/sub/arquivo)
+MAX_UPLOAD_DEPTH = 3
+
 # Mude junto com o literal API_BUILD em static/js/core.js sempre que as
 # rotas mudarem: é assim que a página percebe um servidor ainda sem reiniciar.
-API_BUILD = "2026-10-14"
+API_BUILD = "2026-10-27"
 
 bp = Blueprint("braggflow", __name__)
 
@@ -145,14 +155,17 @@ def _list_raw_files() -> list[dict]:
     """
     Arquivos brutos disponíveis, com o tipo de conteúdo de cada um:
     ``timeseries`` (pico por canal no tempo) ou ``spectrum`` (intensidade por
-    comprimento de onda).
+    comprimento de onda). Inclui as subpastas (uma pasta por ensaio, ou uma
+    pasta enviada inteira), menos as ocultas.
     """
     files = []
     for folder in (_data().raw, _data().uploads):
         if not folder.is_dir():
             continue
-        for f in sorted(folder.iterdir()):
+        for f in sorted(folder.rglob("*")):
             if not (f.is_file() and f.suffix.lower() in RAW_EXTENSIONS):
+                continue
+            if any(parte.startswith(".") for parte in f.relative_to(folder).parts):
                 continue
             stat = f.stat()
             files.append({
@@ -196,6 +209,161 @@ def _acquisition(spectra) -> dict:
     texto = (quando.time().isoformat(timespec="milliseconds") if spectra.acquired_from == "filename"
              else quando.isoformat(timespec="milliseconds"))
     return {"acquired": texto, "acquired_from": spectra.acquired_from}
+
+
+def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
+    """
+    Extremos de um espectro já preparado, com a unidade e o instante da
+    aquisição. Ficam guardados pelo arquivo, pela fonte e pelo fundo (caminho,
+    data e tamanho), pelo traço e pelo preparo: recalcular a evolução com
+    outro λ de referência ou outro modo não relê nem reanalisa nada.
+    """
+    deps = [path] + [_resolve_data_file(settings[k])
+                     for k in ("reference_file", "dark_file") if settings.get(k)]
+    cache = _state().analyses
+    chave = cache.key({"trace": trace, "settings": settings}, deps)
+    pronto = cache.get(chave)
+    if pronto is None:
+        spectra = _state().spectra.get(path)
+        nome = trace or (spectra.names[0] if spectra.names else "")
+        spectrum = spectra.get(nome)
+        if spectrum is None:
+            raise ValueError(f"Traço '{nome}' não encontrado em {path.name}.")
+        wavelength, intensity = _prepared(spectrum, settings)
+        pronto = {
+            "extrema": analyse_spectrum(wavelength, intensity, settings)["extrema"],
+            "unit": transmission_unit(settings, spectra.intensity_unit),
+            "acquired": spectra.acquired,
+            "acquired_from": spectra.acquired_from,
+            "multi_trace": len(spectra.spectra) > 1,
+            "trace": nome,
+        }
+        cache.put(chave, pronto)
+    return pronto
+
+
+def _compute_evolution(options: dict) -> dict:
+    """
+    Evolução dos vales (ou picos) dos espectros pedidos, para a aba Espectros
+    e para a figura. ``options``: ``items`` (``[{file, trace?, settings?}]``),
+    ``settings`` (o preparo comum, para os itens sem preparo próprio) e as
+    opções de :data:`EVOLUTION_SPEC`.
+
+    Um arquivo que não dá para ler ou preparar não derruba o cálculo: fica de
+    fora e aparece em ``skipped`` e nos avisos.
+    """
+    opts = resolve_evolution_options(options)
+    comum = options.get("settings") or {}
+    kind = opts["kind"]
+    entradas, unidades, ignorados, vistos = [], set(), [], set()
+    for item in options.get("items") or []:
+        arquivo = str(item.get("file") or "")
+        trace = str(item.get("trace") or "")
+        if (arquivo, trace) in vistos:
+            continue
+        vistos.add((arquivo, trace))
+        try:
+            path = _resolve_data_file(arquivo)
+            settings = resolve_spectrum_settings(
+                {**(item.get("settings") or comum), "find_min": kind == "min",
+                 "find_max": kind == "max", "max_peaks": EVOLUTION_MAX_PEAKS},
+                prefix=f"[{path.name}] ")
+            pronto = _spectrum_extrema(path, trace, settings)
+        except Exception as e:
+            ignorados.append({"file": arquivo, "error": str(e)})
+            continue
+        rel = _rel(path)
+        unidades.add(pronto["unit"])
+        entradas.append({**pronto, "file": rel,
+                         "key": f"{rel} · {pronto['trace']}" if pronto["multi_trace"] else rel})
+
+    if len(entradas) < 2:
+        motivo = ""
+        if ignorados:
+            motivo = " Não deu para ler: " + "; ".join(
+                f"{Path(i['file']).name or '(sem nome)'} ({i['error']})" for i in ignorados[:3])
+        raise ValueError("Escolha dois ou mais espectros para ver a evolução." + motivo)
+
+    resultado = spectra_evolution(entradas, kind=kind, mode=opts["mode"],
+                                  tolerance=opts["tolerance"], reference=opts["reference"],
+                                  window=opts["window"], follow=opts["follow"],
+                                  locate=opts["locate"])
+
+    origem = {e["key"]: e for e in entradas}
+    for arquivo in resultado["files"]:
+        e = origem[arquivo["key"]]
+        arquivo["file"] = e["file"]
+        arquivo["acquired_from"] = e["acquired_from"]
+        if e["acquired_from"] == "filename" and arquivo["acquired"]:
+            arquivo["acquired"] = arquivo["acquired"].split("T")[1]     # só a hora
+
+    nome = "vale" if kind == "min" else "pico"
+    avisos = []
+    if ignorados:
+        nomes = ", ".join(Path(i["file"]).name or "(sem nome)" for i in ignorados[:3])
+        mais = f" e mais {len(ignorados) - 3}" if len(ignorados) > 3 else ""
+        avisos.append(f"{len(ignorados)} arquivo(s) ignorado(s) por erro de leitura: {nomes}{mais}.")
+    if resultado["x"] == "order":
+        avisos.append("Nem todos os arquivos têm o instante da aquisição (cabeçalho Date: "
+                      "ou hora no nome); a evolução está na ordem dos arquivos.")
+    elif len({e["acquired_from"] == "filename" for e in entradas}) > 1:
+        avisos.append("Alguns instantes vêm do cabeçalho e outros só do nome do arquivo "
+                      "(sem data): o tempo decorrido supõe que todos são do mesmo dia.")
+    if len(unidades) > 1:
+        avisos.append("Os espectros estão em unidades diferentes (" + ", ".join(sorted(unidades))
+                      + "): confira o preparo de cada arquivo.")
+    if opts["mode"] != "follow":
+        vazios = sum(p is None for p in resultado["tracks"][0]["points"])
+        if vazios:
+            onde = " na janela" if opts["mode"] == "reference" and opts["window"] else ""
+            avisos.append(f"Nenhum {nome}{onde} em {vazios} espectro(s): o ponto fica vazio.")
+    if opts["locate"] != "vertex":
+        sem = sum(1 for t in resultado["tracks"] for p in t["points"]
+                  if p is not None and p["located"] != opts["locate"])
+        if sem:
+            metodo = "o ajuste no fundo" if opts["locate"] == "fit" else "o centroide"
+            avisos.append(f"Sem {metodo} em {sem} ponto(s): ficou o vértice de 3 pontos.")
+    resultado.update({"unit": unidades.pop() if len(unidades) == 1 else "", "warnings": avisos,
+                      "skipped": ignorados})
+    return resultado
+
+
+def _evolution_items(options: dict, style: dict, markers: list):
+    """
+    Curvas da evolução para a figura: uma por trilha marcada, com a grandeza
+    escolhida (``y`` das opções) contra o tempo desde o primeiro espectro, na
+    unidade da figura, ou contra o número do espectro. As marcações estão em
+    segundos desde o primeiro espectro. Retorna ``(items, xlabel, ylabel,
+    divisor, markers)``.
+    """
+    pedido = options.get("evolution") or {}
+    opts = resolve_evolution_options(pedido)
+    resultado = _compute_evolution(pedido)
+    data_s = style["data"]
+    por_tempo = resultado["x"] == "time" and opts["x"] == "time"
+    if por_tempo:
+        offset = marker_offset(markers, data_s)
+        markers = shift_markers(markers, offset)
+        divisor = TIME_DIVISORS[data_s["time_unit"]]
+        x = (np.array([f["elapsed_s"] for f in resultado["files"]], dtype=float) - offset) / divisor
+    else:
+        markers, divisor = [], 1.0          # sem tempo, as marcações não têm onde ficar
+        x = np.array([f["index"] for f in resultado["files"]], dtype=float)
+
+    marcadas = options.get("tracks")
+    items = []
+    for trilha in resultado["tracks"]:
+        if marcadas is not None and trilha["key"] not in marcadas:
+            continue
+        y = np.array([np.nan if p is None or p.get(opts["y"]) is None else p[opts["y"]]
+                      for p in trilha["points"]], dtype=float)
+        items.append({"key": trilha["key"], "label": trilha["name"], "x": x, "y": y})
+    if not items:
+        raise ValueError("Marque pelo menos uma trilha da evolução.")
+    xlabel, ylabel = evolution_labels(opts["y"], resultado["unit"], resultado["kind"],
+                                      data_s["time_unit"] if por_tempo else None,
+                                      style["axes"]["language"])
+    return items, xlabel, ylabel, divisor, markers
 
 
 def _spectrum_items(options: dict) -> list[dict]:
@@ -401,10 +569,19 @@ def _is_spectrum_request(options: dict) -> bool:
     return str(options.get("source", "")) == "spectra"
 
 
+def _is_evolution_request(options: dict) -> bool:
+    return str(options.get("source", "")) == "evolution"
+
+
+def _has_figure_data(options: dict) -> bool:
+    return bool(options.get("file") or options.get("spectra") or options.get("series")
+                or (_is_evolution_request(options) and options.get("evolution")))
+
+
 def _render_requested_figure(options: dict, fmt=None, preview: bool = False):
     """
-    Desenha a figura pedida, de série no tempo ou de espectros.
-    Retorna ``(bytes, info, style)``.
+    Desenha a figura pedida: série no tempo, espectros ou a evolução dos
+    vales entre espectros. Retorna ``(bytes, info, style)``.
     """
     style = resolve_style(options.get("style"))
     dpi = style["export"]["preview_dpi"] if preview else None
@@ -414,6 +591,8 @@ def _render_requested_figure(options: dict, fmt=None, preview: bool = False):
         items = _spectrum_items(options)
         xlabel, ylabel = spectrum_labels(style)
         divisor = 1.0
+    elif _is_evolution_request(options):
+        items, xlabel, ylabel, divisor, markers = _evolution_items(options, style, markers)
     else:
         items, xlabel, ylabel, divisor, markers = _series_items(options, style, markers)
 
@@ -591,57 +770,14 @@ def api_spectrum_preview():
 def api_spectrum_evolution():
     """
     Vales (ou picos) de vários espectros, um por arquivo, acompanhados de
-    arquivo para arquivo na ordem da aquisição. Cada arquivo usa o seu
-    preparo; os extremos são medidos no espectro inteiro já preparado.
+    arquivo para arquivo na ordem da aquisição (ver ``_compute_evolution``).
+    Os extremos são medidos no espectro inteiro já preparado e guardados: só
+    o primeiro cálculo de cada preparo lê os arquivos.
     """
-    options = request.get_json(silent=True) or {}
-    kind = str(options.get("kind") or "min")
-    mode = str(options.get("mode") or "prominent")
     try:
-        if mode not in EVOLUTION_MODES:
-            raise ValueError(f"Modo desconhecido: {mode}.")
-        entradas, unidades = [], set()
-        for item in options.get("items") or []:
-            path = _resolve_data_file(item.get("file", ""))
-            spectra = _state().spectra.get(path)
-            nome = item.get("trace") or spectra.names[0]
-            spectrum = spectra.get(nome)
-            if spectrum is None:
-                raise ValueError(f"Traço '{nome}' não encontrado em {path.name}.")
-            key = _curve_key(path, spectra, nome)
-            settings = resolve_spectrum_settings(
-                {**(item.get("settings") or {}), "find_min": kind == "min", "find_max": kind == "max"},
-                prefix=f"[{key}] ")
-            wavelength, intensity = _prepared(spectrum, settings)
-            unidades.add(transmission_unit(settings, spectra.intensity_unit))
-            entradas.append({"key": key, "file": _rel(path), "acquired": spectra.acquired,
-                             "acquired_from": spectra.acquired_from,
-                             "extrema": analyse_spectrum(wavelength, intensity, settings)["extrema"]})
-        if len(entradas) < 2:
-            raise ValueError("Escolha dois ou mais espectros para ver a evolução.")
-        resultado = spectra_evolution(entradas, kind=kind, mode=mode,
-                                      tolerance=as_float(options.get("tolerance")))
+        resultado = _compute_evolution(request.get_json(silent=True) or {})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-
-    origem = {e["key"]: e for e in entradas}
-    for arquivo in resultado["files"]:
-        e = origem[arquivo["key"]]
-        arquivo["file"] = e["file"]
-        arquivo["acquired_from"] = e["acquired_from"]
-        if e["acquired_from"] == "filename" and arquivo["acquired"]:
-            arquivo["acquired"] = arquivo["acquired"].split("T")[1]     # só a hora
-    avisos = []
-    if resultado["x"] == "order":
-        avisos.append("Nem todos os arquivos têm o instante da aquisição (cabeçalho Date: "
-                      "ou hora no nome); a evolução está na ordem dos arquivos.")
-    elif len({e["acquired_from"] == "filename" for e in entradas}) > 1:
-        avisos.append("Alguns instantes vêm do cabeçalho e outros só do nome do arquivo "
-                      "(sem data): o tempo decorrido supõe que todos são do mesmo dia.")
-    if len(unidades) > 1:
-        avisos.append("Os espectros estão em unidades diferentes (" + ", ".join(sorted(unidades))
-                      + "): confira o preparo de cada arquivo.")
-    resultado.update({"unit": unidades.pop() if len(unidades) == 1 else "", "warnings": avisos})
     return jsonify(resultado)
 
 
@@ -738,7 +874,7 @@ def api_figure():
     o tamanho final que o arquivo exportado terá.
     """
     options = request.get_json(silent=True) or {}
-    if not (options.get("file") or options.get("spectra") or options.get("series")):
+    if not _has_figure_data(options):
         return jsonify({"error": "Requisição sem dados selecionados."}), 400
 
     with _figure_lock:
@@ -754,7 +890,7 @@ def api_figure():
 def api_figure_download():
     """Figura final no formato e na resolução definidos em ``style.export``."""
     options = request.get_json(silent=True) or {}
-    if not (options.get("file") or options.get("spectra") or options.get("series")):
+    if not _has_figure_data(options):
         return jsonify({"error": "Requisição sem dados selecionados."}), 400
 
     with _figure_lock:
@@ -766,7 +902,7 @@ def api_figure_download():
 
     first = (options.get("spectra") or options.get("series") or [{}])[0]
     source = options.get("file") or first.get("file") or "figura"
-    stem = Path(source).stem.removesuffix("_processado")
+    stem = "evolucao" if _is_evolution_request(options) else Path(source).stem.removesuffix("_processado")
     return send_file(
         io.BytesIO(data),
         mimetype=FIGURE_MIMETYPES[fmt],
@@ -781,7 +917,7 @@ def _analysis_curves(options: dict, style: dict):
     figura nem o deslocamento das marcações) e valores como aparecem no
     gráfico. Retorna ``(curvas, unidade)``.
     """
-    if _is_spectrum_request(options):
+    if _is_spectrum_request(options) or _is_evolution_request(options):
         raise ValueError("A análise estatística é das séries no tempo, não dos espectros.")
 
     entries = _series_entries(options)
@@ -847,6 +983,7 @@ def api_figure_options():
         "legend_positions": list(LEGEND_POSITIONS),
         "formats": list(EXPORT_FORMATS),
         "spectrum_settings": default_spectrum_settings(),
+        "evolution": resolve_evolution_options({}),
         "normalizations": list(NORMALIZATIONS),
         "transmission_outputs": list(TRANSMISSION_OUTPUTS),
     })
@@ -946,30 +1083,59 @@ def api_project_delete(name):
     return jsonify({"deleted": path.stem})
 
 
-@bp.route("/api/upload", methods=["POST"])
-def api_upload():
-    file = request.files.get("file")
-    if file is None or not file.filename:
-        return jsonify({"error": "Nenhum arquivo enviado."}), 400
-    suffix = Path(file.filename).suffix.lower()
+def _upload_destination(filename: str) -> Path:
+    """
+    Onde guardar um arquivo enviado: ``data/uploads/<nome>`` ou, quando uma
+    pasta inteira é enviada (nome ``pasta/sub/arquivo.txt``), nas mesmas
+    subpastas, até ``MAX_UPLOAD_DEPTH``. Cada parte passa por ``_safe_name``
+    (sem ``..`` nem caminhos absolutos).
+    """
+    partes = [_safe_name(parte) for parte in re.split(r"[\\/]", filename or "")]
+    partes = [parte for parte in partes if parte]
+    suffix = Path(filename or "").suffix.lower()
+    nome = partes[-1] if partes else f"upload{suffix}"
+    pastas = partes[:-1][-MAX_UPLOAD_DEPTH:]
+    return _data().uploads.joinpath(*pastas, nome)
+
+
+def _save_upload(file) -> str:
+    """Valida e grava um arquivo enviado; devolve o caminho ``data/...``."""
+    nome = Path(file.filename.replace("\\", "/")).name
+    suffix = Path(nome).suffix.lower()
     if suffix in DESCRIPTOR_EXTENSIONS:
         # O catman grava um descritor do ensaio sem os dados dentro
         info = read_descriptor(file.read().decode("utf-8", errors="replace"))
         alvo = info.get("data_file") or "o arquivo .ASC ou .txt do ensaio"
-        return jsonify({"error":
-            f"{Path(file.filename).name} descreve o ensaio, mas não contém os dados. "
-            f"Envie {alvo}, que é o arquivo indicado dentro dele."}), 400
+        raise ValueError(f"{nome} descreve o ensaio, mas não contém os dados. "
+                         f"Envie {alvo}, que é o arquivo indicado dentro dele.")
     if suffix not in RAW_EXTENSIONS:
-        return jsonify({"error":
-            f"Extensão não suportada: {suffix}. Aceito: "
-            f"{', '.join(sorted(RAW_EXTENSIONS))}."}), 400
-
-    uploads = _data().uploads
-    uploads.mkdir(parents=True, exist_ok=True)
-    safe_name = _safe_name(Path(file.filename).name) or f"upload{suffix}"
-    dest = uploads / safe_name
+        raise ValueError(f"{nome}: extensão não suportada ({suffix or 'sem extensão'}). "
+                         f"Aceito: {', '.join(sorted(RAW_EXTENSIONS))}.")
+    dest = _upload_destination(file.filename)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     file.save(dest)
-    return jsonify({"file": _rel(dest)})
+    return _rel(dest)
+
+
+@bp.route("/api/upload", methods=["POST"])
+def api_upload():
+    """
+    Grava um ou vários arquivos (campo ``file`` repetido) em data/uploads.
+    O nome pode trazer a pasta de origem (``pasta/arquivo.txt``), que é
+    mantida. Um arquivo recusado não impede os outros: volta em ``errors``.
+    """
+    files = [f for f in request.files.getlist("file") if f and f.filename]
+    if not files:
+        return jsonify({"error": "Nenhum arquivo enviado."}), 400
+    salvos, erros = [], []
+    for file in files:
+        try:
+            salvos.append(_save_upload(file))
+        except (ValueError, OSError) as e:
+            erros.append(str(e))
+    if not salvos:
+        return jsonify({"error": " · ".join(erros), "errors": erros}), 400
+    return jsonify({"file": salvos[0], "files": salvos, "errors": erros})
 
 
 @bp.route("/api/process", methods=["POST"])

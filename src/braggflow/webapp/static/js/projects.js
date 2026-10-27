@@ -2,9 +2,9 @@
 // excluir e o aviso de alterações não salvas.
 
 import { $, fmtBytes, fmtWhen, showError } from "./core.js";
-import { baseName, fileKind, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, spectraState, spectraStateFor } from "./state.js";
+import { baseName, commonSpectrumSettings, fileKind, folderOf, porNome, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName, spectraCommon, spectraState } from "./state.js";
 import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
-import { renderSpectraFiles, resetSpectraAnalyses, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
+import { addSpectraToProject, applySpectraProject, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
 import { addMarkerRow, applySourceMode, applyStyle, channelStyleMemory, collectMarkers, collectStyle, drawPlotMarkers, loadVizSources, refreshVizCurves, rememberChannelStyles, vizSource } from "./viz.js";
 import { switchTab } from "./tabs.js";
 import { resetAnalysis } from "./analysis.js";
@@ -41,15 +41,18 @@ function clearProjectState() {
   shared.currentSpectrumFile = null;
   shared.spectrumCurves = {};
   shared.seriesCurves = {};
+  shared.evolutionCurves = {};
   $("file-select").innerHTML = "";
   $("marker-list").innerHTML = "";
   $("sensor-list").innerHTML = '<span class="hint">Adicione um arquivo…</span>';
   $("viz-channels").innerHTML = '<span class="hint">Marque uma fonte de dados…</span>';
   $("file-info").textContent = "";
+  $("spectra-filter").value = "";
   if (shared.figureOptions) applyStyle(shared.figureOptions.style);
+  resetSpectraAnalyses();
+  resetSpectraProject();
   renderSeriesFiles();
   renderSpectraFiles();
-  resetSpectraAnalyses();
   clearSelection({ redraw: false });
   resetAnalysis();
   Plotly.purge($("plot"));
@@ -139,33 +142,82 @@ function startNewProject() {
 }
 
 // ── Adicionar arquivos ao projeto ────────────────────────────────────────────
+// Arquivos enviados ficam na raiz de data/raw e data/uploads ou em subpastas
+// (uma por ensaio, ou uma pasta enviada inteira): as subpastas viram grupos.
+const RAIZES = new Set(["data/raw", "data/uploads"]);
+const MAX_SOLTOS = 12;    // na tela vazia, os arquivos soltos que aparecem um a um
+
+function availableFiles(kind) {
+  const espectro = kind === "spectrum";
+  const dentro = new Set(espectro ? projectSpectraPaths() : projectSeriesPaths());
+  return shared.rawFiles.filter((f) => (f.kind === "spectrum") === espectro && !dentro.has(f.path));
+}
+
+// [[pasta ou "" para os soltos, arquivos]]: soltos primeiro, do mais recente;
+// pastas pelo nome, e dentro delas os arquivos pelo nome (01, 02… 10)
+function byFolder(files) {
+  const grupos = new Map();
+  files.forEach((f) => {
+    const pasta = RAIZES.has(folderOf(f.path)) ? "" : folderOf(f.path);
+    if (!grupos.has(pasta)) grupos.set(pasta, []);
+    grupos.get(pasta).push(f);
+  });
+  return [...grupos.entries()]
+    .sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : porNome(a, b)))
+    .map(([pasta, lista]) => [pasta, lista.sort(pasta === ""
+      ? (a, b) => (b.modified || "").localeCompare(a.modified || "")
+      : (a, b) => porNome(a.path, b.path))]);
+}
+
+function addAll(paths) {
+  showError("");
+  addFilesAndShow(paths).catch((err) => showError(err.message));
+}
+
 export function renderFilePicker(kind) {
-  const box = kind === "spectrum" ? $("spectra-picker") : $("series-picker");
-  const dentro = kind === "spectrum" ? projectSpectraPaths() : projectSeriesPaths();
-  const disponiveis = shared.rawFiles
-    .filter((f) => (kind === "spectrum" ? f.kind === "spectrum" : f.kind !== "spectrum"))
-    .filter((f) => !dentro.includes(f.path))
-    .sort((a, b) => (b.modified || "").localeCompare(a.modified || ""));
+  const espectro = kind === "spectrum";
+  const box = $(espectro ? "spectra-picker" : "series-picker");
+  const filtro = (espectro ? $("spectrum-picker-filter").value : "").trim().toLowerCase();
+  const disponiveis = availableFiles(kind)
+    .filter((f) => !filtro || shortName(f.path).toLowerCase().includes(filtro));
 
   box.innerHTML = "";
   if (!disponiveis.length) {
-    box.innerHTML = '<span class="hint">Nenhum arquivo disponível fora do projeto.</span>';
+    box.innerHTML = `<span class="hint">${filtro ? "Nenhum arquivo com esse nome." : "Nenhum arquivo disponível fora do projeto."}</span>`;
     return;
   }
-  disponiveis.forEach((f) => {
-    const label = document.createElement("label");
-    label.className = "check-row";
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.className = kind === "spectrum" ? "pick-spectrum" : "pick-series";
-    cb.value = f.path;
-    const meta = document.createElement("span");
-    meta.className = "file-meta";
-    meta.textContent = `${fmtWhen(f.modified)} · ${fmtBytes(f.size || 0)}`;
-    label.append(cb, document.createTextNode(baseName(f.path)), meta);
-    label.title = f.path;
-    box.appendChild(label);
+  const fragment = document.createDocumentFragment();
+  byFolder(disponiveis).forEach(([pasta, arquivos]) => {
+    if (pasta) {
+      const head = document.createElement("div");
+      head.className = "picker-group";
+      const nome = document.createElement("span");
+      nome.textContent = `${shortName(pasta)}/ (${arquivos.length})`;
+      nome.title = pasta;
+      const todos = document.createElement("button");
+      todos.type = "button";
+      todos.className = "btn-link";
+      todos.textContent = arquivos.length > 1 ? `adicionar ${filtro ? "estes" : "todos"}` : "adicionar";
+      todos.addEventListener("click", () => addAll(arquivos.map((f) => f.path)));
+      head.append(nome, todos);
+      fragment.appendChild(head);
+    }
+    arquivos.forEach((f) => {
+      const label = document.createElement("label");
+      label.className = "check-row";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = espectro ? "pick-spectrum" : "pick-series";
+      cb.value = f.path;
+      const meta = document.createElement("span");
+      meta.className = "file-meta";
+      meta.textContent = `${fmtWhen(f.modified)} · ${fmtBytes(f.size || 0)}`;
+      label.append(cb, document.createTextNode(baseName(f.path)), meta);
+      label.title = f.path;
+      fragment.appendChild(label);
+    });
   });
+  box.appendChild(fragment);
 }
 
 async function addPickedFiles(kind) {
@@ -177,13 +229,24 @@ async function addPickedFiles(kind) {
   renderFilePicker(kind);
 }
 
+function emptyButton(textos, title, onClick) {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className = "empty-file";
+  botao.title = title;
+  textos.forEach((texto) => {
+    const span = document.createElement("span");
+    span.textContent = texto;
+    botao.appendChild(span);
+  });
+  botao.addEventListener("click", onClick);
+  return botao;
+}
+
 export function renderEmptyFiles(kind) {
   const espectro = kind === "spectrum";
   const box = $(espectro ? "spectra-empty-files" : "series-empty-files");
-  const dentro = espectro ? projectSpectraPaths() : projectSeriesPaths();
-  const lista = shared.rawFiles
-    .filter((f) => (f.kind === "spectrum") === espectro && !dentro.includes(f.path))
-    .sort((a, b) => (b.modified || "").localeCompare(a.modified || ""));
+  const lista = availableFiles(kind);
 
   box.innerHTML = "";
   if (!lista.length) return;
@@ -191,19 +254,49 @@ export function renderEmptyFiles(kind) {
   titulo.className = "sub-label";
   titulo.textContent = "Ou use um arquivo já enviado";
   box.appendChild(titulo);
-  lista.forEach((f) => {
-    const botao = document.createElement("button");
-    botao.type = "button";
-    botao.className = "empty-file";
-    botao.title = f.path;
-    [f.path.split("/").pop(), fmtWhen(f.modified), fmtBytes(f.size || 0)].forEach((texto) => {
-      const span = document.createElement("span");
-      span.textContent = texto;
-      botao.appendChild(span);
-    });
-    botao.addEventListener("click", () => addFilesAndShow([f.path]).catch((err) => showError(err.message)));
-    box.appendChild(botao);
+  byFolder(lista).forEach(([pasta, arquivos]) => {
+    if (pasta) {     // uma pasta inteira de uma vez
+      const botao = emptyButton(
+        [`${baseName(pasta)}/`, `${arquivos.length} arquivo(s) · adicionar todos`], pasta,
+        () => addAll(arquivos.map((f) => f.path)));
+      botao.classList.add("empty-folder");
+      box.appendChild(botao);
+      return;
+    }
+    arquivos.slice(0, MAX_SOLTOS).forEach((f) => box.appendChild(emptyButton(
+      [baseName(f.path), fmtWhen(f.modified), fmtBytes(f.size || 0)], f.path, () => addAll([f.path]))));
+    if (arquivos.length > MAX_SOLTOS) {
+      const mais = document.createElement("span");
+      mais.className = "hint";
+      mais.textContent = `… e mais ${arquivos.length - MAX_SOLTOS} em “Adicionar arquivos ao projeto”, na barra lateral.`;
+      box.appendChild(mais);
+    }
   });
+}
+
+// Itens soltos na área: arquivos e pastas inteiras, lidas com as subpastas.
+// As entradas precisam ser pegas antes do primeiro await (o navegador as
+// esvazia quando o evento termina).
+async function droppedFiles(dataTransfer) {
+  const entradas = [...(dataTransfer.items || [])].map((item) => item.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entradas.length) return [...dataTransfer.files];
+  const arquivos = [];
+  async function visitar(entrada, pasta) {
+    const caminho = pasta ? `${pasta}/${entrada.name}` : entrada.name;
+    if (entrada.isFile) {
+      const file = await new Promise((ok, erro) => entrada.file(ok, erro));
+      arquivos.push({ file, path: caminho });
+    } else if (entrada.isDirectory) {
+      const leitor = entrada.createReader();
+      for (;;) {       // readEntries devolve em lotes, até um lote vazio
+        const lote = await new Promise((ok, erro) => leitor.readEntries(ok, erro));
+        if (!lote.length) break;
+        for (const filho of lote) await visitar(filho, caminho);
+      }
+    }
+  }
+  for (const entrada of entradas) await visitar(entrada, "");
+  return arquivos;
 }
 
 // Soltar arquivos fora da área certa não pode abrir o arquivo no navegador
@@ -215,7 +308,7 @@ document.querySelectorAll(".dropzone").forEach((zona) => {
   zona.addEventListener("drop", (e) => {
     e.preventDefault();
     zona.classList.remove("over");
-    uploadFiles(e.dataTransfer.files).catch((err) => showError(err.message));
+    droppedFiles(e.dataTransfer).then(uploadFiles).catch((err) => showError(err.message));
   });
   zona.querySelector(".dropzone-input").addEventListener("change", (e) =>
     uploadFiles(e.target.files).catch((err) => showError(err.message)).finally(() => { e.target.value = ""; }));
@@ -223,9 +316,7 @@ document.querySelectorAll(".dropzone").forEach((zona) => {
 
 export async function addFileToProject(path) {
   if (fileKind(path) === "spectrum") {
-    spectraStateFor(path);
-    renderSpectraFiles();
-    await selectSpectrumFile(path);
+    await addSpectraToProject([path]);
   } else {
     seriesStateFor(path);
     renderSeriesFiles();
@@ -430,9 +521,15 @@ function collectProject() {
       };
     }),
     join_series: $("card-concat").open,
+    // No preparo comum, os arquivos não levam preparo próprio
     spectra_files: projectSpectraPaths().map((path) => ({
-      file: path, settings: spectraStateFor(path).settings,
+      file: path,
+      settings: spectraCommon.on ? null : spectraState[path].settings,
+      exclude: Boolean(spectraState[path].exclude),
     })),
+    spectra_common: spectraCommon.on,
+    spectra_settings: commonSpectrumSettings(),
+    evolution: evolutionOptions(),
     markers: collectMarkers(),
     source: vizSource(),
     viz_sources: { series: marked("viz-series-source"), spectra: marked("viz-spectrum-source") },
@@ -494,9 +591,7 @@ async function applyProjectData(project) {
     state.sensors = entry.sensors;
     state.processing = entry.processing;
   });
-  (project.spectra_files || []).forEach((entry) => {
-    spectraStateFor(entry.file).settings = entry.settings;
-  });
+  applySpectraProject(project);
   $("card-concat").open = Boolean(project.join_series);
   renderSeriesFiles();
   renderSpectraFiles();
@@ -514,7 +609,7 @@ async function applyProjectData(project) {
   project.markers.forEach((m) => addMarkerRow(m.time, m.label, m.color));
   applyStyle(project.style);
 
-  $("viz-source").value = project.source === "spectra" ? "spectra" : "series";
+  $("viz-source").value = ["spectra", "evolution"].includes(project.source) ? project.source : "series";
   applySourceMode();
   // Lista vazia = nenhuma preferência: curvas de um CSV marcado depois aparecem
   pendingVizChannels = project.channels?.length ? project.channels : null;

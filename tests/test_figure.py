@@ -292,3 +292,17 @@ def test_monochrome_markers_ignore_each_marker_color(data):
 
     assert set(cores(resolve_style({}))) == {"#ff0000"}
     assert set(cores(resolve_style({"markers": {"monochrome": True}}))) == {"#000000"}
+
+
+def test_evolution_labels():
+    from braggflow.visualization.figure import evolution_labels
+
+    assert evolution_labels("wavelength", "%", "min", "min") == ("Time (min)", r"$\lambda$ (nm)")
+    assert evolution_labels("delta", "%", "min", None, "pt") == ("Espectro", r"$\Delta\lambda$ (nm)")
+    assert evolution_labels("intensity", "%", "min", "s", "pt")[1] == "Transmissão (%)"
+    assert evolution_labels("intensity", "a.u.", "max", "s")[1] == "Intensity (a.u.)"
+    assert evolution_labels("intensity", "AU", "min", "s")[1] == "Absorbance"
+    assert evolution_labels("prominence", "dB", "min", "s", "pt")[1] == "Profundidade (dB)"
+    assert evolution_labels("prominence", "", "max", "s")[1] == "Height"
+    with pytest.raises(ValueError, match="Grandeza"):
+        evolution_labels("x", "", "min")

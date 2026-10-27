@@ -51,6 +51,26 @@ itself did not change: the same input gives the same output as before.
   trend removal (`remove_trend`), and the evolution of valleys or peaks across
   files (`spectra_evolution`, `/api/spectra/evolution`) with plot, table and
   CSV.
+- Valley tracking for series of many spectra: a reference wavelength
+  ("Marcar no gráfico" and a click on the valley, or typed) with a search
+  window and "seguir a deriva" (`spectra_evolution(mode="reference")`); the
+  valley position from a least-squares parabola fitted to the bottom
+  (`analyse_spectrum` → `fit`, the default `locate` of the evolution), several
+  times less noisy than the 3-point vertex on broad valleys; one preparation
+  for every spectrum of the project (`Project.spectra_common`,
+  `spectra_settings`); clicking a point of the evolution opens its spectrum,
+  ◀ ▶ walk through them, and outliers can be left out of the evolution
+  (`spectra_files[].exclude`). Evolution options are validated by
+  `EVOLUTION_SPEC` and saved with the project (`Project.evolution`).
+- Many spectra at once: "Importar pasta" and dropping a folder keep it as
+  `data/uploads/<folder>/`; subfolders of `data/raw` and `data/uploads` are
+  listed and offered as "adicionar todos"; `/api/upload` takes several files
+  per request; adding files draws the list once and previews one file; the
+  prepared spectra and their valleys are cached (`AppState.analyses`), and a
+  file that cannot be read is skipped with a warning.
+- Figura: the evolution of a valley between spectra as a third source
+  (`source: "evolution"`, `evolution_labels`), with the y quantity, time unit
+  and markers.
 - Séries temporais plot: one panel per channel (default) or all on the same
   plot, values relative to the start, and the y scale follows the processed
   signal instead of the raw spikes. "Medir trecho": dragging a stretch gives
@@ -125,6 +145,10 @@ itself did not change: the same input gives the same output as before.
   valleys table) of the previous project on screen. They are cleared, and the
   evolution is recomputed for the open project, also when its files or their
   preparation change while the card is open.
+- A spectrum preview still on its way when the project changed created a
+  file named `null` in the new project, and the evolution then failed with
+  "Arquivo inválido ou fora de data/: null" (the intermittent CI failure of
+  `test_evolution_belongs_to_the_open_project`).
 - Text files with blank lines in the equipment header were read from the wrong
   line (the header count skipped them, the reader did not).
 - A one-field line just before the data (such as

@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .processing.spectra import resolve_spectrum_settings
+from .processing.spectra import resolve_evolution_options, resolve_spectrum_settings
 from .sensors import Sensor
 from .visualization.figure import default_style, parse_markers, resolve_style
 
@@ -57,8 +57,13 @@ class Project:
     markers: List[dict] = field(default_factory=list)   # {time, label, color}
     series: List[dict] = field(default_factory=list)    # um estado por arquivo
     join_series: bool = False                           # arquivos de um mesmo ensaio
-    spectra_files: List[dict] = field(default_factory=list)  # [{file, settings}]
-    source: str = "series"                              # ou "spectra"
+    spectra_files: List[dict] = field(default_factory=list)  # [{file, settings, exclude}]
+    # Mesmo preparo para todos os espectros (então ``settings`` de cada um é
+    # None); None = projeto de antes da opção, decidido ao abrir
+    spectra_common: Optional[bool] = None
+    spectra_settings: Optional[dict] = None
+    evolution: dict = field(default_factory=dict)       # como acompanhar os vales
+    source: str = "series"                              # "spectra" ou "evolution"
     viz_sources: Dict[str, List[str]] = field(default_factory=dict)
     channels: List[str] = field(default_factory=list)   # curvas marcadas
     spectra: List[dict] = field(default_factory=list)   # [{file, trace}]
@@ -76,7 +81,7 @@ class Project:
         self.channels = [str(c) for c in self.channels]
         if self.source == "timeseries":
             self.source = "series"          # nome antigo da fonte
-        if self.source not in ("series", "spectra"):
+        if self.source not in ("series", "spectra", "evolution"):
             raise ValueError(f"Fonte da figura inválida: {self.source}.")
 
         self.series = [self._clean_series_entry(entry) for entry in (self.series or [])
@@ -89,11 +94,19 @@ class Project:
 
         self.spectra_files = [
             {"file": str(entry["file"]),
-             "settings": resolve_spectrum_settings(entry.get("settings"),
-                                                   prefix=f"[{Path(str(entry['file'])).name}] ")}
+             "settings": (resolve_spectrum_settings(entry["settings"],
+                                                    prefix=f"[{Path(str(entry['file'])).name}] ")
+                          if isinstance(entry.get("settings"), dict) else None),
+             "exclude": bool(entry.get("exclude", False))}
             for entry in (self.spectra_files or [])
             if isinstance(entry, dict) and entry.get("file")
         ]
+        if self.spectra_common is not None:
+            self.spectra_common = bool(self.spectra_common)
+        if self.spectra_settings is not None:
+            self.spectra_settings = resolve_spectrum_settings(self.spectra_settings,
+                                                              prefix="[preparo comum] ")
+        self.evolution = resolve_evolution_options(self.evolution or {})
         self.viz_sources = {
             key: [str(path) for path in (self.viz_sources or {}).get(key, [])]
             for key in ("series", "spectra")
@@ -132,6 +145,9 @@ class Project:
             "series": self.series,
             "join_series": self.join_series,
             "spectra_files": self.spectra_files,
+            "spectra_common": self.spectra_common,
+            "spectra_settings": self.spectra_settings,
+            "evolution": self.evolution,
             "source": self.source,
             "viz_sources": self.viz_sources,
             "channels": self.channels,
@@ -153,6 +169,9 @@ class Project:
             series=data.get("series") or [],
             join_series=bool(data.get("join_series")),
             spectra_files=data.get("spectra_files") or [],
+            spectra_common=data.get("spectra_common"),
+            spectra_settings=data.get("spectra_settings"),
+            evolution=data.get("evolution") or {},
             source=str(data.get("source") or "series"),
             viz_sources=data.get("viz_sources") or {},
             channels=data.get("channels") or [],

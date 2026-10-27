@@ -4,7 +4,7 @@
 export const $ = (id) => document.getElementById(id);
 
 // Precisa bater com API_BUILD em braggflow/webapp/app.py
-const API_BUILD = "2026-10-14";
+const API_BUILD = "2026-10-27";
 
 // Quando o servidor responde com uma página de erro (HTML), a mensagem diz o
 // que fazer em vez do críptico "Unexpected token '<'".

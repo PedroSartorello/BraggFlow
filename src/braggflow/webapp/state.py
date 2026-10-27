@@ -131,6 +131,11 @@ class ResultCache:
 
 # Arquivos do interrogador já lidos (reprocessar não relê o disco)
 FILE_CACHE_SIZE = 2
+# Espectros lidos e extremos já medidos: uma evolução com centenas de
+# arquivos é recalculada (outro λ de referência, outro modo) sem reler nada.
+# Um espectro de 1000–4000 pontos ocupa de 20 a 70 kB.
+SPECTRA_CACHE_SIZE = 1024
+ANALYSIS_CACHE_SIZE = 8192
 
 
 def _load_processed(path: Path):
@@ -151,6 +156,7 @@ class AppState:
     data: DataFolder
     interrogator: FileCache = field(default_factory=lambda: FileCache(load_file, FILE_CACHE_SIZE))
     processed: FileCache = field(default_factory=lambda: FileCache(_load_processed, FILE_CACHE_SIZE * 3))
-    spectra: FileCache = field(default_factory=lambda: FileCache(load_spectra, FILE_CACHE_SIZE * 3))
+    spectra: FileCache = field(default_factory=lambda: FileCache(load_spectra, SPECTRA_CACHE_SIZE))
     kinds: FileCache = field(default_factory=lambda: FileCache(_classify, None))
     results: ResultCache = field(default_factory=ResultCache)
+    analyses: ResultCache = field(default_factory=lambda: ResultCache(ANALYSIS_CACHE_SIZE))

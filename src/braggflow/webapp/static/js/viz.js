@@ -2,9 +2,10 @@
 // marcações, geração e download da figura.
 
 import { $, fmtNum, showError } from "./core.js";
-import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectraStateFor } from "./state.js";
+import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectrumSettingsFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
-import { saveCurrentSpectrumState } from "./spectra.js";
+import { ensureEvolution, evolutionPayload, saveCurrentSpectrumState, setEvolutionY } from "./spectra.js";
+import { switchTab } from "./tabs.js";
 import { scheduleAnalysis } from "./analysis.js";
 import { applyVizChannelSelection, markProjectDirty } from "./projects.js";
 
@@ -31,23 +32,63 @@ const MARKER_LABELS = {
 const styleInput = (path) => document.querySelector(`[data-style="${path}"]`);
 export const vizSource = () => $("viz-source").value;
 
-// Mostra só os campos que fazem sentido para a fonte escolhida
+const SOURCE_HINTS = {
+  series: ["t (s, na escala do CSV) · legenda · cor", "t (s)",
+           "Marque os CSVs processados e escolha as curvas no cartão Curvas. Limites de X na unidade escolhida."],
+  spectra: ["λ (nm) · legenda · cor", "λ (nm)",
+            "Cada traço do arquivo vira uma curva. Limites de X em nm; recorte, suavização e normalização vêm da aba Espectros."],
+  evolution: ["t (s desde o 1º espectro) · legenda · cor", "t (s)",
+              "A evolução da aba Espectros: os mesmos espectros, preparo e λ de referência. Cada trilha vira uma curva; X é o tempo desde o 1º espectro."],
+};
+
+// Mostra só os campos que fazem sentido para a fonte escolhida (data-for)
 export function applySourceMode() {
-  const spectra = vizSource() === "spectra";
-  document.querySelectorAll("#tab-viz-sidebar .only-timeseries")
-    .forEach((el) => el.classList.toggle("hidden", spectra));
-  document.querySelectorAll("#tab-viz-sidebar .only-spectra")
-    .forEach((el) => el.classList.toggle("hidden", !spectra));
-  $("marker-hint").textContent = spectra
-    ? "λ (nm) · legenda · cor"
-    : "t (s, na escala do CSV) · legenda · cor";
-  $("viz-data-hint").textContent = spectra
-    ? "Cada traço do arquivo vira uma curva. Limites de X em nm; recorte, suavização e normalização vêm da aba Espectros."
-    : "Marque os CSVs processados e escolha as curvas no cartão Curvas. Limites de X na unidade escolhida.";
-  document.querySelectorAll(".marker-time").forEach((el) => {
-    el.placeholder = spectra ? "λ (nm)" : "t (s)";
-  });
+  const fonte = vizSource();
+  document.querySelectorAll("#tab-viz-sidebar [data-for]").forEach((el) =>
+    el.classList.toggle("hidden", !el.dataset.for.split(" ").includes(fonte)));
+  const [marcacoes, placeholder, dica] = SOURCE_HINTS[fonte] || SOURCE_HINTS.series;
+  $("marker-hint").textContent = marcacoes;
+  $("viz-data-hint").textContent = dica;
+  document.querySelectorAll(".marker-time").forEach((el) => { el.placeholder = placeholder; });
 }
+
+// Uma curva por trilha da evolução (normalmente uma: o vale acompanhado)
+let evolutionCurvesRequest = 0;
+async function loadEvolutionCurves() {
+  const box = $("viz-channels");
+  const request = ++evolutionCurvesRequest;
+  rememberChannelStyles();
+  let evolucao = null;
+  try {
+    evolucao = await ensureEvolution();
+  } catch (err) {
+    showError(err.message);
+  }
+  if (request !== evolutionCurvesRequest) return;
+  if (!evolucao) {
+    shared.evolutionCurves = {};
+    box.innerHTML = '<span class="hint">Calcule a evolução na aba Espectros: dois ou mais espectros e, ' +
+      "no modo λ de referência, o λ marcado.</span>";
+    return;
+  }
+  shared.evolutionCurves = Object.fromEntries(evolucao.tracks.map((t) => [t.key, t]));
+  const fragment = document.createDocumentFragment();
+  evolucao.tracks.forEach((trilha, i) =>
+    fragment.appendChild(channelRow(trilha.key, i, `${trilha.name} · ${evolucao.files.length} espectros`)));
+  box.innerHTML = "";
+  box.appendChild(fragment);
+  applyVizChannelSelection();
+}
+
+// Da aba Espectros para a figura da evolução
+export function openEvolutionFigure() {
+  $("viz-source").value = "evolution";
+  $("viz-evo-y").value = $("evo-y").value;
+  applySourceMode();
+  markProjectDirty();
+  switchTab("viz");
+}
+$("btn-evolution-figure").addEventListener("click", openEvolutionFigure);
 
 // Uma curva por traço de cada arquivo marcado
 let spectrumRequest = 0;
@@ -86,6 +127,7 @@ async function loadSpectrumCurves() {
 
 export async function refreshVizCurves() {
   if (vizSource() === "spectra") await loadSpectrumCurves();
+  else if (vizSource() === "evolution") await loadEvolutionCurves();
   else await loadSeriesCurves();
   refreshStyleState();
 }
@@ -384,6 +426,9 @@ const CARD_SUMMARIES = {
     if (vizSource() === "spectra") {
       return PLURAL(document.querySelectorAll(".viz-spectrum-source:checked").length, "espectro", "espectros");
     }
+    if (vizSource() === "evolution") {
+      return `evolução · y = ${opcaoEscolhida($("viz-evo-y")) || "λ"} · x em ${styleInput("data.time_unit")?.value || "s"}`;
+    }
     const partes = [PLURAL(document.querySelectorAll(".viz-series-source:checked").length, "CSV", "CSVs"),
                     `x em ${styleInput("data.time_unit")?.value || "s"}`];
     if (styleInput("data.relative_first")?.checked) partes.push("Δ");
@@ -679,7 +724,16 @@ export function collectVizOptions() {
       source: "spectra",
       // cada espectro leva o preparo definido na aba Espectros
       spectra: selected.map((key) => shared.spectrumCurves[key]).filter(Boolean)
-        .map((curve) => ({ ...curve, settings: spectraStateFor(curve.file).settings })),
+        .map((curve) => ({ ...curve, settings: spectrumSettingsFor(curve.file) })),
+      markers: collectMarkers(),
+      style: collectStyle(),
+    };
+  }
+  if (vizSource() === "evolution") {
+    return {
+      source: "evolution",
+      evolution: { ...evolutionPayload(), y: $("viz-evo-y").value },
+      tracks: selected.filter((key) => key in (shared.evolutionCurves || {})),
       markers: collectMarkers(),
       style: collectStyle(),
     };
@@ -691,6 +745,9 @@ export function collectVizOptions() {
     style: collectStyle(),
   };
 }
+
+// As curvas marcadas, qualquer que seja a fonte
+const chosenCurves = (opts) => ({ spectra: opts.spectra, evolution: opts.tracks })[opts.source] || opts.series;
 
 // ── Geração, zoom e download ─────────────────────────────────────────────────
 function applyZoom() {
@@ -704,11 +761,11 @@ function applyZoom() {
 
 export async function generateFigure() {
   const opts = collectVizOptions();
-  const curves = opts.source === "spectra" ? opts.spectra : opts.series;
+  const curves = chosenCurves(opts);
   if (!curves.length) {
-    showError(opts.source === "spectra"
-      ? "Marque pelo menos um traço de espectro."
-      : "Marque pelo menos um canal de um CSV processado.");
+    showError({ spectra: "Marque pelo menos um traço de espectro.",
+                evolution: "Marque pelo menos uma trilha da evolução (calcule-a na aba Espectros)." }[opts.source]
+              || "Marque pelo menos um canal de um CSV processado.");
     return;
   }
   const request = ++figureRequest;
@@ -761,6 +818,7 @@ export async function onVizChange(el) {
     if (el.id === "viz-source") { applySourceMode(); await refreshVizCurves(); }
     if (el.classList.contains("viz-series-source")) await loadSeriesCurves();
     if (el.classList.contains("viz-spectrum-source")) await loadSpectrumCurves();
+    if (el.id === "viz-evo-y") setEvolutionY(el.value);
     if (el.id === "style-select") await loadStyle(el.value);
     if (el.id === "viz-preset") applyPreset(el.value);
   } catch (err) {
@@ -777,7 +835,7 @@ export async function onVizChange(el) {
 
 async function copyFigure() {
   const opts = collectVizOptions();
-  const curvas = opts.source === "spectra" ? opts.spectra : opts.series;
+  const curvas = chosenCurves(opts);
   if (!curvas.length) { showError("Marque pelo menos uma curva."); return; }
   const dpi = Math.min(Number(opts.style.export?.dpi) || 300, 300);
   opts.style.export = { ...opts.style.export, preview_dpi: dpi };
@@ -801,7 +859,7 @@ async function copyFigure() {
 
 async function downloadFigure() {
   const opts = collectVizOptions();
-  if (!(opts.source === "spectra" ? opts.spectra : opts.series).length) {
+  if (!chosenCurves(opts).length) {
     showError("Marque as curvas da figura primeiro."); return;
   }
   const format = opts.style.export.format;
@@ -821,7 +879,7 @@ async function downloadFigure() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    const first = (opts.spectra || opts.series)[0].file;
+    const first = opts.source === "evolution" ? "evolucao" : (opts.spectra || opts.series)[0].file;
     const base = first.split("/").pop().replace(/\.[^.]+$/, "").replace(/_processado$/, "");
     a.download = `${base}_figura.${format}`;
     a.click();
