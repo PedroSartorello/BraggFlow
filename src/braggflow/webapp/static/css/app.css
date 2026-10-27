@@ -148,12 +148,12 @@ header {
 
 /* ── Controles ───────────────────────────────────────────────────────── */
 label.field { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
-input[type=number], input[type=text], select {
+input[type=number], input[type=text], input[type=time], select {
   width: 100%; height: 30px; padding: 4px 8px; font-size: 12.5px; font-family: var(--font);
   border: 1px solid var(--border-strong); border-radius: 7px;
   background: #fff; color: var(--text); transition: border-color .12s, box-shadow .12s;
 }
-input[type=number]:focus, input[type=text]:focus, select:focus {
+input[type=number]:focus, input[type=text]:focus, input[type=time]:focus, select:focus {
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(26, 78, 138, .14);
 }
@@ -446,12 +446,12 @@ body.no-series #status-details { display: none !important; }
   padding: 2px; height: 30px; width: 100%;
   border: 1px solid var(--border-strong); border-radius: 7px; background: #fff; cursor: pointer;
 }
-.marker-row .marker-del {
+.marker-row .marker-del, .event-row .marker-del {
   height: 30px; font-size: 14px; line-height: 1;
   border: 1px solid transparent; background: transparent; color: var(--muted);
   border-radius: 7px; transition: background .15s, color .15s;
 }
-.marker-row .marker-del:hover { background: var(--danger-bg); color: var(--danger); }
+.marker-row .marker-del:hover, .event-row .marker-del:hover { background: var(--danger-bg); color: var(--danger); }
 #marker-list { display: flex; flex-direction: column; gap: 5px; }
 #marker-list:empty::after {
   content: "Nenhuma marcação ainda."; font-size: 11px; color: var(--muted);
@@ -623,4 +623,15 @@ body.no-spectra #spectra-evolution { display: none !important; }
   border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
 }
 .focus-step:hover { border-color: var(--accent); color: var(--accent); }
+#evolution-plot.marking, #evolution-plot.marking .nsewdrag { cursor: crosshair !important; }
+#evolution-plot.marking.near-event, #evolution-plot.marking.near-event .nsewdrag { cursor: ew-resize !important; }
+#btn-evo-event.on { background: #eaf3ec; border-color: #2E8B57; color: #1d6b40; }
+.evolution-events { display: flex; flex-direction: column; gap: 6px; }
+.events-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12px; }
+.events-head .hint { flex: 1 1 240px; }
+.event-list { display: flex; flex-direction: column; gap: 4px; }
+.event-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) 38px auto 26px; gap: 6px; align-items: center; }
+.event-row .event-when { font-size: 11px; color: var(--muted); white-space: nowrap; }
+#tab-viz-sidebar .event-row { grid-template-columns: 100px minmax(0, 1fr) 34px 26px; }
+#tab-viz-sidebar .event-row .event-when { display: none; }
 

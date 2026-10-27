@@ -1116,9 +1116,9 @@ def test_evolution_figure(webapp):
     dados, client = webapp
     caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
     evolucao = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos],
-                "settings": LMR_PREPARO, "mode": "prominent", "y": "delta"}
-    pedido = {"source": "evolution", "evolution": evolucao, "markers": [{"time": "100", "label": "água"}],
-              "style": {"data": {"time_unit": "min"}}}
+                "settings": LMR_PREPARO, "mode": "prominent", "y": "delta",
+                "events": [{"at": "2026-03-02T09:31:00", "label": "água", "color": "#2E8B57"}]}
+    pedido = {"source": "evolution", "evolution": evolucao, "style": {"data": {"time_unit": "min"}}}
     resp = client.post("/api/figure", json=pedido)
     assert resp.status_code == 200, resp.get_json()
     assert resp.get_json()["image"]
@@ -1130,3 +1130,29 @@ def test_evolution_figure(webapp):
     resp = client.post("/api/figure", json={**pedido, "tracks": ["outra"]})
     assert resp.status_code == 400 and "trilha" in resp.get_json()["error"]
     assert client.post("/api/analysis", json=pedido).status_code == 400
+
+    por_ordem = {**pedido, "evolution": {**evolucao, "x": "order"}}     # o evento fica entre o 1º e o 2º
+    assert client.post("/api/figure", json=por_ordem).status_code == 200
+
+
+def test_evolution_events_come_back_in_seconds_from_the_first_spectrum(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))     # 09:30:15, + 75,5 s cada
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "settings": LMR_PREPARO,
+              "events": [{"at": "2026-03-02T09:32:00", "label": "glicerina", "color": "#8B008B"},
+                         {"at": "2026-03-02T09:31:00.500", "label": "água"}]}
+    data = client.post("/api/spectra/evolution", json=pedido).get_json()
+    assert data["start"] == "2026-03-02T09:30:15.000"
+    assert [(e["label"], e["elapsed_s"]) for e in data["events"]] == [("água", 45.5), ("glicerina", 105.0)]
+    assert data["events"][0]["color"] == "#4682B4", "sem cor: a padrão"
+
+    # sem o 1º espectro, o evento continua no mesmo instante: só o tempo decorrido muda
+    sem_o_primeiro = {**pedido, "items": pedido["items"][1:]}
+    data = client.post("/api/spectra/evolution", json=sem_o_primeiro).get_json()
+    assert data["events"][0]["elapsed_s"] == pytest.approx(45.5 - 75.5)
+
+    resp = client.post("/api/spectra/evolution", json={**pedido, "events": [{"at": "ontem"}]})
+    assert resp.status_code == 400 and "Instante inválido" in resp.get_json()["error"]
+

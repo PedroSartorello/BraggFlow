@@ -4,7 +4,7 @@
 import { $, fmtNum, showError } from "./core.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectrumSettingsFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
-import { ensureEvolution, evolutionPayload, saveCurrentSpectrumState, setEvolutionY } from "./spectra.js";
+import { ensureEvolution, evolutionEventsList, evolutionPayload, saveCurrentSpectrumState, setEvolutionY } from "./spectra.js";
 import { switchTab } from "./tabs.js";
 import { scheduleAnalysis } from "./analysis.js";
 import { applyVizChannelSelection, markProjectDirty } from "./projects.js";
@@ -37,8 +37,8 @@ const SOURCE_HINTS = {
            "Marque os CSVs processados e escolha as curvas no cartão Curvas. Limites de X na unidade escolhida."],
   spectra: ["λ (nm) · legenda · cor", "λ (nm)",
             "Cada traço do arquivo vira uma curva. Limites de X em nm; recorte, suavização e normalização vêm da aba Espectros."],
-  evolution: ["t (s desde o 1º espectro) · legenda · cor", "t (s)",
-              "A evolução da aba Espectros: os mesmos espectros, preparo e λ de referência. Cada trilha vira uma curva; X é o tempo desde o 1º espectro."],
+  evolution: ["t (s, na escala do CSV) · legenda · cor", "t (s)",
+              "A evolução da aba Espectros: os mesmos espectros, preparo, λ de referência e eventos. Cada trilha vira uma curva; X é o tempo desde o 1º espectro."],
 };
 
 // Mostra só os campos que fazem sentido para a fonte escolhida (data-for)
@@ -427,7 +427,9 @@ const CARD_SUMMARIES = {
       return PLURAL(document.querySelectorAll(".viz-spectrum-source:checked").length, "espectro", "espectros");
     }
     if (vizSource() === "evolution") {
-      return `evolução · y = ${opcaoEscolhida($("viz-evo-y")) || "λ"} · x em ${styleInput("data.time_unit")?.value || "s"}`;
+      const eventos = evolutionEventsList().length;
+      return `evolução · y = ${opcaoEscolhida($("viz-evo-y")) || "λ"} · x em ${styleInput("data.time_unit")?.value || "s"}` +
+        (eventos ? ` · ${PLURAL(eventos, "evento", "eventos")}` : "");
     }
     const partes = [PLURAL(document.querySelectorAll(".viz-series-source:checked").length, "CSV", "CSVs"),
                     `x em ${styleInput("data.time_unit")?.value || "s"}`];
@@ -795,7 +797,8 @@ export async function generateFigure() {
       ? ` → ${info.width_px} × ${info.height_px} px a ${info.dpi} dpi` : " (vetorial)";
     $("viz-status").textContent =
       `${fmtNum(info.width_cm, 2)} × ${fmtNum(info.height_cm, 2)} cm · ${format.toUpperCase()}${size}` +
-      ` · ${curveCount} curva(s) · ${opts.markers.length} marcação(ões)`;
+      ` · ${curveCount} curva(s) · ` +
+      (opts.source === "evolution" ? `${opts.evolution.events.length} evento(s)` : `${opts.markers.length} marcação(ões)`);
     persistStyle();
   } catch (err) {
     if (request !== figureRequest) return;

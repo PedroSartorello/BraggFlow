@@ -4,7 +4,7 @@
 import { $, fmtBytes, fmtWhen, showError } from "./core.js";
 import { baseName, commonSpectrumSettings, fileKind, folderOf, porNome, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName, spectraCommon, spectraState } from "./state.js";
 import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
-import { addSpectraToProject, applySpectraProject, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
+import { addSpectraToProject, applySpectraProject, evolutionEventsList, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
 import { addMarkerRow, applySourceMode, applyStyle, channelStyleMemory, collectMarkers, collectStyle, drawPlotMarkers, loadVizSources, refreshVizCurves, rememberChannelStyles, vizSource } from "./viz.js";
 import { switchTab } from "./tabs.js";
 import { resetAnalysis } from "./analysis.js";
@@ -530,6 +530,7 @@ function collectProject() {
     spectra_common: spectraCommon.on,
     spectra_settings: commonSpectrumSettings(),
     evolution: evolutionOptions(),
+    evolution_events: evolutionEventsList(),
     markers: collectMarkers(),
     source: vizSource(),
     viz_sources: { series: marked("viz-series-source"), spectra: marked("viz-spectrum-source") },

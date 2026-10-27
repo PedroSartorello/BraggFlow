@@ -10,6 +10,7 @@ import {
 import { PALETTE, plotFont, uploadFiles } from "./series.js";
 import { numeroOuTraco } from "./analysis.js";
 import { fileRow, markProjectDirty, renderEmptyFiles, renderFilePicker } from "./projects.js";
+import { scheduleFigure, vizSource } from "./viz.js";
 
 export async function openSpectraTab() {
   renderSpectraFiles();
@@ -138,6 +139,8 @@ export function resetSpectraProject() {
   spectraCommon.on = true;
   spectraCommon.settings = defaultSpectrumSettings();
   applyEvolutionOptions({});
+  evolutionEvents = [];
+  renderEventLists();
   syncCommonMode();
   formTarget = null;
   showSpectrumSettings(null);
@@ -164,6 +167,8 @@ export function applySpectraProject(project) {
     st.exclude = Boolean(entrada.exclude);
   });
   applyEvolutionOptions(project.evolution || {});
+  evolutionEvents = (project.evolution_events || []).map((e) => ({ ...e }));
+  renderEventLists();
   syncCommonMode();
   formTarget = null;
   showSpectrumSettings(shared.currentSpectrumFile);
@@ -425,7 +430,11 @@ $("btn-evo-pick").addEventListener("click", () => {
   if (!lastPreview) { showError("Abra um espectro para marcar o λ de referência no gráfico."); return; }
   setPicking(!picking);
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) setPicking(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (picking) setPicking(false);
+  if (markingEvents) setMarkingEvents(false);
+});
 
 // ── Picos e vales: tabela e resumo de cada traço ────────────────────────────
 let spectraAnalysis = null;    // {file, traces} da última prévia
@@ -623,6 +632,7 @@ export function resetSpectraAnalyses() {
   evolutionFiles = "";
   lastPreview = null;
   if (picking) setPicking(false);
+  if (markingEvents) setMarkingEvents(false);
   Plotly.purge($("evolution-plot"));
   $("evolution-table").innerHTML = "";
   $("evolution-table-summary").textContent = "Tabela";
@@ -687,11 +697,12 @@ export function evolutionPayload() {
     items: evolutionItems(),
     ...(spectraCommon.on ? { settings: commonSpectrumSettings() } : {}),
     ...evolutionOptions(),
+    events: evolutionEventsList(),
   };
 }
 
-// O que muda o cálculo (o eixo y e o x só mudam o gráfico)
-const evolutionKey = (payload) => JSON.stringify({ ...payload, y: undefined, x: undefined });
+// O que muda o cálculo (os eixos e os eventos só mudam o gráfico)
+const evolutionKey = (payload) => JSON.stringify({ ...payload, y: undefined, x: undefined, events: undefined });
 let lastEvolutionKey = "";
 
 function scheduleEvolution() {
@@ -709,6 +720,7 @@ export async function ensureEvolution() {
 
 function clearEvolution(mensagem) {
   evolution = null;
+  syncEventTool();
   Plotly.purge($("evolution-plot"));
   $("evolution-table").innerHTML = "";
   $("evolution-table-summary").textContent = "Tabela";
@@ -794,16 +806,26 @@ function renderEvolution() {
       marker: { symbol: "circle-open", size: 15, color: "#e67e22", line: { width: 2.5 } },
     });
   }
+  const eventos = eventPositions();
   const gd = $("evolution-plot");
   Plotly.react(gd, traces, {
     separators: ",.",
-    margin: { l: 60, r: 20, t: 30, b: 45 },
+    margin: { l: 60, r: 20, t: eventos.length ? 44 : 30, b: 45 },
+    // Um evento = uma linha e a sua legenda, nos mesmos índices (o arraste usa isso)
+    shapes: eventos.map(({ x, e }) => ({
+      type: "line", xref: "x", yref: "paper", x0: x, x1: x, y0: 0, y1: 1,
+      line: { color: e.color, width: 1.5, dash: "dash" },
+    })),
+    annotations: eventos.map(({ x, e }) => ({
+      x, y: 1, xref: "x", yref: "paper", yanchor: "bottom", showarrow: false,
+      text: textoPlotly(e.label), font: { size: 11, color: e.color },
+    })),
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
     xaxis: { title: porTempo ? "Tempo desde o 1º arquivo (min)" : "Arquivo (ordem)",
              gridcolor: "#eceff3", dtick: porTempo || n > 30 ? undefined : 1 },
     yaxis: { title: $("evo-y").value === "intensity" && evolution.unit ? `${rotulo} (${evolution.unit})` : rotulo,
              gridcolor: "#eceff3" },
-    legend: { orientation: "h", y: 1.1 },
+    legend: { orientation: "h", y: eventos.length ? 1.16 : 1.1 },
     hovermode: "closest",
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
   }, { responsive: true });
@@ -827,6 +849,8 @@ function renderEvolution() {
     : `${evolution.mode === "prominent" ? `${nome} mais proeminente` : `${evolution.tracks.length} trilhas`} · ${n} espectros`;
   renderEvolutionTable();
   renderEvolutionFocus();
+  renderEventLists();
+  syncEventTool();
 }
 
 function evolutionRows() {
@@ -844,6 +868,11 @@ function evolutionRows() {
       linha[`Largura (nm)${sufixo}`] = p ? numeroOuTraco(p.fwhm, 4) : "—";
       if (comVertice) linha[`λ vértice (nm)${sufixo}`] = p ? numeroOuTraco(p.vertex, 4) : "—";
     });
+    if (evolutionEvents.length && evolution.start) {
+      // O último evento antes do espectro: em que meio (ou condição) ele foi gravado
+      const antes = evolutionEvents.filter((e) => elapsedOf(e) <= f.elapsed_s);
+      linha.Evento = antes.length ? antes[antes.length - 1].label || "(sem legenda)" : "—";
+    }
     return linha;
   });
 }
@@ -943,3 +972,215 @@ $("btn-evolution-csv").addEventListener("click", () => {
              ...linhas.map((l) => colunas.map((c) => String(l[c]).replace(/—/, "")).join(";"))].join("\n"),
             "evolucao_espectros.csv");
 });
+
+// ── Eventos da evolução: trocas de meio, injeções… ───────────────────────────
+// Guardados pelo instante da aquisição (ISO, como os arquivos), não pelo tempo
+// desde o 1º espectro: tirar o 1º da evolução não os faz andar. As contas são
+// em UTC para não depender do fuso nem do horário de verão.
+const EVENT_COLORS = ["#4682B4", "#2E8B57", "#8B008B", "#C0392B", "#D35400", "#7F8C8D"];
+const EVENT_GRAB_PX = 6;
+let evolutionEvents = [];   // [{at, label, color}], em ordem de tempo
+let markingEvents = false;
+let eventDrag = null;       // {indice, x}
+
+export const evolutionEventsList = () => evolutionEvents.map((e) => ({ ...e }));
+
+const textoPlotly = (t) => (t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const instante = (iso) => Date.parse(`${iso}Z`);
+
+function isoUtc(ms) {
+  const d = new Date(ms);
+  const p = (n, k = 2) => String(n).padStart(k, "0");
+  return `${p(d.getUTCFullYear(), 4)}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T` +
+    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${p(d.getUTCMilliseconds(), 3)}`;
+}
+
+// Segundos desde o 1º espectro da evolução atual
+const elapsedOf = (e) => (instante(e.at) - instante(evolution.start)) / 1000;
+const isoOfElapsed = (s) => isoUtc(instante(evolution.start) + Math.round(s * 1000));
+
+// Interpolação linear com as pontas presas (como np.interp)
+function interp(v, xs, ys) {
+  if (v <= xs[0]) return ys[0];
+  if (v >= xs[xs.length - 1]) return ys[ys.length - 1];
+  const i = xs.findIndex((x) => x >= v);
+  const f = (v - xs[i - 1]) / (xs[i] - xs[i - 1] || 1);
+  return ys[i - 1] + f * (ys[i] - ys[i - 1]);
+}
+
+// Eixo x do gráfico: minutos, ou o número do espectro (o evento fica entre o
+// espectro de antes e o de depois)
+const porMinuto = () => $("evo-x").value === "time";
+function xOfElapsed(s) {
+  if (porMinuto()) return s / 60;
+  return interp(s, evolution.files.map((f) => f.elapsed_s), evolution.files.map((f) => f.index));
+}
+function elapsedOfX(x) {
+  if (porMinuto()) return x * 60;
+  return interp(x, evolution.files.map((f) => f.index), evolution.files.map((f) => f.elapsed_s));
+}
+
+function eventPositions() {
+  if (!evolution?.start) return [];
+  return evolutionEvents.map((e, i) => ({ e, i, x: xOfElapsed(elapsedOf(e)) }));
+}
+
+// Sem o instante de cada arquivo, não há onde pôr um evento
+function syncEventTool() {
+  const pode = Boolean(evolution?.start);
+  $("btn-evo-event").disabled = !pode;
+  document.querySelectorAll(".evo-event-add").forEach((b) => { b.disabled = !pode; });
+  if (!pode && markingEvents) setMarkingEvents(false);
+}
+
+function setMarkingEvents(on) {
+  markingEvents = on && Boolean(evolution?.start);
+  $("btn-evo-event").classList.toggle("on", markingEvents);
+  $("evolution-plot").classList.toggle("marking", markingEvents);
+  $("evolution-events-hint").textContent = markingEvents
+    ? "Clique no gráfico para marcar um evento · arraste uma linha para mover · Esc termina"
+    : "Trocas de meio, injeções…: “Marcar evento” e um clique no gráfico. Viram as linhas verticais da figura.";
+}
+
+// Posição do ponteiro no eixo x e o evento cuja linha está a até EVENT_GRAB_PX
+function eventNear(ev) {
+  const gd = $("evolution-plot");
+  const xa = gd._fullLayout?.xaxis, ya = gd._fullLayout?.yaxis;
+  if (!xa || !ya || !evolution?.start) return null;
+  const r = gd.getBoundingClientRect();
+  const px = ev.clientX - r.left - xa._offset, py = ev.clientY - r.top - ya._offset;
+  if (px < 0 || px > xa._length || py < 0 || py > ya._length) return null;
+  let alvo = null, menor = EVENT_GRAB_PX;
+  eventPositions().forEach(({ x, i }) => {
+    const d = Math.abs(xa.l2p(x) - px);
+    if (d <= menor) { menor = d; alvo = i; }
+  });
+  return { x: xa.p2l(px), alvo };
+}
+
+function sortEvents() {
+  evolutionEvents.sort((a, b) => instante(a.at) - instante(b.at));
+}
+
+// Algo mudou nos eventos: gráfico, tabela, as duas listas, projeto e figura
+function eventsChanged({ listas = true } = {}) {
+  sortEvents();
+  markProjectDirty();
+  if (evolution) renderEvolution();
+  else if (listas) renderEventLists();
+  if (vizSource() === "evolution") scheduleFigure();
+}
+
+function addEvent(elapsed) {
+  const evento = { at: isoOfElapsed(elapsed), label: "",
+                   color: EVENT_COLORS[evolutionEvents.length % EVENT_COLORS.length] };
+  evolutionEvents.push(evento);
+  eventsChanged();
+  // A legenda é o que falta: o cursor já vai para ela
+  const i = evolutionEvents.indexOf(evento);
+  $("evolution-events").querySelectorAll(".event-label")[i]?.focus();
+}
+
+// "+ adicionar": no instante do espectro em foco (ou no fim da evolução)
+document.querySelectorAll(".evo-event-add").forEach((botao) => botao.addEventListener("click", () => {
+  if (!evolution?.start) { showError("Calcule a evolução com espectros que tenham o instante da aquisição."); return; }
+  const foco = evolution.files.find((f) => f.file === shared.currentSpectrumFile);
+  addEvent((foco || evolution.files[evolution.files.length - 1]).elapsed_s);
+}));
+
+$("btn-evo-event").addEventListener("click", () => setMarkingEvents(!markingEvents));
+
+$("evolution-plot").addEventListener("mousedown", (ev) => {
+  if (!markingEvents || ev.button !== 0) return;
+  const perto = eventNear(ev);
+  if (!perto) return;                 // fora da área dos eixos (legenda, título)
+  ev.stopPropagation();               // nem zoom, nem abrir o espectro do ponto
+  ev.preventDefault();                // (e o foco não sai do campo sozinho:)
+  document.activeElement?.blur?.();   // a legenda recém-digitada é gravada antes
+  if (perto.alvo !== null) eventDrag = { indice: perto.alvo, x: perto.x };
+  else addEvent(elapsedOfX(perto.x));
+}, true);
+
+window.addEventListener("mousemove", (ev) => {
+  const gd = $("evolution-plot");
+  if (eventDrag) {
+    const perto = eventNear(ev);
+    if (!perto) return;
+    eventDrag.x = perto.x;
+    const i = eventDrag.indice;
+    Plotly.relayout(gd, { [`shapes[${i}].x0`]: perto.x, [`shapes[${i}].x1`]: perto.x, [`annotations[${i}].x`]: perto.x });
+    return;
+  }
+  if (markingEvents && gd.contains(ev.target)) gd.classList.toggle("near-event", eventNear(ev)?.alvo != null);
+});
+
+window.addEventListener("mouseup", () => {
+  if (!eventDrag) return;
+  const { indice, x } = eventDrag;
+  eventDrag = null;
+  evolutionEvents[indice].at = isoOfElapsed(elapsedOfX(x));
+  eventsChanged();
+});
+
+// Hora digitada (HH:MM:SS): no dia do evento, ou no vizinho se cair mais
+// perto da evolução (ensaio que passa da meia-noite)
+function setEventClock(evento, valor) {
+  const [h, m, s = "0"] = valor.split(":").map(Number);
+  if (![h, m, s].every(Number.isFinite)) return;
+  const d = new Date(instante(evento.at));
+  let novo = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m, Math.floor(s));
+  if (evolution?.start) {
+    const ini = instante(evolution.start);
+    const fim = ini + 1000 * Math.max(...evolution.files.map((f) => f.elapsed_s ?? 0));
+    const fora = (t) => (t < ini ? ini - t : t > fim ? t - fim : 0);
+    const DIA = 864e5;
+    [-DIA, DIA].forEach((passo) => { if (fora(novo + passo) < fora(novo)) novo += passo; });
+  }
+  evento.at = isoUtc(novo);
+}
+
+function eventRow(evento) {
+  const row = document.createElement("div");
+  row.className = "event-row";
+  const hora = document.createElement("input");
+  hora.type = "time"; hora.step = 1; hora.className = "event-time";
+  hora.value = evento.at.slice(11, 19);
+  hora.title = "Hora do evento";
+  const legenda = document.createElement("input");
+  legenda.type = "text"; legenda.className = "event-label"; legenda.value = evento.label;
+  legenda.placeholder = "legenda (ex.: Água)";
+  const cor = document.createElement("input");
+  cor.type = "color"; cor.className = "color-input event-color"; cor.value = evento.color;
+  cor.title = "Cor da linha";
+  const quando = document.createElement("span");
+  quando.className = "event-when";
+  if (evolution?.start) quando.textContent = `${fmtNum(elapsedOf(evento) / 60, 2)} min`;
+  const del = document.createElement("button");
+  del.type = "button"; del.className = "marker-del"; del.textContent = "×";
+  del.title = "Apagar o evento";
+
+  hora.addEventListener("change", () => { setEventClock(evento, hora.value); eventsChanged(); });
+  hora.addEventListener("blur", () => setTimeout(renderEventLists));    // volta à ordem de tempo
+  // Legenda e cor não mudam a ordem: a lista onde se digita fica como está
+  legenda.addEventListener("change", () => { evento.label = legenda.value.trim(); eventsChanged({ listas: false }); });
+  cor.addEventListener("change", () => { evento.color = cor.value; eventsChanged({ listas: false }); });
+  del.addEventListener("click", () => {
+    evolutionEvents.splice(evolutionEvents.indexOf(evento), 1);
+    eventsChanged();
+  });
+  row.append(hora, legenda, cor, quando, del);
+  return row;
+}
+
+// As duas listas (aba Espectros e cartão Dados da Figura), menos a que tem o
+// foco: refazê-la tiraria o cursor do campo onde se está digitando
+function renderEventLists() {
+  ["evolution-events", "viz-evo-events"].forEach((id) => {
+    const box = $(id);
+    if (box.contains(document.activeElement) && box.children.length === evolutionEvents.length) return;
+    box.innerHTML = "";
+    evolutionEvents.forEach((evento) => box.appendChild(eventRow(evento)));
+    if (!evolutionEvents.length) box.innerHTML = '<span class="hint">Nenhum evento.</span>';
+  });
+}
+

@@ -176,9 +176,21 @@ window (an empty point). The prepared spectra and their valleys are cached by
 file, preparation, source and dark: changing λ ref, the window or the mode
 recomputes hundreds of files at once. Plot λ, Δλ to the first file,
 intensity, depth or width against elapsed time or file order; table and CSV
-with every value; "Fazer figura" opens it in the Figura tab. All of it — the
-common preparation, λ ref, window, mode and the files left out — is saved
-with the project.
+with every value; "Fazer figura" opens it in the Figura tab.
+
+*Eventos* (medium changes, injections…): with "Marcar evento" on, a click on
+the evolution plot marks an event there and dragging a line moves it (Esc
+ends); after each click the cursor goes to its label, so marking "Ar",
+"Água", "Glicerina" is click, type, click, type. "+ adicionar" puts one at
+the spectrum in focus. The list under the plot edits the time (HH:MM:SS),
+label and colour. An event is stored by its acquisition instant, not by the
+time since the first spectrum, so it stays put when the first spectrum is
+left out or an earlier file is added. The table and the CSV get an "Evento"
+column with the last event before each spectrum. Marking needs the
+acquisition time of the files (header `Date:` or time in the name).
+
+All of it — the common preparation, λ ref, window, mode, the files left out
+and the events — is saved with the project.
 
 **Interval statistics** (Séries temporais, under the markers) — for every
 channel of the processed signal on the plot: mean, deviation, extremes, drift,
@@ -191,8 +203,10 @@ CSV export.
 evolution of a valley between spectra. With *Evolução entre espectros*, each
 track is a curve; "Grandeza no eixo Y" (λ, Δλ, intensity, depth, width) is
 the same choice as the y axis of the Espectros tab, x is the time since the
-first spectrum in the chosen unit (or the spectrum number when the files have
-no time), and markers are in seconds since the first spectrum. The sidebar
+first spectrum in the chosen unit (or the spectrum number), and the vertical
+lines are the events of the evolution — listed in the *Dados* card, where
+their label, colour and time can be changed too (the markers of the
+Séries temporais tab are not used here). The sidebar
 starts with what changes the figure the most, *Estilo e tamanho* (saved
 style, size preset — IEEE, Elsevier, A4, slide —, font and base size), then
 *Dados*, *Curvas*, *Figura* and *Marcações e eixos*. Each card shows a
