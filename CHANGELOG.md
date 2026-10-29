@@ -69,8 +69,15 @@ itself did not change: the same input gives the same output as before.
   prepared spectra and their valleys are cached (`AppState.analyses`), and a
   file that cannot be read is skipped with a warning.
 - Figura: the evolution of a valley between spectra as a third source
-  (`source: "evolution"`, `evolution_labels`), with the y quantity, time unit
-  and markers.
+  (`source: "evolution"`, `evolution_labels`), with the y quantity and time
+  unit.
+- Events of the evolution (medium changes, injections): "Marcar evento" and a
+  click on the evolution plot, drag to move, label/colour/time in a list
+  under the plot and in the Figura *Dados* card. Stored by acquisition
+  instant (`Project.evolution_events`, `parse_evolution_events`), returned
+  with `elapsed_s` by `/api/spectra/evolution` (which now also gives `start`),
+  drawn as the vertical lines of the evolution figure, and added to the
+  table and CSV as an "Evento" column.
 - Séries temporais plot: one panel per channel (default) or all on the same
   plot, values relative to the start, and the y scale follows the processed
   signal instead of the raw spikes. "Medir trecho": dragging a stretch gives

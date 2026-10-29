@@ -55,6 +55,7 @@ from braggflow.processing.spectra import (
     analyse_spectrum,
     apply_transmission,
     default_spectrum_settings,
+    parse_evolution_events,
     prepare_spectrum,
     resolve_evolution_options,
     resolve_spectrum_settings,
@@ -246,13 +247,16 @@ def _compute_evolution(options: dict) -> dict:
     """
     Evolução dos vales (ou picos) dos espectros pedidos, para a aba Espectros
     e para a figura. ``options``: ``items`` (``[{file, trace?, settings?}]``),
-    ``settings`` (o preparo comum, para os itens sem preparo próprio) e as
-    opções de :data:`EVOLUTION_SPEC`.
+    ``settings`` (o preparo comum, para os itens sem preparo próprio), as
+    opções de :data:`EVOLUTION_SPEC` e ``events`` (``[{at, label, color}]``),
+    que voltam com ``elapsed_s``: segundos desde o 1º espectro, ou ``None``
+    quando os arquivos não têm o instante da aquisição.
 
     Um arquivo que não dá para ler ou preparar não derruba o cálculo: fica de
     fora e aparece em ``skipped`` e nos avisos.
     """
     opts = resolve_evolution_options(options)
+    eventos = parse_evolution_events(options.get("events"))
     comum = options.get("settings") or {}
     kind = opts["kind"]
     entradas, unidades, ignorados, vistos = [], set(), [], set()
@@ -323,8 +327,12 @@ def _compute_evolution(options: dict) -> dict:
         if sem:
             metodo = "o ajuste no fundo" if opts["locate"] == "fit" else "o centroide"
             avisos.append(f"Sem {metodo} em {sem} ponto(s): ficou o vértice de 3 pontos.")
+    inicio = datetime.fromisoformat(resultado["start"]) if resultado["start"] else None
+    for evento in eventos:
+        evento["elapsed_s"] = ((datetime.fromisoformat(evento["at"]) - inicio).total_seconds()
+                               if inicio else None)
     resultado.update({"unit": unidades.pop() if len(unidades) == 1 else "", "warnings": avisos,
-                      "skipped": ignorados})
+                      "skipped": ignorados, "events": eventos})
     return resultado
 
 
@@ -332,23 +340,32 @@ def _evolution_items(options: dict, style: dict, markers: list):
     """
     Curvas da evolução para a figura: uma por trilha marcada, com a grandeza
     escolhida (``y`` das opções) contra o tempo desde o primeiro espectro, na
-    unidade da figura, ou contra o número do espectro. As marcações estão em
-    segundos desde o primeiro espectro. Retorna ``(items, xlabel, ylabel,
-    divisor, markers)``.
+    unidade da figura, ou contra o número do espectro. As marcações são os
+    eventos da evolução (``evolution.events``), não as das séries; no eixo de
+    números, cada evento fica entre os espectros de antes e de depois dele.
+    Retorna ``(items, xlabel, ylabel, divisor, markers)``.
     """
     pedido = options.get("evolution") or {}
     opts = resolve_evolution_options(pedido)
     resultado = _compute_evolution(pedido)
     data_s = style["data"]
+    tempos = np.array([f["elapsed_s"] if f["elapsed_s"] is not None else np.nan
+                       for f in resultado["files"]], dtype=float)
+    markers = [{"time": e["elapsed_s"], "label": e["label"], "color": e["color"]}
+               for e in resultado["events"] if e["elapsed_s"] is not None]
     por_tempo = resultado["x"] == "time" and opts["x"] == "time"
     if por_tempo:
         offset = marker_offset(markers, data_s)
         markers = shift_markers(markers, offset)
         divisor = TIME_DIVISORS[data_s["time_unit"]]
-        x = (np.array([f["elapsed_s"] for f in resultado["files"]], dtype=float) - offset) / divisor
+        x = (tempos - offset) / divisor
     else:
-        markers, divisor = [], 1.0          # sem tempo, as marcações não têm onde ficar
+        divisor = 1.0
         x = np.array([f["index"] for f in resultado["files"]], dtype=float)
+        if resultado["x"] == "time":
+            markers = [{**m, "time": float(np.interp(m["time"], tempos, x))} for m in markers]
+        else:
+            markers = []                    # sem o instante dos arquivos, os eventos não têm onde ficar
 
     marcadas = options.get("tracks")
     items = []

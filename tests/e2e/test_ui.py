@@ -421,6 +421,77 @@ def test_evolution_becomes_a_figure(pasta_lmr, app):
     expect(app.locator("#evo-y")).to_have_value("delta")
 
 
+def ponto_da_evolucao(page: Page, minutos: float) -> tuple[float, float]:
+    """Pixel do gráfico da evolução no instante ``minutos`` (meia altura)."""
+    return page.evaluate("""(t) => {
+        const gd = document.getElementById('evolution-plot');
+        gd.scrollIntoView({block: 'center'});
+        const xa = gd._fullLayout.xaxis, ya = gd._fullLayout.yaxis, r = gd.getBoundingClientRect();
+        return [r.left + xa._offset + xa.l2p(t), r.top + ya._offset + ya._length / 2];
+    }""", minutos)
+
+
+def eventos_no_grafico(page: Page) -> list:
+    return page.evaluate("""() => {
+        const l = document.getElementById('evolution-plot').layout;
+        return (l.annotations || []).map((a, i) => [a.text, Math.round(l.shapes[i].x0 * 60)]);
+    }""")
+
+
+def test_events_are_marked_on_the_evolution_and_go_to_the_figure(pasta_lmr, app):
+    novo_projeto(app, "Eventos")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)                                   # espectros às 09:30:15, 09:31:30,5 e 09:32:46
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    app.click("#btn-evo-event")
+    expect(app.locator("#btn-evo-event")).to_have_class(re.compile(r"\bon\b"))
+    app.mouse.click(*ponto_da_evolucao(app, 0.8))       # 48 s depois do 1º
+    expect(app.locator("#evolution-events .event-label")).to_be_focused()
+    app.keyboard.type("Água")
+    app.mouse.click(*ponto_da_evolucao(app, 2.0))       # o clique grava a legenda antes
+    app.keyboard.type("Glicerina")
+    app.keyboard.press("Enter")
+    expect(app.locator("#evolution-events .event-row")).to_have_count(2)
+    app.wait_for_function("document.getElementById('evolution-plot').layout.annotations?.[1]?.text === 'Glicerina'")
+    eventos = eventos_no_grafico(app)
+    assert [e[0] for e in eventos] == ["Água", "Glicerina"]
+    assert [e[1] for e in eventos] == pytest.approx([48, 120], abs=3)
+    hora = app.locator("#evolution-events .event-time").first.input_value()
+    assert hora[:5] == "09:31", hora
+
+    # Arrastar a linha da água para 0,3 min
+    app.mouse.move(*ponto_da_evolucao(app, eventos[0][1] / 60))
+    app.mouse.down()
+    app.mouse.move(*ponto_da_evolucao(app, 0.3), steps=5)
+    app.mouse.up()
+    app.wait_for_function("Math.abs(document.getElementById('evolution-plot').layout.shapes[0].x0 - 0.3) < 0.05")
+
+    app.locator("#evolution-table-box > summary").click()      # em que meio cada espectro foi gravado
+    expect(app.locator("#evolution-table tbody tr td:last-child")).to_have_text(["—", "Água", "Glicerina"])
+
+    app.keyboard.press("Escape")
+    expect(app.locator("#btn-evo-event")).not_to_have_class(re.compile(r"\bon\b"))
+
+    app.click("#btn-evolution-figure")
+    expect(app.locator("#viz-status")).to_contain_text("2 evento(s)")
+    expect(app.locator("#viz-evo-events .event-row")).to_have_count(2)
+    antes = app.get_attribute("#viz-img", "src")
+    app.locator("#viz-evo-events .event-label").first.fill("Água DI")
+    app.locator("#viz-evo-events .event-label").first.press("Tab")
+    app.wait_for_function("(antes) => document.getElementById('viz-img').src !== antes", arg=antes)
+    expect(app.locator("#evolution-events .event-label").first).to_have_value("Água DI")
+
+    salvar_projeto(app)
+    app.reload()
+    app.locator("#gate-projects .gate-row", has_text="Eventos").click()
+    app.click('#tabs .tab[data-tab="spectra"]')
+    expect(app.locator("#evolution-events .event-row")).to_have_count(2)
+    expect(app.locator("#evolution-events .event-label").nth(1)).to_have_value("Glicerina")
+    app.wait_for_function("(document.getElementById('evolution-plot').layout?.shapes || []).length === 2")
+
+
 def test_a_folder_of_spectra_is_imported_at_once(data_dir, tmp_path, app):
     from ..lmr_synthetic import lmr_series
     pasta = tmp_path / "LMR 13-10"

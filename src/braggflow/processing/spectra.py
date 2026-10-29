@@ -88,6 +88,39 @@ def resolve_evolution_options(user: Optional[dict] = None) -> dict:
     return resolve_section(EVOLUTION_SPEC, user)
 
 
+# Um evento da evolução: troca de meio, injeção, mudança de temperatura…
+EVENT_SPEC = {
+    "at": ("str", "", None, "Instante do evento"),
+    "label": ("str", "", None, "Legenda do evento"),
+    "color": ("color", "#4682B4", None, "Cor do evento"),
+}
+
+
+def parse_evolution_events(raw: Optional[Sequence[dict]]) -> List[dict]:
+    """
+    Valida os eventos marcados na evolução: ``{at, label, color}``, com ``at``
+    no formato ISO — o instante da aquisição, como ``SpectrumSet.acquired``
+    (1900-01-01 quando os arquivos só têm a hora no nome). São guardados pelo
+    instante, e não pelo tempo desde o 1º espectro, para não andarem quando o
+    1º espectro sai da evolução ou entra um arquivo anterior. Devolve em ordem
+    de tempo, com ``at`` em milissegundos.
+    """
+    eventos = []
+    for i, item in enumerate(raw or []):
+        prefixo = f"[evento {i + 1}] "
+        if not isinstance(item, dict):
+            raise ValueError(f"{prefixo}Evento inválido.")
+        e = resolve_section(EVENT_SPEC, item, prefix=prefixo)
+        try:
+            quando = datetime.fromisoformat(e["at"].strip()).replace(tzinfo=None)
+        except ValueError:
+            raise ValueError(f"{prefixo}Instante inválido: {e['at']!r}.") from None
+        eventos.append({"at": quando.isoformat(timespec="milliseconds"),
+                        "label": e["label"].strip(), "color": e["color"]})
+    eventos.sort(key=lambda e: e["at"])
+    return eventos
+
+
 def default_spectrum_settings() -> dict:
     return resolve_section(SPECTRUM_SPEC, {})
 
@@ -517,7 +550,8 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
 
     Cada ponto traz λ, intensidade, proeminência, largura e ``delta`` (λ menos
     o λ do primeiro ponto da trilha). Cada trilha tem ``key`` (estável, para o
-    estilo da figura), ``name`` e ``points``.
+    estilo da figura), ``name`` e ``points``. ``start`` é o instante do 1º
+    arquivo (ISO, com data), a origem de ``elapsed_s``.
     """
     if kind not in ("min", "max"):
         raise ValueError(f"Tipo de extremo desconhecido: {kind}.")
@@ -617,4 +651,6 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
             "reference": reference if mode == "reference" else None,
             "window": window if mode == "reference" else None,
             "follow": bool(follow) if mode == "reference" else None, "locate": locate,
-            "x": "time" if com_tempo else "order", "files": arquivos, "tracks": trilhas}
+            "x": "time" if com_tempo else "order",
+            "start": t0.isoformat(timespec="milliseconds") if com_tempo else None,
+            "files": arquivos, "tracks": trilhas}

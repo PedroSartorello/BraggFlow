@@ -545,6 +545,13 @@
           <option value="fwhm">largura (nm)</option>
         </select>
       </label>
+      <div class="span2 hidden" data-for="evolution">
+        <span class="hint">Eventos (linhas verticais da figura):</span>
+        <div class="event-list" id="viz-evo-events"></div>
+        <span class="hint">Marque clicando no gráfico da evolução, na aba Espectros (“Marcar evento”);
+          aqui dá para mudar legenda, cor e hora.</span>
+        <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco na aba Espectros">+ adicionar evento</button>
+      </div>
       <label class="field" data-for="series evolution">Eixo X em
         <select data-style="data.time_unit">
           <option value="s">segundos</option>
@@ -976,12 +983,22 @@
           </label>
           <button type="button" id="btn-evolution" class="btn-secondary btn-sm">Recalcular</button>
           <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+          <button type="button" id="btn-evo-event" class="btn-secondary btn-sm"
+                  title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina.">Marcar evento</button>
           <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura</button>
         </div>
         <span class="hint" id="evolution-status">Usa os espectros do projeto em ordem de aquisição
           (cabeçalho <code>Date:</code> ou hora no nome do arquivo, <code>..._09-30-15-250</code>).
           Marque o λ de referência e clique no vale, no gráfico do espectro acima.</span>
         <div id="evolution-plot"></div>
+        <div class="evolution-events" id="evolution-events-box">
+          <div class="events-head">
+            <strong>Eventos</strong>
+            <span class="hint" id="evolution-events-hint">Trocas de meio, injeções…: “Marcar evento” e um clique no gráfico. Viram as linhas verticais da figura.</span>
+            <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco">+ adicionar</button>
+          </div>
+          <div class="event-list" id="evolution-events"></div>
+        </div>
         <div class="evolution-focus hidden" id="evolution-focus">
           <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior (na ordem da evolução)" aria-label="Espectro anterior">◀</button>
           <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte (na ordem da evolução)" aria-label="Espectro seguinte">▶</button>

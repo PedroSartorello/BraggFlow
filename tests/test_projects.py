@@ -130,6 +130,14 @@ def test_common_spectrum_settings_exclusions_and_evolution_are_kept():
     assert dados.evolution["reference"] == 870.5 and dados.evolution["window"] == 15
     assert dados.evolution["locate"] == "fit" and dados.source == "evolution"
 
+    com_eventos = Project.from_dict(_project(evolution_events=[
+        {"at": "1900-01-01T09:41:00", "label": "Glicerina", "color": "#8B008B"},
+        {"at": "1900-01-01T09:35:30.25", "label": "Água"}]).to_dict())
+    assert [(e["at"], e["label"]) for e in com_eventos.evolution_events] == [
+        ("1900-01-01T09:35:30.250", "Água"), ("1900-01-01T09:41:00.000", "Glicerina")]
+    with pytest.raises(ValueError, match=r"\[evento 1\] Cor"):
+        _project(evolution_events=[{"at": "1900-01-01T09:41:00", "color": "nada"}])
+
     antigo = _project(spectra_files=[{"file": "data/raw/a.txt", "settings": {}}])
     assert antigo.spectra_common is None, "projeto de antes da opção: a página decide ao abrir"
 

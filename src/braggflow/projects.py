@@ -14,7 +14,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .processing.spectra import resolve_evolution_options, resolve_spectrum_settings
+from .processing.spectra import (
+    parse_evolution_events,
+    resolve_evolution_options,
+    resolve_spectrum_settings,
+)
 from .sensors import Sensor
 from .visualization.figure import default_style, parse_markers, resolve_style
 
@@ -63,6 +67,7 @@ class Project:
     spectra_common: Optional[bool] = None
     spectra_settings: Optional[dict] = None
     evolution: dict = field(default_factory=dict)       # como acompanhar os vales
+    evolution_events: List[dict] = field(default_factory=list)   # {at, label, color}
     source: str = "series"                              # "spectra" ou "evolution"
     viz_sources: Dict[str, List[str]] = field(default_factory=dict)
     channels: List[str] = field(default_factory=list)   # curvas marcadas
@@ -107,6 +112,7 @@ class Project:
             self.spectra_settings = resolve_spectrum_settings(self.spectra_settings,
                                                               prefix="[preparo comum] ")
         self.evolution = resolve_evolution_options(self.evolution or {})
+        self.evolution_events = parse_evolution_events(self.evolution_events)
         self.viz_sources = {
             key: [str(path) for path in (self.viz_sources or {}).get(key, [])]
             for key in ("series", "spectra")
@@ -148,6 +154,7 @@ class Project:
             "spectra_common": self.spectra_common,
             "spectra_settings": self.spectra_settings,
             "evolution": self.evolution,
+            "evolution_events": self.evolution_events,
             "source": self.source,
             "viz_sources": self.viz_sources,
             "channels": self.channels,
@@ -172,6 +179,7 @@ class Project:
             spectra_common=data.get("spectra_common"),
             spectra_settings=data.get("spectra_settings"),
             evolution=data.get("evolution") or {},
+            evolution_events=data.get("evolution_events") or [],
             source=str(data.get("source") or "series"),
             viz_sources=data.get("viz_sources") or {},
             channels=data.get("channels") or [],

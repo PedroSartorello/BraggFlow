@@ -194,7 +194,7 @@ What is connected to each interrogator channel. Saved by the web app in
 
 | Folder | File | Content |
 |---|---|---|
-| `data/projects/` | `<name>.json` | a whole analysis: files with their own sensors and steps, concatenation, markers, spectra (the common preparation or one per file, files left out of the evolution, and how the evolution follows the valley: λ ref, window, mode, position), selected curves and figure style (`braggflow.projects.Project`) |
+| `data/projects/` | `<name>.json` | a whole analysis: files with their own sensors and steps, concatenation, markers, spectra (the common preparation or one per file, files left out of the evolution, how the evolution follows the valley — λ ref, window, mode, position — and its events, stored by acquisition instant), selected curves and figure style (`braggflow.projects.Project`) |
 | `data/styles/` | `<name>.json` | a figure style of the Figura tab (`braggflow.visualization.figure.resolve_style`) |
 
 Paths inside projects are written as `data/<subfolder>/<file>`; `data` stands
