@@ -254,11 +254,14 @@ def run_recipe(files: Sequence[Path], options: dict, *,
 
     savgol = options.get("savgol") or {}
     if savgol.get("enabled"):
-        pipeline.apply_filter(
-            apply_savgol_filter,
-            window_length=int(as_float(savgol.get("window_length"), 11)),
-            polyorder=int(as_float(savgol.get("polyorder"), 2)),
-        )
+        janela = int(as_float(savgol.get("window_length"), 11))
+        ordem = int(as_float(savgol.get("polyorder"), 2))
+        # O scipy recusa em inglês e sem dizer onde; aqui a mensagem nomeia a etapa
+        if janela < 3 or janela % 2 == 0:
+            raise ValueError(f"Savitzky-Golay: a janela precisa ser um número ímpar a partir de 3 (recebido {janela}).")
+        if janela <= ordem:
+            raise ValueError(f"Savitzky-Golay: a janela ({janela}) precisa ser maior que a ordem ({ordem}).")
+        pipeline.apply_filter(apply_savgol_filter, window_length=janela, polyorder=ordem)
 
     movavg = options.get("moving_average") or {}
     if movavg.get("enabled"):

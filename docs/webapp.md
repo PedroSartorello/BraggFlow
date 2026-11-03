@@ -219,6 +219,20 @@ tela" shows the whole figure; "Copiar figura" puts it on the clipboard as a PNG
 (export resolution, up to 300 dpi) for slides and documents; "Baixar figura"
 exports PDF/PNG/SVG/EPS/TIFF.
 
+**Errors and keyboard.**
+- **Refused values.** A value the processing would refuse is marked at its
+  field, with the reason right under it, and nothing is sent. Examples are an
+  even Savitzky-Golay window, a value below a field's minimum, or a search
+  window ≤ 0. The status bar names the field to fix.
+- **Failed runs.** When a run fails, the plot keeps its last good result under
+  a "Desatualizado" badge until the next success.
+- **Errors from the server.** They appear fixed under the header; × or Esc
+  closes them.
+- **Shortcuts.** They are shown on the plot tools (1, 2, Z, M, A). The tabs
+  move with the arrow keys, and ← and → step through the spectra in
+  Espectros.
+- **Visual system.** It is recorded in `DESIGN.md`.
+
 ## For developers
 
 `braggflow.webapp.app.create_app(data_dir=None)` builds an app with its own

@@ -116,7 +116,23 @@ export async function openProjectGate({ canReturn = false } = {}) {
   if (!projects.length) {
     box.innerHTML = '<span class="hint">Nenhum projeto salvo ainda. Comece um novo abaixo.</span>';
   }
+  // O foco entra no diálogo: o último projeto aberto, ou o nome do novo
+  if (!$("project-gate").classList.contains("hidden") && !$("project-gate").contains(document.activeElement)) {
+    ($("gate-projects").querySelector(".gate-row") || $("gate-name")).focus();
+  }
 }
+
+// Diálogo de projetos: Tab circula dentro dele; Esc volta ao projeto atual
+$("project-gate").addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("project-gate").dataset.canReturn) { closeProjectGate(); return; }
+  if (e.key !== "Tab") return;
+  const focaveis = [...$("project-gate").querySelectorAll("button, input")].filter((el) => el.offsetParent && !el.disabled);
+  if (!focaveis.length) return;
+  const [primeiro, ultimo] = [focaveis[0], focaveis[focaveis.length - 1]];
+  if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+  else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+});
+$("gate-name").addEventListener("input", () => $("gate-error").classList.add("hidden"));
 
 function closeProjectGate() {
   $("project-gate").classList.add("hidden");
@@ -673,7 +689,10 @@ async function saveProjectNow(silent) {
     }
     return true;
   } catch (err) {
-    setSaveState("erro ao salvar — clique para tentar de novo", true);
+    // O motivo fica à vista: o salvamento não vai dar certo enquanto ele existir
+    const motivo = err.message.replace(/^Projeto inválido:\s*/, "");
+    setSaveState(`não salvo: ${motivo}`, true);
+    $("save-state").title = `${err.message} · Corrija e clique aqui para tentar de novo.`;
     if (!silent) showError(err.message);
     return false;
   }
@@ -744,7 +763,7 @@ function askLeaveProject() {
       }
       await saveProject();
       if (projectDirty) {               // não salvou: mostra o motivo aqui mesmo
-        $("leave-error").textContent = $("error-bar").textContent || "Não foi possível salvar.";
+        $("leave-error").textContent = $("error-text").textContent || "Não foi possível salvar.";
         $("leave-error").classList.remove("hidden");
         return;
       }

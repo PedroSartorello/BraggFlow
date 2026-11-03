@@ -39,11 +39,98 @@ export async function checkServerBuild() {
 }
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
+// Aviso de erro: fixo no topo da área de trabalho, anunciado ao leitor de tela
 export function showError(msg) {
-  const bar = $("error-bar");
-  bar.textContent = msg;
-  bar.style.display = msg ? "block" : "none";
+  $("error-text").textContent = msg;
+  $("error-bar").classList.toggle("visible", Boolean(msg));
 }
+$("error-close").addEventListener("click", () => showError(""));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("error-bar").classList.contains("visible")) showError("");
+});
+
+// Gráfico mostrando um resultado antigo (o último cálculo falhou ou falta corrigir um campo)
+export function markStale(id, texto = "") {
+  const el = $(id);
+  el.classList.toggle("is-stale", Boolean(texto));
+  if (texto) el.dataset.stale = texto;
+  else delete el.dataset.stale;
+}
+
+// ── Campos com valor que o processamento não aceita ──────────────────────────
+// A mensagem fica logo abaixo do campo, antes de qualquer pedido ao servidor.
+const FIELD_RULES = {
+  "savgol-window": (el) => {
+    const janela = Number(el.value), ordem = Number($("savgol-poly").value);
+    if (!Number.isInteger(janela) || janela < 3 || janela % 2 === 0) return "Use um número ímpar a partir de 3.";
+    if (Number.isFinite(ordem) && janela <= ordem) return `A janela precisa ser maior que a ordem (${ordem}).`;
+    return "";
+  },
+  "evo-window": (el) => (el.value.trim() !== "" && !(Number(el.value) > 0)
+    ? "Use um valor maior que zero, ou deixe vazio para não limitar." : ""),
+};
+
+export function fieldProblem(el) {
+  if (el.disabled || el.closest("label")?.classList.contains("hidden")) return "";
+  const step = el.closest(".step");
+  if (step?.querySelector(".step-switch") && !step.querySelector(".step-switch").checked) return "";
+  const v = el.validity;
+  if (v.badInput) return "Digite um número.";
+  const propria = FIELD_RULES[el.id]?.(el);      // a regra do campo explica melhor que o limite
+  if (propria) return propria;
+  if (v.rangeUnderflow) return `Use um valor a partir de ${el.min.replace(".", ",")}.`;
+  if (v.rangeOverflow) return `Use um valor até ${el.max.replace(".", ",")}.`;
+  return "";
+}
+
+let fieldErrorCount = 0;
+export function markField(el, msg) {
+  const host = el.closest("label") || el.parentElement;
+  let note = [...host.children].find((c) => c.classList.contains("field-error") && c.dataset.for === (el.id || el.className));
+  if (!msg) {
+    el.removeAttribute("aria-invalid");
+    if (note) { el.removeAttribute("aria-describedby"); note.remove(); }
+    return;
+  }
+  if (!note) {
+    note = document.createElement("span");
+    note.className = "field-error";
+    note.id = `field-error-${++fieldErrorCount}`;
+    note.dataset.for = el.id || el.className;
+    host.appendChild(note);
+  }
+  note.textContent = msg;
+  el.setAttribute("aria-invalid", "true");
+  el.setAttribute("aria-describedby", note.id);
+}
+
+// Confere os campos numéricos de uma área; devolve o primeiro inválido (ou null)
+export function checkFields(root) {
+  let primeiro = null;
+  root.querySelectorAll("input[type=number]").forEach((el) => {
+    const problema = fieldProblem(el);
+    markField(el, problema);
+    if (problema && !primeiro) primeiro = el;
+  });
+  const step = primeiro?.closest(".step");
+  if (step) toggleStep(step, true);           // o campo com problema fica à vista
+  return primeiro;
+}
+
+// Nome do campo para a mensagem de status ("Janela (ímpar)", "K_T de CH_1"…)
+export function fieldName(el) {
+  const label = el.closest("label");
+  const texto = label ? [...label.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ").trim() : "";
+  return texto || el.getAttribute("aria-label") || el.placeholder || "campo";
+}
+
+// Corrigiu o valor: a mensagem sai na hora
+document.addEventListener("input", (e) => {
+  if (e.target.matches?.('input[type=number][aria-invalid="true"]')) markField(e.target, fieldProblem(e.target));
+  if (e.target.id === "savgol-poly" && $("savgol-window").getAttribute("aria-invalid")) {
+    markField($("savgol-window"), fieldProblem($("savgol-window")));
+  }
+});
 
 export function setBusy(busy) {
   $("btn-process").disabled = busy;
@@ -63,10 +150,28 @@ export function toggleStep(step, open) {
   const show = open ?? body.classList.contains("hidden");
   body.classList.toggle("hidden", !show);
   step.classList.toggle("open", show);
+  step.querySelector(".step-name")?.setAttribute("aria-expanded", String(show));
 }
 
 document.querySelectorAll(".step-name").forEach((button) => {
   button.addEventListener("click", () => toggleStep(button.closest(".step")));
+});
+
+// Interruptores das etapas e dos cartões: o nome da etapa é o rótulo deles
+document.querySelectorAll(".step").forEach((step, i) => {
+  const sw = step.querySelector(".step-switch");
+  const nome = step.querySelector(".step-name");
+  if (!sw || !nome) return;
+  nome.id ||= `step-name-${i}`;
+  sw.setAttribute("aria-labelledby", nome.id);
+  nome.setAttribute("aria-expanded", "false");
+});
+document.querySelectorAll(".card-header").forEach((head, i) => {
+  const sw = head.querySelector("input[type=checkbox]");
+  const titulo = head.querySelector("span");
+  if (!sw || !titulo) return;
+  titulo.id ||= `card-title-${i}`;
+  sw.setAttribute("aria-labelledby", titulo.id);
 });
 
 export function syncCardStyles() {

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BraggFlow — Processamento FBG</title>
+<title>BraggFlow — séries, espectros e figuras</title>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
 
-<div id="project-gate" class="gate hidden">
+<div id="project-gate" class="gate hidden" role="dialog" aria-modal="true" aria-labelledby="gate-title">
   <div class="gate-card">
     <div class="brand">
       <svg class="logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -17,7 +17,7 @@
         <path d="M5 21 Q8.5 9 11.5 16 T18 18 T27 11" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
       </svg>
       <div>
-        <strong>BraggFlow</strong>
+        <strong id="gate-title">BraggFlow</strong>
         <small>Escolha um projeto para continuar ou comece um novo</small>
       </div>
     </div>
@@ -29,7 +29,8 @@
     <span class="gate-error hidden" id="gate-error">Dê um nome ao projeto: os resultados ficam numa pasta com esse nome.</span>
     <button type="button" id="btn-gate-back" class="btn-secondary hidden">← Voltar ao projeto atual</button>
     <span class="hint">Um projeto guarda os arquivos escolhidos, o processamento de cada um, as marcações e o estilo da figura.
-      Atalhos: Ctrl+Enter processa (ou atualiza a figura) · Ctrl+S salva o projeto.</span>
+      Excluir um projeto apaga só o projeto: os arquivos de dados e os CSVs processados ficam.
+      Atalhos: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> processa (ou atualiza a figura) · <kbd>Ctrl</kbd>+<kbd>S</kbd> salva o projeto.</span>
   </div>
 </div>
 
@@ -43,7 +44,7 @@
     </label>
     <div class="dialog-actions">
       <button type="button" id="leave-cancel" class="btn-secondary">Cancelar</button>
-      <button type="button" id="leave-discard" class="btn-secondary">Descartar</button>
+      <button type="button" id="leave-discard" class="btn-secondary btn-danger-quiet">Descartar</button>
       <button type="button" id="leave-save" class="btn-primary">Salvar e continuar</button>
     </div>
   </div>
@@ -63,19 +64,19 @@
     </svg>
     <div>
       <strong>BraggFlow</strong>
-      <small>Sinais FBG · processamento &amp; figuras</small>
+      <small>Sensores ópticos · séries, espectros e figuras</small>
     </div>
   </div>
 
-  <div id="tabs">
-    <button type="button" class="tab active" data-tab="series">Séries temporais</button>
-    <button type="button" class="tab" data-tab="spectra">Espectros</button>
-    <button type="button" class="tab" data-tab="viz">Figura</button>
+  <div id="tabs" role="tablist" aria-label="Área de trabalho">
+    <button type="button" class="tab active" data-tab="series" role="tab" id="tab-series" aria-selected="true" aria-controls="tab-series-main">Séries temporais</button>
+    <button type="button" class="tab" data-tab="spectra" role="tab" id="tab-spectra" aria-selected="false" aria-controls="tab-spectra-main" tabindex="-1">Espectros</button>
+    <button type="button" class="tab" data-tab="viz" role="tab" id="tab-viz" aria-selected="false" aria-controls="tab-viz-main" tabindex="-1">Figura</button>
   </div>
 
   <div id="project-bar">
     <span class="project-label">Projeto</span>
-    <input type="text" id="project-name" class="project-title" placeholder="nome do projeto"
+    <input type="text" id="project-name" class="project-title" placeholder="nome do projeto" aria-label="Nome do projeto"
            title="Nome do projeto. Salvar com outro nome cria uma cópia.">
     <span id="project-dirty" class="hidden" title="Há alterações que ainda não foram salvas">não salvo</span>
     <span id="save-state" class="save-state" aria-live="polite"></span>
@@ -92,8 +93,12 @@
 </header>
 
 <div id="content">
+<div id="error-bar" role="alert" aria-live="assertive">
+  <span id="error-text"></span>
+  <button type="button" id="error-close" aria-label="Fechar aviso" title="Fechar (Esc)">×</button>
+</div>
+
 <div id="sidebar">
-  <div id="error-bar"></div>
 
   <div id="tab-series-sidebar">
 
@@ -109,9 +114,10 @@
         <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 8px;">
           <div id="series-picker" class="file-list"></div>
           <button type="button" id="btn-add-series" class="btn-dashed">Adicionar marcados</button>
-          <label class="field">Importar do computador
-            <input type="file" id="file-upload" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec">
-          </label>
+          <div class="upload-row">
+            <label class="btn-secondary btn-sm">Importar arquivos
+              <input type="file" id="file-upload" class="file-hidden" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
+          </div>
         </div>
       </details>
       <button type="button" id="btn-copy-series" class="btn-dashed">Copiar opções para os outros arquivos</button>
@@ -331,8 +337,8 @@
       <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo">Baixar CSV</button>
     </div>
     <div class="row actions-sub">
-      <label class="check-row" title="A cada mudança nas opções, processa e grava de novo">
-        <input type="checkbox" id="auto-process" checked> Reprocessar ao mudar opções</label>
+      <label class="check-row" title="A cada mudança nas opções, processa e grava o CSV de novo. Abrir ou adicionar um arquivo só mostra a prévia.">
+        <input type="checkbox" id="auto-process" checked> Gravar o CSV a cada mudança</label>
       <button type="button" id="btn-process-all" class="btn-link"
               title="Processa, um por um, os arquivos marcados na lista">Processar marcados ▶▶</button>
     </div>
@@ -793,9 +799,9 @@
     <div id="plot-toolbar" class="plot-toolbar">
       <div class="segmented" role="radiogroup" aria-label="Disposição dos canais">
         <label title="Um painel por canal, cada um com a sua escala; o tempo é o mesmo em todos (atalho 1)">
-          <input type="radio" name="plot-layout" value="separate" checked> Canais separados</label>
+          <input type="radio" name="plot-layout" value="separate" checked> Canais separados<kbd>1</kbd></label>
         <label title="Todos os canais no mesmo eixo (atalho 2)">
-          <input type="radio" name="plot-layout" value="overlay"> Mesmo gráfico</label>
+          <input type="radio" name="plot-layout" value="overlay"> Mesmo gráfico<kbd>2</kbd></label>
       </div>
       <label class="check-row plot-toggle" title="Mostra cada canal menos o seu primeiro valor (só a exibição; o processamento não muda). Atalho D">
         <input type="checkbox" id="plot-relative"> Relativo ao início</label>
@@ -803,11 +809,11 @@
         <input type="checkbox" id="show-raw" checked> Sinal bruto</label>
       <div class="segmented" role="radiogroup" aria-label="O que o arraste do mouse faz">
         <label title="Arrastar aproxima; duplo clique mostra tudo (atalho Z)">
-          <input type="radio" name="plot-tool" value="zoom" checked> Zoom</label>
+          <input type="radio" name="plot-tool" value="zoom" checked> Zoom<kbd>Z</kbd></label>
         <label title="Arrastar mede o trecho: média, desvio, deriva e variação de cada canal (atalho M)">
-          <input type="radio" name="plot-tool" value="select"> Medir trecho</label>
+          <input type="radio" name="plot-tool" value="select"> Medir trecho<kbd>M</kbd></label>
         <label title="Clicar marca um instante; arrastar uma marcação muda o instante dela (atalho A)">
-          <input type="radio" name="plot-tool" value="mark"> Marcar</label>
+          <input type="radio" name="plot-tool" value="mark"> Marcar<kbd>A</kbd></label>
       </div>
       <span class="plot-hint" id="plot-hint">arraste = zoom · duplo clique = ver tudo</span>
     </div>
@@ -934,8 +940,9 @@
       <summary class="card-header"><span>Evolução entre arquivos</span>
         <span class="card-state" id="evolution-state"></span></summary>
       <div class="card-body" style="grid-template-columns: minmax(0, 1fr);">
-        <div class="analysis-options evolution-options">
-          <label class="field">Acompanhar
+        <div class="analysis-options evolution-options evo-group" role="group" aria-labelledby="evo-g-track">
+          <span class="evo-group-title" id="evo-g-track">Acompanhar</span>
+          <label class="field">Extremo
             <select id="evo-kind" data-evo="kind"><option value="min">vales</option><option value="max">picos</option></select>
           </label>
           <label class="field" title="Perto do λ de referência: em cada arquivo, o extremo mais próximo do λ marcado (dentro da janela). Mais proeminente: a ressonância principal de cada arquivo. Todos os do 1º arquivo: cada extremo do 1º arquivo vira uma trilha.">Modo
@@ -965,7 +972,8 @@
             </select>
           </label>
         </div>
-        <div class="analysis-options evolution-options">
+        <div class="analysis-options evolution-options evo-group" role="group" aria-labelledby="evo-g-show">
+          <span class="evo-group-title" id="evo-g-show">Mostrar</span>
           <label class="field">Eixo y
             <select id="evo-y" data-evo="y">
               <option value="wavelength">λ (nm)</option>
@@ -981,11 +989,13 @@
               <option value="order">ordem dos arquivos</option>
             </select>
           </label>
+          <div class="evo-actions">
           <button type="button" id="btn-evolution" class="btn-secondary btn-sm">Recalcular</button>
           <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
           <button type="button" id="btn-evo-event" class="btn-secondary btn-sm"
                   title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina.">Marcar evento</button>
           <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura</button>
+          </div>
         </div>
         <span class="hint" id="evolution-status">Usa os espectros do projeto em ordem de aquisição
           (cabeçalho <code>Date:</code> ou hora no nome do arquivo, <code>..._09-30-15-250</code>).
@@ -1000,8 +1010,8 @@
           <div class="event-list" id="evolution-events"></div>
         </div>
         <div class="evolution-focus hidden" id="evolution-focus">
-          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior (na ordem da evolução)" aria-label="Espectro anterior">◀</button>
-          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte (na ordem da evolução)" aria-label="Espectro seguinte">▶</button>
+          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior, na ordem da evolução (←)" aria-label="Espectro anterior">◀</button>
+          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte, na ordem da evolução (→)" aria-label="Espectro seguinte">▶</button>
           <span id="evolution-focus-text"></span>
           <button type="button" id="btn-evo-exclude" class="btn-link"></button>
           <button type="button" id="btn-evo-restore" class="btn-link hidden"></button>
@@ -1118,7 +1128,7 @@
         <option value="eps">EPS</option>
         <option value="tiff">TIFF</option>
       </select>
-      <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)">
+      <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)" aria-label="Resolução (dpi)">
       <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento">Copiar figura</button>
       <button type="button" id="btn-fig-download" class="btn-secondary btn-sm">Baixar figura ⭳</button>
     </div>

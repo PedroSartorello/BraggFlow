@@ -1,7 +1,7 @@
 // Aba Espectros: preparo (o mesmo para todos ou um por arquivo), gráfico,
 // picos e vales e a evolução do vale entre arquivos.
 
-import { $, fmtNum, showError } from "./core.js";
+import { $, checkFields, fieldName, fmtNum, markStale, showError } from "./core.js";
 import {
   baseName, commonSpectrumSettings, defaultSpectrumSettings, editedSpectrumSettings,
   projectSpectraPaths, referenceSpectra, shared, shortName, spectraCommon, spectraState,
@@ -355,6 +355,7 @@ function renderSpectrumPlot() {
     yaxis: { title: intensityTitle(data.unit), gridcolor: "#eceff3", zerolinecolor: "#e2e7ee" },
     hovermode: "x unified",
     legend: { orientation: "h", y: 1.08 },
+    showlegend: data.traces.length > 1,       // um traço só: a legenda não diz nada
     shapes, annotations,
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
   }, { responsive: true });
@@ -431,9 +432,18 @@ $("btn-evo-pick").addEventListener("click", () => {
   setPicking(!picking);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape") return;
-  if (picking) setPicking(false);
-  if (markingEvents) setMarkingEvents(false);
+  if (e.key === "Escape") {
+    if (picking) setPicking(false);
+    if (markingEvents) setMarkingEvents(false);
+    return;
+  }
+  // ← → percorrem os espectros (na ordem da evolução), fora dos campos de texto
+  if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !e.ctrlKey && !e.altKey && !e.metaKey
+      && !$("tab-spectra-main").classList.contains("hidden")
+      && !e.target.closest("input, select, textarea, [role=tab], [contenteditable]")) {
+    e.preventDefault();
+    stepSpectrum(e.key === "ArrowLeft" ? -1 : 1);
+  }
 });
 
 // ── Picos e vales: tabela e resumo de cada traço ────────────────────────────
@@ -721,6 +731,8 @@ export async function ensureEvolution() {
 function clearEvolution(mensagem) {
   evolution = null;
   syncEventTool();
+  markStale("evolution-plot");
+  $("evolution-status").classList.remove("status-error");
   Plotly.purge($("evolution-plot"));
   $("evolution-table").innerHTML = "";
   $("evolution-table-summary").textContent = "Tabela";
@@ -742,6 +754,13 @@ async function runEvolution() {
       : "Adicione dois ou mais espectros ao projeto para ver a evolução.");
     return;
   }
+  const invalido = checkFields($("spectra-evolution"));
+  if (invalido) {        // nem vai ao servidor: o campo diz o que corrigir
+    $("evolution-status").textContent = `Corrija o campo destacado: ${fieldName(invalido)}.`;
+    $("evolution-status").classList.add("status-error");
+    if (evolution) markStale("evolution-plot", "Desatualizado: corrija o campo destacado");
+    return;
+  }
   if (payload.mode === "reference" && String(payload.reference).trim() === "") {
     clearEvolution("Marque o λ de referência: “Marcar no gráfico” e clique no vale do espectro acima, ou digite o valor.");
     return;
@@ -758,13 +777,19 @@ async function runEvolution() {
     if (!resp.ok) throw new Error(data.error || "Erro ao calcular a evolução.");
     evolution = data;
     lastEvolutionKey = evolutionKey(payload);
+    markStale("evolution-plot");
+    $("evolution-status").classList.remove("status-error");
     showError("");
     if (data.x === "order") $("evo-x").value = "order";
     renderEvolution();
     renderSpectrumPlot();
   } catch (err) {
     if (request !== evolutionRequest) return;
-    clearEvolution(`Falha: ${err.message}`);
+    if (!evolution) { clearEvolution(`Falha: ${err.message}`); return; }
+    // O último resultado bom continua na tela, marcado como desatualizado
+    $("evolution-status").textContent = `Falha: ${err.message}`;
+    $("evolution-status").classList.add("status-error");
+    markStale("evolution-plot", "Desatualizado: o último cálculo falhou");
   }
 }
 

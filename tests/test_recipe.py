@@ -188,3 +188,12 @@ def test_all_columns_hidden_is_explained():
 def test_hidden_reference_is_explained():
     with pytest.raises(ValueError, match="referência 'FBG' está oculto"):
         run_recipe([EXAMPLE], COMP, setup=_setup_com_oculto("CH_3"))
+
+
+@pytest.mark.parametrize("janela, ordem, trecho", [(2, 2, "ímpar a partir de 3"), (10, 2, "ímpar"),
+                                                    (3, 3, "maior que a ordem (3)")])
+def test_savgol_window_is_explained_in_the_step_terms(janela, ordem, trecho):
+    with pytest.raises(ValueError, match=r"^Savitzky-Golay: ") as erro:
+        run_recipe([EXAMPLE], {"savgol": {"enabled": True, "window_length": janela, "polyorder": ordem}})
+    assert trecho in str(erro.value)
+

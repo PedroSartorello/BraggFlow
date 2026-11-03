@@ -313,7 +313,7 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
     app.click('#tabs .tab[data-tab="spectra"]')
     expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
     assert arquivos_da_evolucao() == nomes_a
-    expect(app.locator("#error-bar")).to_be_empty()            # projeto só de espectros: nada faltando
+    expect(app.locator("#error-text")).to_be_empty()           # projeto só de espectros: nada faltando
 
 
 @pytest.fixture
@@ -871,3 +871,62 @@ def test_hidden_column_disappears_from_the_program(app, data_dir):
     expect(app.locator("#hidden-sensors")).to_be_hidden()
     expect(linha.locator(".sensor-name")).to_be_visible()
     app.wait_for_function("document.getElementById('plot').data.some((t) => t.name === 'FBG')")
+
+
+# ── erros perto do campo, teclado e leitores de tela ─────────────────────────
+
+def test_an_invalid_field_is_marked_where_it_is_and_nothing_is_sent(app, server):
+    novo_projeto(app, "Campos")
+    adicionar_serie(app, "ensaio_a.asc")
+    pedidos = []
+    app.on("request", lambda r: "/api/process" in r.url and pedidos.append(r.url))
+
+    app.locator('.step[data-step="savgol"] .step-name').click()
+    app.fill("#savgol-window", "2")
+    app.locator("#savgol-window").press("Tab")
+    expect(app.locator("#savgol-window")).to_have_attribute("aria-invalid", "true")
+    expect(app.locator('.field-error')).to_contain_text("ímpar a partir de 3")
+    expect(app.locator("#status-text")).to_contain_text("Corrija o campo destacado: Janela (ímpar)")
+    expect(app.locator("#plot")).to_have_class(re.compile(r"\bis-stale\b"))
+    app.wait_for_timeout(700)                                  # o reprocessamento automático já teria ido
+    assert pedidos == [], "um valor inválido não vai ao servidor"
+
+    app.fill("#savgol-window", "21")                           # corrigiu: a mensagem sai na hora
+    expect(app.locator(".field-error")).to_have_count(0)
+    app.locator("#savgol-window").press("Tab")                 # e, ao sair do campo, processa
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    expect(app.locator("#plot")).not_to_have_class(re.compile(r"\bis-stale\b"))
+    assert server.erros == []
+
+
+def test_project_dialog_keeps_focus_and_tabs_answer_to_arrows(app):
+    gate = app.locator("#project-gate")
+    expect(gate).to_have_attribute("role", "dialog")
+    expect(app.locator("#gate-name")).to_be_focused()          # sem projetos: o nome do novo
+    for _ in range(6):                                         # Tab não sai do diálogo
+        app.keyboard.press("Tab")
+        assert app.evaluate("document.getElementById('project-gate').contains(document.activeElement)")
+    novo_projeto(app, "Teclado")
+
+    app.locator("#tabs .tab.active").focus()
+    app.keyboard.press("ArrowRight")
+    expect(app.locator("#tab-spectra")).to_have_attribute("aria-selected", "true")
+    expect(app.locator("#tab-spectra-main")).to_be_visible()
+    app.keyboard.press("ArrowRight")
+    expect(app.locator("#tab-viz")).to_be_focused()
+    expect(app.locator("#tab-series")).to_have_attribute("aria-selected", "false")
+
+
+def test_symbols_and_units_keep_their_case(lmr, app):
+    novo_projeto(app, "Símbolos")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text=lmr[0].name).click()
+    preparar_lmr(app)
+    expect(app.locator("#spectra-table th").first).to_be_attached()
+    estilos = app.evaluate("""() => [...document.querySelectorAll('#spectra-table th, .section-label, .sub-label')]
+        .map((el) => getComputedStyle(el).textTransform)""")
+    assert set(estilos) == {"none"}, "λ, nm e σ não podem virar Λ, NM e Σ"
+    assert "λ (nm)" in app.locator("#spectra-table th").all_inner_texts()
+    rotulo = app.locator('.step[data-step="savgol"] .step-switch')
+    expect(rotulo).to_have_attribute("aria-labelledby", re.compile(r"step-name-"))
+

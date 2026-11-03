@@ -231,10 +231,15 @@ function channelRow(ch, index, note, defaultVisible = true) {
 
   const label = makeInput("text", "ch-label", saved.label ?? "", ch);
   label.title = "Texto na legenda";
+  label.setAttribute("aria-label", `Legenda de ${ch}`);
+  visible.setAttribute("aria-label", `Mostrar ${ch} na figura`);
+  color.setAttribute("aria-label", `Cor de ${ch}`);
   const linestyle = makeSelect("ch-linestyle", LINESTYLE_LABELS, saved.linestyle);
   linestyle.title = "Estilo da linha";
   const marker = makeSelect("ch-marker", MARKER_LABELS, saved.marker);
   marker.title = "Marcador";
+  linestyle.setAttribute("aria-label", `Estilo da linha de ${ch}`);
+  marker.setAttribute("aria-label", `Marcador de ${ch}`);
 
   row.append(head, label, linestyle, marker, color);
   return row;
@@ -611,14 +616,22 @@ function resetStyle() {
 }
 
 // ── Marcações ────────────────────────────────────────────────────────────────
-export function addMarkerRow(time = "", label = "", color = "#4682B4") {
+// Cada marcação nova pega a próxima cor: intervalos vizinhos não se confundem
+const MARKER_COLORS = ["#4682B4", "#2E8B57", "#8B008B", "#C0392B", "#D35400", "#7F8C8D"];
+
+export function addMarkerRow(time = "", label = "", color = null) {
   const row = document.createElement("div");
   row.className = "marker-row";
+  const n = $("marker-list").children.length;
 
   const tIn = makeInput("number", "marker-time", time, "t (s)");
   const lIn = makeInput("text", "marker-label", label, "legenda");
   const cIn = document.createElement("input");
-  cIn.type = "color"; cIn.className = "marker-color"; cIn.value = color;
+  cIn.type = "color"; cIn.className = "marker-color";
+  cIn.value = color || MARKER_COLORS[n % MARKER_COLORS.length];
+  tIn.setAttribute("aria-label", `Instante da marcação ${n + 1} (s)`);
+  lIn.setAttribute("aria-label", `Legenda da marcação ${n + 1}`);
+  cIn.setAttribute("aria-label", `Cor da marcação ${n + 1}`);
 
   const del = document.createElement("button");
   del.type = "button"; del.className = "marker-del"; del.textContent = "×";
@@ -797,8 +810,11 @@ export async function generateFigure() {
       ? ` → ${info.width_px} × ${info.height_px} px a ${info.dpi} dpi` : " (vetorial)";
     $("viz-status").textContent =
       `${fmtNum(info.width_cm, 2)} × ${fmtNum(info.height_cm, 2)} cm · ${format.toUpperCase()}${size}` +
-      ` · ${curveCount} curva(s) · ` +
-      (opts.source === "evolution" ? `${opts.evolution.events.length} evento(s)` : `${opts.markers.length} marcação(ões)`);
+      ` · ${curveCount} curva(s)` +
+      (opts.source === "evolution"
+        ? (opts.evolution.events.length ? ` · ${opts.evolution.events.length} evento(s)` : "")
+        : (opts.markers.length ? ` · ${opts.markers.length} marcação(ões)` : ""));
+    $("viz-status").title = $("viz-status").textContent;
     persistStyle();
   } catch (err) {
     if (request !== figureRequest) return;

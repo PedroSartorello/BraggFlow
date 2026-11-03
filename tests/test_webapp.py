@@ -1156,3 +1156,23 @@ def test_evolution_events_come_back_in_seconds_from_the_first_spectrum(webapp):
     resp = client.post("/api/spectra/evolution", json={**pedido, "events": [{"at": "ontem"}]})
     assert resp.status_code == 400 and "Instante inválido" in resp.get_json()["error"]
 
+
+def test_evolution_figure_legend_follows_the_figure_language(webapp, monkeypatch):
+    import braggflow.webapp.app as modulo
+
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    legendas = []
+    original = modulo.render_curve_figure
+    monkeypatch.setattr(modulo, "render_curve_figure",
+                        lambda items, *a, **k: legendas.append([i["label"] for i in items]) or original(items, *a, **k))
+    evolucao = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "settings": LMR_PREPARO,
+                "mode": "reference", "reference": "870.4", "window": "20"}
+    for idioma in ("en", "pt"):
+        resp = client.post("/api/figure", json={"source": "evolution", "evolution": evolucao,
+                                                "style": {"axes": {"language": idioma}}})
+        assert resp.status_code == 200, resp.get_json()
+    assert legendas == [["valley near 870.4 nm"], ["vale perto de 870,4 nm"]]
+

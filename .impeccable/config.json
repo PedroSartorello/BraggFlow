@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/braggflow/webapp/templates/index.html"
+        ],
+        "createdAt": "2026-11-03T14:56:19.473Z",
+        "reason": "assistant: #viz-img gets its src from viz.js and stays hidden until a figure exists (critique B confirmed false positive)"
+      },
+      {
+        "rule": "tight-leading",
+        "value": "*",
+        "files": [
+          "src/braggflow/webapp/templates/index.html"
+        ],
+        "createdAt": "2026-11-03T14:56:19.653Z",
+        "reason": "assistant: 1.15 line-height is the single-line nowrap brand lockup (critique B confirmed false positive)"
+      }
+    ]
+  }
+}

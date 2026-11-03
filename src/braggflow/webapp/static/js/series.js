@@ -1,7 +1,7 @@
 // Aba Séries temporais: opções de processamento, sensores, setups, lista
 // de arquivos, gráfico, processamento (um, em lote ou juntos) e concatenação.
 
-import { $, fmtNum, fmtSig, setBusy, showError, syncCardStyles } from "./core.js";
+import { $, checkFields, fieldName, fmtNum, fmtSig, markStale, setBusy, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { addSpectraToProject, renderSpectraFiles } from "./spectra.js";
 import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
@@ -99,7 +99,7 @@ const plotResizer = new ResizeObserver((entries) => {
     Plotly.Plots.resize(target).catch(() => {});
   });
 });
-["plot", "spectra-plot"].forEach((id) => plotResizer.observe($(id)));
+["plot", "spectra-plot", "evolution-plot"].forEach((id) => plotResizer.observe($(id)));
 export const PALETTE = ["#000000", "#800000", "#003366", "#2E8B57", "#8B008B",
                  "#B8860B", "#4B0082", "#006400", "#8B0000", "#00008B"];
 
@@ -471,9 +471,17 @@ export async function processData({ save = true, files = null } = {}) {
   const opts = { ...collectOptions(), save };
   if (files) opts.files = files;        // vários arquivos viram um sinal contínuo
   if (!opts.file) { showError("Selecione um arquivo primeiro."); return; }
+  const invalido = checkFields($("tab-series-sidebar"));
+  if (invalido) {        // nem vai ao servidor: o campo diz o que corrigir
+    $("status-text").textContent = `Corrija o campo destacado: ${fieldName(invalido)}.`;
+    $("status-text").classList.add("status-error");
+    markStale("plot", "Desatualizado: corrija o campo destacado na barra lateral");
+    return;
+  }
 
   setBusy(true);
   showError("");
+  $("status-text").classList.remove("status-error");
   $("status-text").textContent = "Processando…";
   try {
     const resp = await fetch("/api/process", {
@@ -485,6 +493,7 @@ export async function processData({ save = true, files = null } = {}) {
     if (!resp.ok) throw new Error(data.error || "Erro no processamento.");
 
     updateChannelDropdown(data.channels);
+    markStale("plot");
     lastPlotOptions = opts;
     renderPlot(data);
     if (selection) measureSelection();       // o processamento mudou: a medição também
@@ -498,8 +507,8 @@ export async function processData({ save = true, files = null } = {}) {
     }
     const csv = data.processed_file || data.existing_file;
     const estado = data.processed_file ? "CSV salvo ✓"
-      : csv ? "pré-visualização · há um CSV salvo"
-      : "pré-visualização · ainda sem CSV (Processar ▶ grava)";
+      : csv ? "pré-visualização · há um CSV gravado antes"
+      : "pré-visualização · CSV ainda não gravado (Processar ▶ grava)";
     $("status-text").textContent =
       `${data.n_samples.toLocaleString("pt-BR")} amostras · ${data.channels.join(", ")} · ${estado}`;
 
@@ -515,7 +524,9 @@ export async function processData({ save = true, files = null } = {}) {
     $("btn-open-viz").classList.toggle("hidden", !csv);
   } catch (err) {
     showError(err.message);
-    $("status-text").textContent = "Falha no processamento.";
+    $("status-text").textContent = `Falha no processamento: ${err.message}`;
+    $("status-text").classList.add("status-error");
+    markStale("plot", "Desatualizado: o último processamento falhou");
     setStatusDetails([]);
     $("btn-open-viz").classList.add("hidden");
   } finally {
@@ -629,6 +640,9 @@ function sensorRow(ch, data, previous) {
     makeInput("number", "sensor-kt",
       previous?.kt ?? fromSetup?.temp_sensitivity ?? "", "K_T"),
   );
+  [["sensor-name", "Nome"], ["sensor-band-min", "Banda mínima (nm)"], ["sensor-band-max", "Banda máxima (nm)"],
+   ["sensor-kt", "K_T (pm/°C)"]].forEach(([classe, rotulo]) =>
+    row.querySelector(`.${classe}`).setAttribute("aria-label", `${rotulo} de ${ch}`));
   const kt = row.querySelector(".sensor-kt");
   kt.title = "Sensibilidade térmica K_T (pm/°C), da calibração em temperatura. " +
     "Usada pela compensação de temperatura: k = K_T do sensor / K_T da referência.";

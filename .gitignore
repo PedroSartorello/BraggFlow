@@ -57,3 +57,9 @@ Thumbs.db
 
 # Rastros dos testes de navegador (pytest --tracing)
 test-results/
+
+# Impeccable: no repositório só o sistema de design e a configuração do detector;
+# críticas, esboços, capturas e rodadas de decisão são material de trabalho local
+.impeccable/*
+!.impeccable/design.json
+!.impeccable/config.json
