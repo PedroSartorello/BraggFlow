@@ -162,7 +162,7 @@ components:
     padding: "2px 9px"
 ---
 
-<!-- Captured from the implementation on 2026-11-03, refreshed after the critique refinement and the visual pass: ruled sidebar, header with the project crumb, drawn icons, status as an instrument readout. -->
+<!-- Captured from the implementation on 2026-11-03, refreshed after the critique refinement and the visual pass: ruled sidebar, header with the project crumb, drawn icons, status as an instrument readout; then the bilingual interface (PT · EN). -->
 
 # Design System: BraggFlow
 
@@ -334,6 +334,11 @@ and weight make the hierarchy; a second typeface is never needed.
 t, nm and s change meaning in capitals. No label, header or summary is ever
 transformed to uppercase; hierarchy comes from weight, size and ink.
 
+Both rules hold in English. English copy is sentence case like the
+Portuguese ("Download CSV", "Time series", "Mark on plot"), never Title Case,
+and uses plain verbs. Units and symbols are written the same in both
+languages: λ, nm, Δλ, FWHM, K_T, pm/°C.
+
 ## Layout
 
 The page is a full-height app shell:
@@ -341,7 +346,8 @@ The page is a full-height app shell:
 - a 56px header in three columns:
   - left: the wordmark and the project crumb (name and "Projetos");
   - centre: the three tabs as a segmented control;
-  - right: the save state, autosave, undo, redo and save;
+  - right: the save state, autosave, undo, redo, save and the language
+    switch (PT · EN);
 - under it, a fixed 350px sidebar that scrolls on its own;
 - a main area that fills the rest.
 
@@ -492,6 +498,14 @@ The Ruled Sidebar Rule).
   cards. Nothing is hidden behind a menu.
 - **Project dialog:** a modal dialog that keeps focus inside it. Esc returns to
   the current project.
+- **Language switch:** a compact segmented control, PT · EN, last in the
+  header's right group. The project dialog, which covers the header when the
+  page opens, carries a twin at its top right. Each language is named in
+  itself (tooltip and accessible name "Português (Brasil)", "English"), so
+  someone who cannot read the current language still finds theirs. The
+  checked side takes the pen-ink blue. The choice belongs to the browser,
+  not the project; the figure's language is its own option in the Figura
+  tab.
 
 ### Status readout
 The status bar of each tab reads like an instrument:
@@ -545,6 +559,9 @@ the cursor to a crosshair and arm a button that shows the mode. In Espectros,
 - **Do** use tabular figures for every number, so columns line up.
 - **Do** mark a refused value at its field with the reason under it, and badge
   the plot as stale instead of blanking it.
+- **Do** give every visible string both languages (`static/js/strings.js`),
+  English in sentence case with plain verbs. Numbers follow the interface
+  language (1.550,25 or 1,550.25); figures follow their own.
 
 ### Don't:
 - **Don't** uppercase text that can carry a symbol or unit (The Case Is Meaning

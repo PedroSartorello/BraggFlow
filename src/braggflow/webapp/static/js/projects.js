@@ -1,7 +1,8 @@
 // Projetos: tela inicial, adicionar e tirar arquivos, salvar, abrir,
 // excluir e o aviso de alterações não salvas.
 
-import { $, fmtBytes, fmtWhen, icon, showError } from "./core.js";
+import { $, fmtBytes, fmtWhen, hintHtml, icon, setPlain, setText, showError } from "./core.js";
+import { numberLocale, onLanguageChange, t } from "./i18n.js";
 import { baseName, commonSpectrumSettings, fileKind, folderOf, porNome, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName, spectraCommon, spectraState } from "./state.js";
 import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
 import { addSpectraToProject, applySpectraProject, evolutionEventsList, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
@@ -25,8 +26,8 @@ export function fileRow(path, { selected, onSelect, checkbox, note }) {
   remove.type = "button";
   remove.className = "file-remove";
   remove.append(icon("x"));
-  remove.setAttribute("aria-label", `Tirar ${baseName(path)} do projeto`);
-  remove.title = "Tirar do projeto (não apaga o arquivo)";
+  remove.setAttribute("aria-label", t("files.removeLabel", { name: baseName(path) }));
+  remove.title = t("files.removeTitle");
   remove.addEventListener("click", (e) => { e.stopPropagation(); removeFileFromProject(path); });
   row.append(checkbox || document.createElement("span"), name, state, remove);
   return row;
@@ -45,9 +46,9 @@ function clearProjectState() {
   shared.evolutionCurves = {};
   $("file-select").innerHTML = "";
   $("marker-list").innerHTML = "";
-  $("sensor-list").innerHTML = '<span class="hint">Adicione um arquivo…</span>';
-  $("viz-channels").innerHTML = '<span class="hint">Marque uma fonte de dados…</span>';
-  $("file-info").textContent = "";
+  $("sensor-list").innerHTML = hintHtml("sensors.addFile");
+  $("viz-channels").innerHTML = hintHtml("viz.pickSource");
+  setPlain($("file-info"), "");
   $("spectra-filter").value = "";
   if (shared.figureOptions) applyStyle(shared.figureOptions.style);
   resetSpectraAnalyses();
@@ -58,8 +59,8 @@ function clearProjectState() {
   resetAnalysis();
   Plotly.purge($("plot"));
   Plotly.purge($("spectra-plot"));
-  $("status-text").textContent = "Adicione arquivos de série temporal.";
-  $("spectra-status").textContent = "Adicione arquivos de espectro.";
+  setText($("status-text"), "project.addSeries");
+  setText($("spectra-status"), "project.addSpectra");
 }
 
 function projectRow(project, isLast) {
@@ -71,9 +72,11 @@ function projectRow(project, isLast) {
   const title = document.createElement("strong");
   title.textContent = project.name;
   const detail = document.createElement("span");
-  detail.textContent = `${project.n_series} série(s) · ${project.n_spectra} espectro(s)` +
-    ` · ${project.n_markers} marcação(ões) · ${project.updated.replace("T", " ")}` +
-    (isLast ? " · último aberto" : "");
+  detail.textContent = [
+    t("gate.seriesCount", { n: project.n_series }), t("gate.spectraCount", { n: project.n_spectra }),
+    t("gate.markerCount", { n: project.n_markers }), project.updated.replace("T", " "),
+    ...(isLast ? [t("gate.lastOpened")] : []),
+  ].join(" · ");
   row.append(title, detail);
   row.addEventListener("click", async () => {
     closeProjectGate();
@@ -88,10 +91,10 @@ function projectRow(project, isLast) {
   const excluir = document.createElement("button");
   excluir.type = "button";
   excluir.className = "gate-delete";
-  excluir.textContent = "Excluir";
-  excluir.title = `Excluir o projeto "${project.name}". Arquivos de dados e CSVs processados não são apagados.`;
+  excluir.textContent = t("gate.delete");
+  excluir.title = t("gate.deleteTitle", { name: project.name });
   excluir.addEventListener("click", () => deleteProject(project.name, excluir).catch((err) => {
-    $("gate-error").textContent = err.message;
+    setPlain($("gate-error"), err.message);
     $("gate-error").classList.remove("hidden");
   }));
 
@@ -99,9 +102,22 @@ function projectRow(project, isLast) {
   return item;
 }
 
+// A lista mostrada no diálogo (desenhada de novo quando o idioma muda)
+let gateList = null;   // {projects, last}
+
+function renderProjectList() {
+  const box = $("gate-projects");
+  const { projects, last } = gateList;
+  box.innerHTML = "";
+  const ordered = [...projects].sort((a, b) => (b.name === last) - (a.name === last));
+  ordered.forEach((project) => box.appendChild(projectRow(project, project.name === last)));
+  if (!projects.length) box.innerHTML = hintHtml("gate.noProjects");
+}
+
 export async function openProjectGate({ canReturn = false } = {}) {
   const box = $("gate-projects");
-  box.innerHTML = '<span class="hint">Carregando…</span>';
+  gateList = null;
+  box.innerHTML = hintHtml("common.loading");
   $("btn-gate-back").classList.toggle("hidden", !canReturn);
   $("gate-error").classList.add("hidden");
   $("project-gate").classList.remove("hidden");
@@ -111,12 +127,8 @@ export async function openProjectGate({ canReturn = false } = {}) {
   try { last = localStorage.getItem(LAST_PROJECT_KEY); } catch { /* sem armazenamento */ }
 
   const projects = await loadProjectList().catch(() => []);
-  box.innerHTML = "";
-  const ordered = [...projects].sort((a, b) => (b.name === last) - (a.name === last));
-  ordered.forEach((project) => box.appendChild(projectRow(project, project.name === last)));
-  if (!projects.length) {
-    box.innerHTML = '<span class="hint">Nenhum projeto salvo ainda. Comece um novo abaixo.</span>';
-  }
+  gateList = { projects, last };
+  renderProjectList();
   // O foco entra no diálogo: o último projeto aberto, ou o nome do novo
   if (!$("project-gate").classList.contains("hidden") && !$("project-gate").contains(document.activeElement)) {
     ($("gate-projects").querySelector(".gate-row") || $("gate-name")).focus();
@@ -142,7 +154,7 @@ function closeProjectGate() {
 function startNewProject() {
   const name = $("gate-name").value.trim();
   if (!name) {                       // o nome dá a pasta dos resultados
-    $("gate-error").textContent = "Dê um nome ao projeto: os resultados ficam numa pasta com esse nome.";
+    setText($("gate-error"), "gate.nameRequired");
     $("gate-error").classList.remove("hidden");
     $("gate-name").focus();
     return;
@@ -153,9 +165,7 @@ function startNewProject() {
   resetHistory();
   closeProjectGate();
   switchTab("series");
-  $("status-text").textContent = name
-    ? `Projeto "${name}": adicione os arquivos de série temporal.`
-    : "Projeto novo: adicione os arquivos de série temporal.";
+  setText($("status-text"), "project.startNamed", { name });
 }
 
 // ── Adicionar arquivos ao projeto ────────────────────────────────────────────
@@ -200,7 +210,7 @@ export function renderFilePicker(kind) {
 
   box.innerHTML = "";
   if (!disponiveis.length) {
-    box.innerHTML = `<span class="hint">${filtro ? "Nenhum arquivo com esse nome." : "Nenhum arquivo disponível fora do projeto."}</span>`;
+    box.innerHTML = hintHtml(filtro ? "files.noMatch" : "files.noneAvailable");
     return;
   }
   const fragment = document.createDocumentFragment();
@@ -214,7 +224,7 @@ export function renderFilePicker(kind) {
       const todos = document.createElement("button");
       todos.type = "button";
       todos.className = "btn-link";
-      todos.textContent = arquivos.length > 1 ? `adicionar ${filtro ? "estes" : "todos"}` : "adicionar";
+      todos.textContent = t(arquivos.length > 1 ? (filtro ? "files.addThese" : "files.addAll") : "files.addOne");
       todos.addEventListener("click", () => addAll(arquivos.map((f) => f.path)));
       head.append(nome, todos);
       fragment.appendChild(head);
@@ -240,7 +250,7 @@ export function renderFilePicker(kind) {
 async function addPickedFiles(kind) {
   const picked = [...document.querySelectorAll(kind === "spectrum" ? ".pick-spectrum:checked" : ".pick-series:checked")]
     .map((c) => c.value);
-  if (!picked.length) { showError("Marque os arquivos que quer adicionar."); return; }
+  if (!picked.length) { showError(t("files.checkToAdd")); return; }
   showError("");
   await addFilesAndShow(picked);
   renderFilePicker(kind);
@@ -269,12 +279,12 @@ export function renderEmptyFiles(kind) {
   if (!lista.length) return;
   const titulo = document.createElement("div");
   titulo.className = "sub-label";
-  titulo.textContent = "Ou use um arquivo já enviado";
+  titulo.textContent = t("files.orUseUploaded");
   box.appendChild(titulo);
   byFolder(lista).forEach(([pasta, arquivos]) => {
     if (pasta) {     // uma pasta inteira de uma vez
       const botao = emptyButton(
-        [`${baseName(pasta)}/`, `${arquivos.length} arquivo(s) · adicionar todos`], pasta,
+        [`${baseName(pasta)}/`, t("files.folderAddAll", { n: arquivos.length })], pasta,
         () => addAll(arquivos.map((f) => f.path)));
       botao.classList.add("empty-folder");
       box.appendChild(botao);
@@ -285,7 +295,7 @@ export function renderEmptyFiles(kind) {
     if (arquivos.length > MAX_SOLTOS) {
       const mais = document.createElement("span");
       mais.className = "hint";
-      mais.textContent = `… e mais ${arquivos.length - MAX_SOLTOS} em “Adicionar arquivos ao projeto”, na barra lateral.`;
+      mais.textContent = t("files.moreInSidebar", { n: arquivos.length - MAX_SOLTOS });
       box.appendChild(mais);
     }
   });
@@ -394,12 +404,22 @@ const historico = { states: [], index: -1 };   // estados para desfazer/refazer
 const autosaveOn = () => $("autosave").checked;
 try { $("autosave").checked = localStorage.getItem(AUTOSAVE_KEY) !== "0"; } catch { /* sem armazenamento */ }
 
-function setSaveState(texto, erro = false) {
-  $("save-state").textContent = texto;
-  $("save-state").classList.toggle("erro", erro);
+// Indicador do cabeçalho: guarda a chave (e o motivo, no erro) para trocar de idioma
+let saveState = { key: "", vars: {}, erro: false };
+
+function setSaveState(key, vars = {}, erro = false) {
+  saveState = { key, vars, erro };
+  drawSaveState();
 }
 
-const agora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+function drawSaveState() {
+  const { key, vars, erro } = saveState;
+  const el = $("save-state");
+  const hora = vars.at?.toLocaleTimeString(numberLocale(), { hour: "2-digit", minute: "2-digit" });
+  el.textContent = key ? t(key, { ...vars, time: hora }) : "";
+  el.classList.toggle("erro", erro);
+  el.title = erro ? t("project.saveRetryTitle", { msg: vars.msg }) : "";
+}
 
 // ``history: false`` para o nome do projeto (não entra no desfazer);
 // ``autosave: false`` para o projeto que acabou de ser excluído (não recriar)
@@ -415,14 +435,14 @@ export function markProjectDirty(dirty = true, { history: comHistorico = true, a
 function scheduleAutosave() {
   clearTimeout(autosaveTimer);
   if (!autosaveOn()) { setSaveState(""); return; }
-  setSaveState("alterações…");
+  setSaveState("project.saveChanges");
   autosaveTimer = setTimeout(autosaveNow, AUTOSAVE_MS);
 }
 
 async function autosaveNow() {
   if (restoring || !projectDirty || !autosaveOn()) return;   // tela pela metade: nada de salvar
   if (document.activeElement === $("project-name")) return;   // salva quando sair do campo
-  if (!$("project-name").value.trim()) { setSaveState("dê um nome ao projeto para salvar"); return; }
+  if (!$("project-name").value.trim()) { setSaveState("project.saveNeedsName"); return; }
   await saveProject({ silent: true });
 }
 
@@ -573,7 +593,7 @@ export function applyVizChannelSelection() {
 async function loadProjectList() {
   const resp = await fetch("/api/projects");
   const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || "Erro ao listar projetos.");
+  if (!resp.ok) throw new Error(data.error || t("project.listError"));
   return data.projects;
 }
 
@@ -581,7 +601,7 @@ async function openProject(name) {
   if (!name) return;
   const resp = await fetch("/api/projects/" + encodeURIComponent(name));
   const project = await resp.json();
-  if (!resp.ok) throw new Error(project.error || "Erro ao abrir projeto.");
+  if (!resp.ok) throw new Error(project.error || t("project.openError"));
   try { localStorage.setItem(LAST_PROJECT_KEY, project.name); } catch { /* sem armazenamento */ }
   cancelPendingTimers();             // timers do projeto anterior não disparam com a tela pela metade
   restoring = true;                  // abrir não é mudança do usuário
@@ -648,8 +668,7 @@ async function applyProjectData(project) {
 
   if (!hasFile) {
     if (project.file) {               // projeto só de espectros não tem série: não falta nada
-      showError(`O arquivo "${project.file}" do projeto não está em data/. ` +
-                "Envie-o novamente ou escolha outro arquivo.");
+      showError(t("project.fileMissing", { file: project.file }));
     }
     return;
   }
@@ -667,11 +686,11 @@ async function saveProjectNow(silent) {
   clearTimeout(autosaveTimer);
   const name = $("project-name").value.trim();
   if (!name) {
-    if (!silent) showError("Informe um nome para o projeto.");
+    if (!silent) showError(t("project.nameRequired"));
     return false;
   }
   const seq = changeSeq;
-  setSaveState("salvando…");
+  setSaveState("project.saving");
   try {
     const resp = await fetch("/api/projects", {
       method: "POST",
@@ -679,21 +698,20 @@ async function saveProjectNow(silent) {
       body: JSON.stringify(collectProject()),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro ao salvar projeto.");
+    if (!resp.ok) throw new Error(data.error || t("project.saveError"));
     try { localStorage.setItem(LAST_PROJECT_KEY, data.name); } catch { /* sem armazenamento */ }
     if (seq === changeSeq) markProjectDirty(false);   // mudou durante o envio: o próximo save leva
-    setSaveState(`salvo às ${agora()}`);
+    setSaveState("project.savedAt", { at: new Date() });
     if (!silent) {
       showError("");
-      $("status-text").textContent = `Projeto "${data.name}" salvo em data/projects.`;
-      $("viz-status").textContent = `Projeto "${data.name}" salvo.`;
+      setText($("status-text"), "project.savedIn", { name: data.name });
+      setText($("viz-status"), "project.saved", { name: data.name });
     }
     return true;
   } catch (err) {
     // O motivo fica à vista: o salvamento não vai dar certo enquanto ele existir
-    const motivo = err.message.replace(/^Projeto inválido:\s*/, "");
-    setSaveState(`não salvo: ${motivo}`, true);
-    $("save-state").title = `${err.message} · Corrija e clique aqui para tentar de novo.`;
+    const motivo = err.message.replace(/^(Projeto inválido|Invalid project):\s*/, "");
+    setSaveState("project.notSaved", { reason: motivo, msg: err.message }, true);
     if (!silent) showError(err.message);
     return false;
   }
@@ -702,18 +720,18 @@ async function saveProjectNow(silent) {
 async function deleteProject(name, button) {
   if (button.dataset.confirm !== "1") {          // exclusão em dois cliques
     button.dataset.confirm = "1";
-    button.textContent = "Confirmar exclusão";
+    button.textContent = t("gate.confirmDelete");
     button.classList.add("danger");
     setTimeout(() => {
       delete button.dataset.confirm;
-      button.textContent = "Excluir";
+      button.textContent = t("gate.delete");
       button.classList.remove("danger");
     }, 6000);
     return;
   }
   const resp = await fetch("/api/projects/" + encodeURIComponent(name), { method: "DELETE" });
   const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || "Erro ao excluir projeto.");
+  if (!resp.ok) throw new Error(data.error || t("project.deleteError"));
   try {
     if (localStorage.getItem(LAST_PROJECT_KEY) === name) localStorage.removeItem(LAST_PROJECT_KEY);
   } catch { /* sem armazenamento */ }
@@ -723,7 +741,7 @@ async function deleteProject(name, button) {
     clearTimeout(autosaveTimer);
     markProjectDirty(true, { history: false, autosave: false });
     $("project-dirty").classList.remove("hidden");
-    setSaveState("projeto excluído: Salvar recria");
+    setSaveState("project.deletedState");
   }
   await openProjectGate({ canReturn: Boolean($("project-gate").dataset.canReturn) });
 }
@@ -733,16 +751,15 @@ function newProject() {
   markProjectDirty(false);
   setSaveState("");
   try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* sem armazenamento */ }
-  $("status-text").textContent = "Projeto novo: ajuste as opções e clique em Salvar projeto.";
+  setText($("status-text"), "project.newAdjust");
 }
 
 // ── Alterações não salvas: salvar, descartar ou ficar ───────────────────────
 function askLeaveProject() {
   return new Promise((resolve) => {
     const nome = $("project-name").value.trim();
-    $("leave-text").textContent = nome
-      ? `O projeto "${nome}" tem alterações que ainda não foram salvas.`
-      : "Este projeto ainda não foi salvo. Dê um nome para guardá-lo.";
+    if (nome) setText($("leave-text"), "leave.unsavedNamed", { name: nome });
+    else setText($("leave-text"), "leave.unsavedNew");
     $("leave-name-field").classList.toggle("hidden", Boolean(nome));
     $("leave-error").classList.add("hidden");
     $("leave-name").value = "";
@@ -764,7 +781,7 @@ function askLeaveProject() {
       }
       await saveProject();
       if (projectDirty) {               // não salvou: mostra o motivo aqui mesmo
-        $("leave-error").textContent = $("error-text").textContent || "Não foi possível salvar.";
+        setPlain($("leave-error"), $("error-text").textContent || t("leave.saveFailed"));
         $("leave-error").classList.remove("hidden");
         return;
       }
@@ -820,3 +837,9 @@ $("autosave").addEventListener("change", () => {
 });
 $("btn-undo").addEventListener("click", () => undo().catch((err) => showError(err.message)));
 $("btn-redo").addEventListener("click", () => redo().catch((err) => showError(err.message)));
+
+// Idioma trocado: o indicador de salvamento e a lista do diálogo de projetos
+onLanguageChange(() => {
+  drawSaveState();
+  if (gateList && !$("project-gate").classList.contains("hidden")) renderProjectList();
+});

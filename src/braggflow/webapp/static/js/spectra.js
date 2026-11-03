@@ -1,7 +1,11 @@
 // Aba Espectros: preparo (o mesmo para todos ou um por arquivo), gráfico,
 // picos e vales e a evolução do vale entre arquivos.
 
-import { $, checkFields, fieldName, fmtNum, icon, markStale, setReadout, showError } from "./core.js";
+import {
+  $, checkFields, fmtNum, hintHtml, icon, markStale, plotSeparators, setHtml, setPlain, setReadout, setText,
+  showError, showFixField, toCsv,
+} from "./core.js";
+import { onLanguageChange, t } from "./i18n.js";
 import {
   baseName, commonSpectrumSettings, defaultSpectrumSettings, editedSpectrumSettings,
   projectSpectraPaths, referenceSpectra, shared, shortName, spectraCommon, spectraState,
@@ -55,8 +59,8 @@ function showSpectrumSettings(path) {
 function syncTransmissionState() {
   const ref = document.querySelector('[data-spec="reference_file"]').value;
   const dark = document.querySelector('[data-spec="dark_file"]').value;
-  $("transmission-state").textContent = ref && dark ? "fonte e fundo"
-    : ref ? "só a fonte" : dark ? "só o fundo" : "não usada";
+  setText($("transmission-state"), ref && dark ? "transmission.both"
+    : ref ? "transmission.sourceOnly" : dark ? "transmission.darkOnly" : "transmission.unused");
   return Boolean(ref || dark);
 }
 
@@ -77,12 +81,12 @@ function fillSpectrumFileSelects() {
   document.querySelectorAll(".spec-file-select").forEach((sel) => {
     const atual = sel.value;
     sel.innerHTML = "";
-    sel.add(new Option("— nenhum —", ""));
+    sel.add(new Option(t("common.none"), ""));
     [...new Set([...projectSpectraPaths(), ...disponiveis])]
       .filter((path) => path !== proprio)
       .forEach((path) => sel.add(new Option(shortName(path), path)));
     if (atual && ![...sel.options].some((o) => o.value === atual)) {
-      sel.add(new Option(`${baseName(atual)} (não encontrado)`, atual));   // escolhido antes, fora da lista
+      sel.add(new Option(t("transmission.notFound", { name: baseName(atual) }), atual));   // escolhido antes, fora da lista
     }
     sel.value = atual;
   });
@@ -91,12 +95,9 @@ function fillSpectrumFileSelects() {
 // ── Mesmo preparo para todos, ou um por arquivo ──────────────────────────────
 function syncCommonMode() {
   $("spectra-common").checked = spectraCommon.on;
-  $("spectra-prep-label").textContent = spectraCommon.on
-    ? "Preparo de todos os espectros" : "Preparo do espectro selecionado";
+  setText($("spectra-prep-label"), spectraCommon.on ? "spectra.prepAll" : "spectra.prepSelected");
   $("btn-copy-spectrum").classList.toggle("hidden", spectraCommon.on);
-  $("spectra-common-hint").textContent = spectraCommon.on
-    ? "Recorte, suavização e detecção valem para todos os arquivos."
-    : "Cada arquivo com o seu preparo; “Aplicar este preparo a todos” copia o do selecionado.";
+  setText($("spectra-common-hint"), spectraCommon.on ? "spectra.commonHintOn" : "spectra.commonHintOff");
 }
 
 // A fonte e o fundo não são convertidos com eles mesmos
@@ -131,7 +132,7 @@ function copySpectrumSettings() {
   renderSpectraFiles();
   markProjectDirty();
   scheduleEvolution();
-  $("spectra-status").textContent = "Preparo aplicado a todos os espectros.";
+  setText($("spectra-status"), "spectra.prepApplied");
 }
 
 // Projeto trocado ou novo: preparo comum com os padrões, evolução padrão
@@ -179,11 +180,11 @@ const FILTRO_A_PARTIR_DE = 8;   // com mais arquivos que isso, a lista ganha um 
 
 function fileNote(path, usados) {
   const st = spectraState[path];
-  if (usados.has(path)) return "fonte/fundo";
-  if (st.exclude) return "fora da evolução";
+  if (usados.has(path)) return t("spectra.noteReference");
+  if (st.exclude) return t("spectra.noteExcluded");
   if (spectraCommon.on) return "";
   const s = st.settings || {};
-  return s.reference_file ? "transmissão" : s.smooth_window ? "suavizado" : "";
+  return s.reference_file ? t("spectra.noteTransmission") : s.smooth_window ? t("spectra.noteSmoothed") : "";
 }
 
 export function renderSpectraFiles() {
@@ -206,15 +207,15 @@ export function renderSpectraFiles() {
   });
   box.innerHTML = "";
   box.appendChild(fragment);
-  if (!paths.length) box.innerHTML = '<span class="hint">Nenhum espectro neste projeto ainda.</span>';
-  else if (!box.children.length) box.innerHTML = '<span class="hint">Nenhum espectro com esse nome.</span>';
+  if (!paths.length) box.innerHTML = hintHtml("spectra.noFiles");
+  else if (!box.children.length) box.innerHTML = hintHtml("spectra.noMatch");
 
   const fora = paths.filter((path) => spectraState[path].exclude && !usados.has(path)).length;
   const nRef = paths.filter((path) => usados.has(path)).length;
-  const partes = [`${paths.length} espectro(s)`];
-  if (nRef) partes.push(`${nRef} de fonte/fundo`);
-  if (fora) partes.push(`${fora} fora da evolução`);
-  $("spectra-files-summary").textContent = paths.length ? partes.join(" · ") : "";
+  const partes = [t("spectra.count", { n: paths.length })];
+  if (nRef) partes.push(t("spectra.countReference", { n: nRef }));
+  if (fora) partes.push(t("spectra.countExcluded", { n: fora }));
+  setPlain($("spectra-files-summary"), paths.length ? partes.join(" · ") : "");
 
   document.body.classList.toggle("no-spectra", !paths.length);
   renderEmptyFiles("spectrum");
@@ -253,10 +254,10 @@ export async function addSpectraToProject(paths) {
 }
 
 function intensityTitle(unit) {
-  if (unit === "%") return "Transmissão (%)";
-  if (unit === "AU") return "Absorbância";
-  if (unit === "") return "Transmissão";
-  return unit && unit !== "a.u." ? `Intensidade (${unit})` : "Intensidade";
+  if (unit === "%") return t("transmission.percent");
+  if (unit === "AU") return t("plot.absorbance");
+  if (unit === "") return t("plot.transmission");
+  return unit && unit !== "a.u." ? t("plot.intensityUnit", { unit }) : t("plot.intensity");
 }
 
 // ── Gráfico do espectro: extremos, λ de referência e o vale acompanhado ─────
@@ -289,7 +290,7 @@ function renderSpectrumPlot() {
   if (!lastPreview || lastPreview.file !== shared.currentSpectrumFile) return;
   const { data } = lastPreview;
   const traces = data.traces.map((trace, i) => ({
-    x: trace.wavelength, y: trace.intensity, name: trace.name, mode: "lines",
+    x: trace.wavelength, y: trace.intensity, name: trace.label ?? trace.name, mode: "lines",
     line: { color: PALETTE[i % PALETTE.length], width: 1.2 },
   }));
   data.traces.forEach((trace, i) => {
@@ -298,14 +299,14 @@ function renderSpectrumPlot() {
     if (!extremos.length) return;
     traces.push({
       x: extremos.map((e) => e.wavelength), y: extremos.map((e) => e.intensity),
-      mode: "markers", name: `${trace.name} · extremos`, showlegend: false,
+      mode: "markers", name: t("spectra.extremaTrace", { name: trace.label ?? trace.name }), showlegend: false,
       marker: {
         color: extremos.map((e) => (e.type === "max" ? "#c0392b" : "#1f6fb2")),
         symbol: extremos.map((e) => (e.type === "max" ? "triangle-up" : "triangle-down")),
         size: 9, line: { color: "#fff", width: 1 },
       },
-      text: extremos.map((e) => `${e.type === "max" ? "máximo" : "mínimo"}` +
-        (e.fwhm ? ` · largura ${fmtNum(e.fwhm, 4)} nm · Q ${fmtNum(e.q, 0)}` : "")),
+      text: extremos.map((e) => t(e.type === "max" ? "spectra.maximum" : "spectra.minimum") +
+        (e.fwhm ? ` · ${t("spectra.widthQ", { width: fmtNum(e.fwhm, 4), q: fmtNum(e.q, 0) })}` : "")),
       hovertemplate: "%{text}<br>λ = %{x:.4f} nm<br>I = %{y}<extra></extra>",
     });
     const xs = [], ys = [];
@@ -315,7 +316,7 @@ function renderSpectrumPlot() {
     });
     if (xs.length) {
       traces.push({
-        x: xs, y: ys, mode: "lines", name: `${trace.name} · largura`, showlegend: false,
+        x: xs, y: ys, mode: "lines", name: t("spectra.widthTrace", { name: trace.label ?? trace.name }), showlegend: false,
         line: { color: cor, width: 1.5, dash: "dash" }, hoverinfo: "skip",
       });
     }
@@ -325,9 +326,9 @@ function renderSpectrumPlot() {
   if (acompanhados.length) {
     traces.push({
       x: acompanhados.map((p) => p.wavelength), y: acompanhados.map((p) => p.intensity),
-      mode: "markers", name: "acompanhado", showlegend: false,
+      mode: "markers", name: t("spectra.trackedName"), showlegend: false,
       marker: { symbol: "circle-open", size: 17, color: "#e67e22", line: { width: 2.5 } },
-      hovertemplate: "vale acompanhado<br>λ = %{x:.3f} nm<extra></extra>",
+      hovertemplate: `${t("spectra.trackedHover")}<br>λ = %{x:.3f} nm<extra></extra>`,
     });
   }
 
@@ -348,10 +349,10 @@ function renderSpectrumPlot() {
 
   const gd = $("spectra-plot");
   Plotly.react(gd, traces, {
-    separators: ",.",
+    separators: plotSeparators(),
     margin: { l: 60, r: 20, t: 30, b: 45 },
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
-    xaxis: { title: "Comprimento de onda (nm)", gridcolor: "#eceff3", zerolinecolor: "#e2e7ee" },
+    xaxis: { title: t("plot.wavelengthAxis"), gridcolor: "#eceff3", zerolinecolor: "#e2e7ee" },
     yaxis: { title: intensityTitle(data.unit), gridcolor: "#eceff3", zerolinecolor: "#e2e7ee" },
     hovermode: "x unified",
     legend: { orientation: "h", y: 1.08 },
@@ -370,7 +371,7 @@ function setPicking(on) {
   picking = on;
   $("btn-evo-pick").classList.toggle("on", on);
   $("spectra-plot").classList.toggle("picking", on);
-  if (on) $("spectra-status").textContent = "Clique no vale que quer acompanhar · Esc cancela";
+  if (on) setText($("spectra-status"), "spectra.pickHint");
   else if (lastPreview?.status) setReadout($("spectra-status"), lastPreview.status);
 }
 
@@ -427,7 +428,7 @@ function setReference(lam) {
 }
 
 $("btn-evo-pick").addEventListener("click", () => {
-  if (!lastPreview) { showError("Abra um espectro para marcar o λ de referência no gráfico."); return; }
+  if (!lastPreview) { showError(t("spectra.openToPick")); return; }
   setPicking(!picking);
 });
 document.addEventListener("keydown", (e) => {
@@ -448,21 +449,22 @@ document.addEventListener("keydown", (e) => {
 // ── Picos e vales: tabela e resumo de cada traço ────────────────────────────
 let spectraAnalysis = null;    // {file, traces} da última prévia
 
-const SPECTRA_COLUNAS = (larguraNome) => [
-  ["Traço", (t) => t.trace],
-  ["Tipo", (e) => (e.type === "max" ? "máximo" : "mínimo")],
+// Títulos no idioma de quando a tabela (ou o CSV) é montada
+const SPECTRA_COLUNAS = (db) => [
+  [t("peaks.col.trace"), (e) => e.trace],
+  [t("peaks.col.type"), (e) => t(e.type === "max" ? "spectra.maximum" : "spectra.minimum")],
   ["λ (nm)", (e) => numeroOuTraco(e.wavelength, 4)],
-  ["λ ajuste (nm)", (e) => numeroOuTraco(e.fit, 4)],
-  ["Intensidade", (e) => numeroOuTraco(e.intensity, 4)],
-  ["Proeminência", (e) => numeroOuTraco(e.prominence, 4)],
-  [`${larguraNome} (nm)`, (e) => numeroOuTraco(e.fwhm, 4)],
+  [t("peaks.col.fit"), (e) => numeroOuTraco(e.fit, 4)],
+  [t("peaks.col.intensity"), (e) => numeroOuTraco(e.intensity, 4)],
+  [t("peaks.col.prominence"), (e) => numeroOuTraco(e.prominence, 4)],
+  [`${db ? t("peaks.band3db") : "FWHM"} (nm)`, (e) => numeroOuTraco(e.fwhm, 4)],
   ["Q", (e) => numeroOuTraco(e.q, 0)],
-  ["Centroide (nm)", (e) => numeroOuTraco(e.centroid, 4)],
-  ["Δλ anterior (nm)", (e) => numeroOuTraco(e.spacing, 4)],
+  [t("peaks.col.centroid"), (e) => numeroOuTraco(e.centroid, 4)],
+  [t("peaks.col.spacing"), (e) => numeroOuTraco(e.spacing, 4)],
 ];
 
 function spectraRows(data) {
-  return data.traces.flatMap((t) => (t.extrema || []).map((e) => ({ ...e, trace: t.name })));
+  return data.traces.flatMap((traco) => (traco.extrema || []).map((e) => ({ ...e, trace: traco.label ?? traco.name })));
 }
 
 function renderSpectraResults(data, file) {
@@ -474,24 +476,24 @@ function renderSpectraResults(data, file) {
 
   const db = settings.intensity_scale === "db";
   const unidade = db ? " dB" : "";
-  const colunas = SPECTRA_COLUNAS(db ? "Banda 3 dB" : "FWHM");
+  const colunas = SPECTRA_COLUNAS(db);
 
   // Resumo: uma linha por traço
   const resumo = $("spectra-summary");
   resumo.innerHTML = "";
-  data.traces.forEach((t) => {
-    const r = t.summary || {};
+  data.traces.forEach((traco) => {
+    const r = traco.summary || {};
     const partes = [];
-    if (r.global_max) partes.push(`máx. global ${fmtNum(r.global_max.intensity, 4)} em ${fmtNum(r.global_max.wavelength, 4)} nm`);
-    if (r.global_min) partes.push(`mín. global ${fmtNum(r.global_min.intensity, 4)} em ${fmtNum(r.global_min.wavelength, 4)} nm`);
-    if (r.side_lobe_suppression != null) partes.push(`lóbulo lateral −${fmtNum(r.side_lobe_suppression, 3)}${unidade}`);
-    if (r.fsr_max != null) partes.push(`FSR picos ${fmtNum(r.fsr_max, 4)} nm`);
-    if (r.fsr_min != null) partes.push(`FSR vales ${fmtNum(r.fsr_min, 4)} nm`);
-    if (r.resolution != null) partes.push(`resolução ${fmtNum(r.resolution * 1000, 2)} pm`);
-    if (r.prominence != null) partes.push(`proeminência ≥ ${fmtNum(r.prominence, 4)}`);
+    if (r.global_max) partes.push(t("spectra.globalMax", { value: fmtNum(r.global_max.intensity, 4), wl: fmtNum(r.global_max.wavelength, 4) }));
+    if (r.global_min) partes.push(t("spectra.globalMin", { value: fmtNum(r.global_min.intensity, 4), wl: fmtNum(r.global_min.wavelength, 4) }));
+    if (r.side_lobe_suppression != null) partes.push(t("spectra.sideLobe", { value: fmtNum(r.side_lobe_suppression, 3), unit: unidade }));
+    if (r.fsr_max != null) partes.push(t("spectra.fsrPeaks", { value: fmtNum(r.fsr_max, 4) }));
+    if (r.fsr_min != null) partes.push(t("spectra.fsrValleys", { value: fmtNum(r.fsr_min, 4) }));
+    if (r.resolution != null) partes.push(t("spectra.resolution", { value: fmtNum(r.resolution * 1000, 2) }));
+    if (r.prominence != null) partes.push(t("spectra.prominenceAtLeast", { value: fmtNum(r.prominence, 4) }));
     const linha = document.createElement("span");
     const nome = document.createElement("b");
-    nome.textContent = `${t.name}: ${r.n_max || 0} pico(s), ${r.n_min || 0} vale(s)`;
+    nome.textContent = `${traco.label ?? traco.name}: ${t("spectra.peakCount", { n: r.n_max || 0 })}, ${t("spectra.valleyCount", { n: r.n_min || 0 })}`;
     linha.append(nome, document.createTextNode(partes.length ? " · " + partes.join(" · ") : ""));
     resumo.appendChild(linha);
   });
@@ -501,8 +503,7 @@ function renderSpectraResults(data, file) {
   tabela.innerHTML = "";
   const linhas = spectraRows(data);
   if (!linhas.length) {
-    tabela.innerHTML = '<tr><td style="text-align:left">Nenhum extremo com essa proeminência. ' +
-      "Diminua a proeminência mínima ou confira a escala.</td></tr>";
+    tabela.innerHTML = `<tr><td style="text-align:left">${t("spectra.noExtrema")}</td></tr>`;
     return;
   }
   const cabeca = tabela.createTHead().insertRow();
@@ -521,11 +522,9 @@ function renderSpectraResults(data, file) {
 function spectraCsv() {
   if (!spectraAnalysis) return "";
   const db = spectrumSettingsFor(shared.currentSpectrumFile).intensity_scale === "db";
-  const colunas = SPECTRA_COLUNAS(db ? "Banda 3 dB" : "FWHM");
+  const colunas = SPECTRA_COLUNAS(db);
   const linhas = spectraRows(spectraAnalysis);
-  return [colunas.map(([nome]) => nome).join(";"),
-          ...linhas.map((l) => colunas.map(([, valor]) => valor(l).replace(/—/, "")).join(";"))]
-    .join("\n");
+  return toCsv([colunas.map(([nome]) => nome), ...linhas.map((l) => colunas.map(([, valor]) => valor(l)))]);
 }
 
 function baixarCsv(csv, nome) {
@@ -540,7 +539,7 @@ function baixarCsv(csv, nome) {
 
 $("btn-spectra-csv").addEventListener("click", () => {
   const csv = spectraCsv();
-  if (!csv) { showError("Ligue a detecção de máximos ou mínimos antes de baixar."); return; }
+  if (!csv) { showError(t("spectra.enableDetection")); return; }
   baixarCsv(csv, `${baseName(shared.currentSpectrumFile).replace(/\.[^.]+$/, "")}_picos_vales.csv`);
 });
 
@@ -558,7 +557,7 @@ function syncSpectrumFields() {
   const sg = document.querySelector('[data-spec="smooth_method"]').value === "savgol";
   const ordem = document.querySelector('[data-spec="smooth_order"]');
   ordem.disabled = !sg;
-  $("spec-order-field").title = sg ? "" : "Só o Savitzky-Golay usa a ordem do ajuste";
+  $("spec-order-field").title = sg ? "" : t("spectra.orderOnlySavgol");
 }
 
 let spectrumPreviewRequest = 0;
@@ -567,7 +566,7 @@ export async function previewSpectrum() {
   if (!file) return;
   saveCurrentSpectrumState();
   const request = ++spectrumPreviewRequest;
-  $("spectra-status").textContent = "Lendo espectro…";
+  setText($("spectra-status"), "spectra.reading");
   try {
     const resp = await fetch("/api/spectra/preview", {
       method: "POST",
@@ -577,27 +576,32 @@ export async function previewSpectrum() {
     const data = await resp.json();
     // Outra prévia, outro arquivo ou outro projeto depois deste pedido: descarta
     if (request !== spectrumPreviewRequest || file !== shared.currentSpectrumFile) return;
-    if (!resp.ok) throw new Error(data.error || "Erro ao ler o espectro.");
+    if (!resp.ok) throw new Error(data.error || t("spectra.readError"));
     showError("");
     const points = data.traces.reduce((total, trace) => total + trace.n_points, 0);
     const passo = data.traces[0]?.plot_stride;
-    const status = [
-      [baseName(file), ""],
-      [points.toLocaleString("pt-BR"), "pontos"],
-      data.traces.length > 1 ? [String(data.traces.length), "traços"] : null,
-      data.acquired ? `gravado ${data.acquired.replace("T", " ")}${data.acquired_from === "filename" ? " (hora do nome)" : ""}` : null,
-      passo > 1 ? `gráfico decimado 1:${passo}` : null,
-      spectraCommon.on && referenceSpectra().has(file) ? "fonte/fundo: mostrado sem conversão" : null,
-    ];
+    const quando = data.acquired?.replace("T", " ");
+    // Montada de novo quando o idioma muda
+    const status = () => ({
+      partes: [
+        [baseName(file), ""],
+        [fmtNum(points, 0), t("spectra.points", { n: points })],
+        data.traces.length > 1 ? [String(data.traces.length), t("spectra.traces")] : null,
+        quando ? t(data.acquired_from === "filename" ? "spectra.recordedFromName" : "spectra.recorded", { when: quando }) : null,
+        passo > 1 ? t("spectra.decimated", { stride: passo }) : null,
+        spectraCommon.on && referenceSpectra().has(file) ? t("spectra.referenceAsIs") : null,
+      ],
+      estado: null,
+    });
     lastPreview = { file, data, status };
     renderSpectraResults(data, file);
     renderSpectrumPlot();
-    if (picking) $("spectra-status").textContent = "Clique no vale que quer acompanhar · Esc cancela";
+    if (picking) setText($("spectra-status"), "spectra.pickHint");
     else setReadout($("spectra-status"), status);
   } catch (err) {
     if (request !== spectrumPreviewRequest) return;
     showError(err.message);
-    $("spectra-status").textContent = `Falha: ${err.message}`;
+    setText($("spectra-status"), "common.failed", { msg: err.message });
   }
 }
 
@@ -629,7 +633,6 @@ let evolutionRequest = 0;  // descarta respostas de cálculos anteriores (ou de 
 let evolutionFiles = "";   // arquivos usados no cálculo atual
 let evolutionStale = true; // algo mudou com o cartão fechado ou a aba escondida
 let evolutionTimer = null;
-const EVOLUTION_HINT = $("evolution-status").innerHTML;
 
 export const currentEvolution = () => evolution;
 
@@ -647,9 +650,9 @@ export function resetSpectraAnalyses() {
   if (markingEvents) setMarkingEvents(false);
   Plotly.purge($("evolution-plot"));
   $("evolution-table").innerHTML = "";
-  $("evolution-table-summary").textContent = "Tabela";
-  $("evolution-status").innerHTML = EVOLUTION_HINT;
-  $("evolution-state").textContent = "";
+  setText($("evolution-table-summary"), "evo.table");
+  setHtml($("evolution-status"), "evo.intro");
+  setPlain($("evolution-state"), "");
   $("evolution-focus").classList.add("hidden");
   spectraAnalysis = null;
   $("spectra-summary").innerHTML = "";
@@ -730,16 +733,16 @@ export async function ensureEvolution() {
   return evolution;
 }
 
-function clearEvolution(mensagem) {
+function clearEvolution(key, vars) {
   evolution = null;
   syncEventTool();
   markStale("evolution-plot");
   $("evolution-status").classList.remove("status-error");
   Plotly.purge($("evolution-plot"));
   $("evolution-table").innerHTML = "";
-  $("evolution-table-summary").textContent = "Tabela";
-  $("evolution-status").textContent = mensagem;
-  $("evolution-state").textContent = "";
+  setText($("evolution-table-summary"), "evo.table");
+  setText($("evolution-status"), key, vars);
+  setPlain($("evolution-state"), "");
   renderEvolutionFocus();
   renderSpectrumPlot();
 }
@@ -751,23 +754,20 @@ async function runEvolution() {
   evolutionFiles = payload.items.map((i) => i.file).join("|");
   evolutionStale = false;
   if (payload.items.length < 2) {
-    clearEvolution(projectSpectraPaths().length
-      ? "Adicione mais espectros ao projeto: a evolução precisa de dois ou mais (fonte, fundo e os tirados não contam)."
-      : "Adicione dois ou mais espectros ao projeto para ver a evolução.");
+    clearEvolution(projectSpectraPaths().length ? "evo.needMore" : "evo.needTwo");
     return;
   }
   const invalido = checkFields($("spectra-evolution"));
   if (invalido) {        // nem vai ao servidor: o campo diz o que corrigir
-    $("evolution-status").textContent = `Corrija o campo destacado: ${fieldName(invalido)}.`;
-    $("evolution-status").classList.add("status-error");
-    if (evolution) markStale("evolution-plot", "Desatualizado: corrija o campo destacado");
+    showFixField($("evolution-status"), invalido);
+    if (evolution) markStale("evolution-plot", "stale.fixField");
     return;
   }
   if (payload.mode === "reference" && String(payload.reference).trim() === "") {
-    clearEvolution("Marque o λ de referência: “Marcar no gráfico” e clique no vale do espectro acima, ou digite o valor.");
+    clearEvolution("evo.markReference");
     return;
   }
-  $("evolution-status").textContent = `Calculando ${payload.items.length} espectros…`;
+  setText($("evolution-status"), "evo.calculating", { n: payload.items.length });
   try {
     const resp = await fetch("/api/spectra/evolution", {
       method: "POST",
@@ -776,7 +776,7 @@ async function runEvolution() {
     });
     const data = await resp.json();
     if (request !== evolutionRequest) return;      // outro cálculo (ou projeto) veio depois
-    if (!resp.ok) throw new Error(data.error || "Erro ao calcular a evolução.");
+    if (!resp.ok) throw new Error(data.error || t("evo.error"));
     evolution = data;
     lastEvolutionKey = evolutionKey(payload);
     markStale("evolution-plot");
@@ -787,20 +787,21 @@ async function runEvolution() {
     renderSpectrumPlot();
   } catch (err) {
     if (request !== evolutionRequest) return;
-    if (!evolution) { clearEvolution(`Falha: ${err.message}`); return; }
+    if (!evolution) { clearEvolution("common.failed", { msg: err.message }); return; }
     // O último resultado bom continua na tela, marcado como desatualizado
-    $("evolution-status").textContent = `Falha: ${err.message}`;
+    setText($("evolution-status"), "common.failed", { msg: err.message });
     $("evolution-status").classList.add("status-error");
-    markStale("evolution-plot", "Desatualizado: o último cálculo falhou");
+    markStale("evolution-plot", "stale.calculationFailed");
   }
 }
 
+// [chave do título do eixo, valor, casas]
 const EVO_Y = {
-  wavelength: ["λ (nm)", (p) => p.wavelength, 4],
-  delta: ["Δλ (nm)", (p) => p.delta, 4],
-  intensity: ["Intensidade", (p) => p.intensity, 4],
-  prominence: ["Proeminência", (p) => p.prominence, 4],
-  fwhm: ["Largura (nm)", (p) => p.fwhm, 4],
+  wavelength: ["evo.col.wavelength", (p) => p.wavelength, 4],
+  delta: ["evo.col.delta", (p) => p.delta, 4],
+  intensity: ["peaks.col.intensity", (p) => p.intensity, 4],
+  prominence: ["peaks.col.prominence", (p) => p.prominence, 4],
+  fwhm: ["evo.col.width", (p) => p.fwhm, 4],
 };
 
 function evolutionX(file) {
@@ -809,7 +810,8 @@ function evolutionX(file) {
 
 function renderEvolution() {
   if (!evolution) return;
-  const [rotulo, valor] = EVO_Y[$("evo-y").value];
+  const [chaveRotulo, valor] = EVO_Y[$("evo-y").value];
+  const rotulo = t(chaveRotulo);
   const porTempo = $("evo-x").value === "time" && evolution.x === "time";
   const n = evolution.files.length;
   const textos = evolution.files.map((f) => `${baseName(f.file)}${f.acquired ? " · " + f.acquired.replace("T", " ") : ""}`);
@@ -829,14 +831,14 @@ function renderEvolution() {
     const pontos = evolution.tracks.map((t) => t.points[i]).filter(Boolean);
     traces.push({
       x: pontos.map(() => evolutionX(evolution.files[i])), y: pontos.map(valor),
-      mode: "markers", name: "em foco", showlegend: false, hoverinfo: "skip",
+      mode: "markers", name: t("evo.inFocus"), showlegend: false, hoverinfo: "skip",
       marker: { symbol: "circle-open", size: 15, color: "#e67e22", line: { width: 2.5 } },
     });
   }
   const eventos = eventPositions();
   const gd = $("evolution-plot");
   Plotly.react(gd, traces, {
-    separators: ",.",
+    separators: plotSeparators(),
     margin: { l: 60, r: 20, t: eventos.length ? 44 : 30, b: 45 },
     // Um evento = uma linha e a sua legenda, nos mesmos índices (o arraste usa isso)
     shapes: eventos.map(({ x, e }) => ({
@@ -848,7 +850,7 @@ function renderEvolution() {
       text: textoPlotly(e.label), font: { size: 11, color: e.color },
     })),
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
-    xaxis: { title: porTempo ? "Tempo desde o 1º arquivo (min)" : "Arquivo (ordem)",
+    xaxis: { title: t(porTempo ? "evo.axisTime" : "evo.axisOrder"),
              gridcolor: "#eceff3", dtick: porTempo || n > 30 ? undefined : 1 },
     yaxis: { title: $("evo-y").value === "intensity" && evolution.unit ? `${rotulo} (${evolution.unit})` : rotulo,
              gridcolor: "#eceff3" },
@@ -862,18 +864,20 @@ function renderEvolution() {
     if (arquivo && arquivo !== shared.currentSpectrumFile) selectSpectrumFile(arquivo).catch((err) => showError(err.message));
   });
 
-  const nome = evolution.kind === "min" ? "vale" : "pico";
-  const partes = [`${n} espectro(s)`, `${evolution.tracks.length} trilha(s)`];
+  const nome = t(evolution.kind === "min" ? "evo.valley" : "evo.peak");
+  const partes = [t("evo.spectraCount", { n }), t("evo.trackCount", { n: evolution.tracks.length })];
   const principal = evolution.tracks[0]?.points.filter(Boolean) || [];
   if (evolution.tracks.length === 1 && principal.length > 1) {
     const total = principal[principal.length - 1].wavelength - principal[0].wavelength;
-    partes.push(`Δλ do 1º ao último ${fmtNum(total, 3)} nm`);
+    partes.push(t("evo.totalShift", { value: fmtNum(total, 3) }));
   }
-  if (evolution.tolerance != null) partes.push(`salto máximo ${fmtNum(evolution.tolerance, 3)} nm`);
-  $("evolution-status").textContent = [partes.join(" · "), ...evolution.warnings].join(" — ");
-  $("evolution-state").textContent = evolution.mode === "reference"
-    ? `${nome} perto de ${fmtNum(evolution.reference, 2)} nm · ${n} espectros`
-    : `${evolution.mode === "prominent" ? `${nome} mais proeminente` : `${evolution.tracks.length} trilhas`} · ${n} espectros`;
+  if (evolution.tolerance != null) partes.push(t("evo.maxJump", { value: fmtNum(evolution.tolerance, 3) }));
+  // Os avisos vêm do servidor, no idioma do pedido
+  setPlain($("evolution-status"), [partes.join(" · "), ...evolution.warnings].join(" — "));
+  setPlain($("evolution-state"), evolution.mode === "reference"
+    ? t("evo.stateReference", { kind: nome, ref: fmtNum(evolution.reference, 2), n })
+    : evolution.mode === "prominent" ? t("evo.stateProminent", { kind: nome, n })
+    : t("evo.stateFollow", { tracks: evolution.tracks.length, n }));
   renderEvolutionTable();
   renderEvolutionFocus();
   renderEventLists();
@@ -883,22 +887,23 @@ function renderEvolution() {
 function evolutionRows() {
   const comVertice = evolution.locate && evolution.locate !== "vertex";
   return evolution.files.map((f, i) => {
-    const linha = { Arquivo: baseName(f.file), "Gravado": f.acquired ? f.acquired.replace("T", " ") : "—",
+    const linha = { [t("evo.col.file")]: baseName(f.file),
+                    [t("evo.col.recorded")]: f.acquired ? f.acquired.replace("T", " ") : "—",
                     "t (min)": f.elapsed_s != null ? numeroOuTraco(f.elapsed_s / 60, 3) : "—" };
     evolution.tracks.forEach((trilha, j) => {
       const p = trilha.points[i];
       const sufixo = evolution.tracks.length > 1 ? ` · ${j + 1}` : "";
-      linha[`λ (nm)${sufixo}`] = p ? numeroOuTraco(p.wavelength, 4) : "—";
-      linha[`Δλ (nm)${sufixo}`] = p ? numeroOuTraco(p.delta, 4) : "—";
-      linha[`Intensidade${sufixo}`] = p ? numeroOuTraco(p.intensity, 4) : "—";
-      linha[`Proeminência${sufixo}`] = p ? numeroOuTraco(p.prominence, 4) : "—";
-      linha[`Largura (nm)${sufixo}`] = p ? numeroOuTraco(p.fwhm, 4) : "—";
-      if (comVertice) linha[`λ vértice (nm)${sufixo}`] = p ? numeroOuTraco(p.vertex, 4) : "—";
+      linha[`${t("evo.col.wavelength")}${sufixo}`] = p ? numeroOuTraco(p.wavelength, 4) : "—";
+      linha[`${t("evo.col.delta")}${sufixo}`] = p ? numeroOuTraco(p.delta, 4) : "—";
+      linha[`${t("peaks.col.intensity")}${sufixo}`] = p ? numeroOuTraco(p.intensity, 4) : "—";
+      linha[`${t("peaks.col.prominence")}${sufixo}`] = p ? numeroOuTraco(p.prominence, 4) : "—";
+      linha[`${t("evo.col.width")}${sufixo}`] = p ? numeroOuTraco(p.fwhm, 4) : "—";
+      if (comVertice) linha[`${t("evo.col.vertex")}${sufixo}`] = p ? numeroOuTraco(p.vertex, 4) : "—";
     });
     if (evolutionEvents.length && evolution.start) {
       // O último evento antes do espectro: em que meio (ou condição) ele foi gravado
       const antes = evolutionEvents.filter((e) => elapsedOf(e) <= f.elapsed_s);
-      linha.Evento = antes.length ? antes[antes.length - 1].label || "(sem legenda)" : "—";
+      linha[t("evo.col.event")] = antes.length ? antes[antes.length - 1].label || t("evo.noLabel") : "—";
     }
     return linha;
   });
@@ -908,7 +913,7 @@ function renderEvolutionTable() {
   const linhas = evolutionRows();
   const tabelaEl = $("evolution-table");
   tabelaEl.innerHTML = "";
-  $("evolution-table-summary").textContent = `Tabela (${linhas.length} linhas)`;
+  setText($("evolution-table-summary"), "evo.tableRows", { n: linhas.length });
   if (!linhas.length) return;
   const colunas = Object.keys(linhas[0]);
   const cabeca = tabelaEl.createTHead().insertRow();
@@ -933,21 +938,22 @@ function renderEvolutionFocus() {
   const usados = referenceSpectra();
   const st = spectraState[file];
   let texto = baseName(file);
-  if (usados.has(file)) texto += " — fonte/fundo, fora da evolução";
-  else if (st.exclude) texto += " — fora da evolução";
+  if (usados.has(file)) texto += ` — ${t("evo.focusReference")}`;
+  else if (st.exclude) texto += ` — ${t("spectra.noteExcluded")}`;
   else if (evolution) {
     const pontos = trackedPoints(file);
-    texto += pontos.length === 1
-      ? ` · λ ${fmtNum(pontos[0].wavelength, 3)} nm · Δλ ${fmtNum(pontos[0].delta, 3)} nm`
-      : pontos.length ? ` · ${pontos.length} extremos acompanhados` : ` · sem ${evolution.kind === "min" ? "vale" : "pico"} acompanhado`;
+    texto += " · " + (pontos.length === 1
+      ? `λ ${fmtNum(pontos[0].wavelength, 3)} nm · Δλ ${fmtNum(pontos[0].delta, 3)} nm`
+      : pontos.length ? t("evo.focusTracked", { n: pontos.length })
+      : t("evo.focusNone", { kind: t(evolution.kind === "min" ? "evo.valley" : "evo.peak") }));
   }
   $("evolution-focus-text").textContent = texto;
   const excluir = $("btn-evo-exclude");
   excluir.classList.toggle("hidden", usados.has(file));
-  excluir.textContent = st.exclude ? "Devolver à evolução" : "Tirar da evolução";
+  excluir.textContent = t(st.exclude ? "evo.restore" : "evo.exclude");
   const fora = projectSpectraPaths().filter((path) => spectraState[path].exclude && !usados.has(path)).length;
   $("btn-evo-restore").classList.toggle("hidden", fora === 0 || (fora === 1 && st.exclude));
-  $("btn-evo-restore").textContent = `Devolver todos (${fora} fora)`;
+  $("btn-evo-restore").textContent = t("evo.restoreAll", { n: fora });
 }
 
 function stepSpectrum(passo) {
@@ -992,12 +998,10 @@ $("spectra-evolution").addEventListener("toggle", () => {
   if ($("spectra-evolution").open && (!evolution || evolutionStale)) runEvolution();
 });
 $("btn-evolution-csv").addEventListener("click", () => {
-  if (!evolution) { showError("Calcule a evolução antes de baixar."); return; }
+  if (!evolution) { showError(t("evo.calculateFirst")); return; }
   const linhas = evolutionRows();
   const colunas = Object.keys(linhas[0]);
-  baixarCsv([colunas.join(";"),
-             ...linhas.map((l) => colunas.map((c) => String(l[c]).replace(/—/, "")).join(";"))].join("\n"),
-            "evolucao_espectros.csv");
+  baixarCsv(toCsv([colunas, ...linhas.map((l) => colunas.map((c) => l[c]))]), "evolucao_espectros.csv");
 });
 
 // ── Eventos da evolução: trocas de meio, injeções… ───────────────────────────
@@ -1064,9 +1068,7 @@ function setMarkingEvents(on) {
   markingEvents = on && Boolean(evolution?.start);
   $("btn-evo-event").classList.toggle("on", markingEvents);
   $("evolution-plot").classList.toggle("marking", markingEvents);
-  $("evolution-events-hint").textContent = markingEvents
-    ? "Clique no gráfico para marcar um evento · arraste uma linha para mover · Esc termina"
-    : "Trocas de meio, injeções…: “Marcar evento” e um clique no gráfico. Viram as linhas verticais da figura.";
+  setText($("evolution-events-hint"), markingEvents ? "evo.eventsHintMarking" : "evo.eventsHint");
 }
 
 // Posição do ponteiro no eixo x e o evento cuja linha está a até EVENT_GRAB_PX
@@ -1110,7 +1112,7 @@ function addEvent(elapsed) {
 
 // "+ adicionar": no instante do espectro em foco (ou no fim da evolução)
 document.querySelectorAll(".evo-event-add").forEach((botao) => botao.addEventListener("click", () => {
-  if (!evolution?.start) { showError("Calcule a evolução com espectros que tenham o instante da aquisição."); return; }
+  if (!evolution?.start) { showError(t("evo.needAcquisitionTime")); return; }
   const foco = evolution.files.find((f) => f.file === shared.currentSpectrumFile);
   addEvent((foco || evolution.files[evolution.files.length - 1]).elapsed_s);
 }));
@@ -1172,19 +1174,19 @@ function eventRow(evento) {
   const hora = document.createElement("input");
   hora.type = "time"; hora.step = 1; hora.className = "event-time";
   hora.value = evento.at.slice(11, 19);
-  hora.title = "Hora do evento";
+  hora.title = t("evo.eventTime");
   const legenda = document.createElement("input");
   legenda.type = "text"; legenda.className = "event-label"; legenda.value = evento.label;
-  legenda.placeholder = "legenda (ex.: Água)";
+  legenda.placeholder = t("evo.eventLabelPlaceholder");
   const cor = document.createElement("input");
   cor.type = "color"; cor.className = "color-input event-color"; cor.value = evento.color;
-  cor.title = "Cor da linha";
+  cor.title = t("evo.eventColor");
   const quando = document.createElement("span");
   quando.className = "event-when";
   if (evolution?.start) quando.textContent = `${fmtNum(elapsedOf(evento) / 60, 2)} min`;
   const del = document.createElement("button");
   del.type = "button"; del.className = "marker-del"; del.append(icon("x"));
-  del.title = "Apagar o evento";
+  del.title = t("evo.eventDelete");
 
   hora.addEventListener("change", () => { setEventClock(evento, hora.value); eventsChanged(); });
   hora.addEventListener("blur", () => setTimeout(renderEventLists));    // volta à ordem de tempo
@@ -1207,7 +1209,17 @@ function renderEventLists() {
     if (box.contains(document.activeElement) && box.children.length === evolutionEvents.length) return;
     box.innerHTML = "";
     evolutionEvents.forEach((evento) => box.appendChild(eventRow(evento)));
-    if (!evolutionEvents.length) box.innerHTML = '<span class="hint">Nenhum evento.</span>';
+    if (!evolutionEvents.length) box.innerHTML = hintHtml("evo.noEvents");
   });
 }
 
+// ── Idioma trocado: o que esta aba desenha fora do HTML ─────────────────────
+onLanguageChange(() => {
+  renderSpectraFiles();                   // notas da lista, fonte e fundo
+  syncSpectrumFields();
+  renderEvolutionFocus();
+  // Os nomes dos traços, os avisos e os nomes das trilhas vêm do servidor: pede de novo
+  if (shared.currentSpectrumFile) previewSpectrum();
+  if (evolution) runEvolution();
+  else renderEventLists();
+});

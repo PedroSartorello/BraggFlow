@@ -22,6 +22,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from ..i18n import num, tr
 from ..options import resolve_section
 from .filters import apply_moving_average_filter, apply_savgol_filter
 
@@ -107,14 +108,14 @@ def parse_evolution_events(raw: Optional[Sequence[dict]]) -> List[dict]:
     """
     eventos = []
     for i, item in enumerate(raw or []):
-        prefixo = f"[evento {i + 1}] "
+        prefixo = tr("spectra.eventPrefix", n=i + 1)
         if not isinstance(item, dict):
-            raise ValueError(f"{prefixo}Evento inválido.")
+            raise ValueError(tr("spectra.invalidEvent", prefix=prefixo))
         e = resolve_section(EVENT_SPEC, item, prefix=prefixo)
         try:
             quando = datetime.fromisoformat(e["at"].strip()).replace(tzinfo=None)
         except ValueError:
-            raise ValueError(f"{prefixo}Instante inválido: {e['at']!r}.") from None
+            raise ValueError(tr("spectra.invalidTime", prefix=prefixo, value=repr(e["at"]))) from None
         eventos.append({"at": quando.isoformat(timespec="milliseconds"),
                         "label": e["label"].strip(), "color": e["color"]})
     eventos.sort(key=lambda e: e["at"])
@@ -146,7 +147,7 @@ def smooth_spectrum(intensity: np.ndarray, window: Optional[int], order: int,
             return intensity
         return apply_moving_average_filter(intensity.reshape(-1, 1), window)[:, 0]
     if method != "savgol":
-        raise ValueError(f"Suavização desconhecida: {method}.")
+        raise ValueError(tr("spectra.unknownSmoothing", method=method))
     if window % 2 == 0:
         window += 1
     if window <= order or window > len(intensity):
@@ -172,7 +173,7 @@ def normalize_spectrum(intensity: np.ndarray, mode: str) -> np.ndarray:
         return (intensity - low) / (high - low) if high > low else intensity - low
     if mode == "baseline":
         return intensity - float(np.median(finite))
-    raise ValueError(f"Normalização desconhecida: {mode}.")
+    raise ValueError(tr("spectra.unknownNormalization", mode=mode))
 
 
 def remove_trend(wavelength: np.ndarray, intensity: np.ndarray, degree: Optional[int]) -> np.ndarray:
@@ -211,7 +212,7 @@ def to_transmission(wavelength: np.ndarray, sample: np.ndarray,
     não se aplica quando só o fundo é dado.
     """
     if output not in TRANSMISSION_OUTPUTS:
-        raise ValueError(f"Saída de transmissão desconhecida: {output}.")
+        raise ValueError(tr("spectra.unknownOutput", output=output))
     wl = np.asarray(wavelength, dtype=float)
     s = np.asarray(sample, dtype=float)
 
@@ -277,21 +278,21 @@ def prepare_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
     high = settings["lambda_max"]
     if low is not None or high is not None:
         if low is not None and high is not None and not low < high:
-            raise ValueError("λ mínimo do espectro deve ser menor que λ máximo.")
+            raise ValueError(tr("spectra.lambdaOrder"))
         inside = np.ones(len(wavelength), dtype=bool)
         if low is not None:
             inside &= wavelength >= low
         if high is not None:
             inside &= wavelength <= high
         if inside.sum() < 2:
-            raise ValueError("O recorte de comprimento de onda não deixou pontos suficientes.")
+            raise ValueError(tr("spectra.cropTooNarrow"))
         wavelength, intensity = wavelength[inside], intensity[inside]
 
     # NaN (transmissão onde a fonte é fraca) não pode entrar nos filtros
     ok = np.isfinite(intensity)
     if not ok.all():
         if ok.sum() < 2:
-            raise ValueError("O espectro não tem pontos válidos depois da conversão.")
+            raise ValueError(tr("spectra.noValidPoints"))
         wavelength, intensity = wavelength[ok], intensity[ok]
     intensity = smooth_spectrum(intensity, settings["smooth_window"], settings["smooth_order"],
                                 settings["smooth_method"])
@@ -510,8 +511,8 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _nm(valor: float) -> str:
-    """λ com uma casa e vírgula decimal, para os nomes das trilhas."""
-    return f"{valor:.1f}".replace(".", ",")
+    """λ com uma casa, no separador decimal do idioma, para os nomes das trilhas."""
+    return num(valor, ".1f")
 
 
 def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "prominent",
@@ -554,20 +555,19 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
     arquivo (ISO, com data), a origem de ``elapsed_s``.
     """
     if kind not in ("min", "max"):
-        raise ValueError(f"Tipo de extremo desconhecido: {kind}.")
+        raise ValueError(tr("spectra.unknownKind", kind=kind))
     if mode not in EVOLUTION_MODES:
-        raise ValueError(f"Modo desconhecido: {mode}.")
+        raise ValueError(tr("spectra.unknownMode", mode=mode))
     if locate not in LOCATE_METHODS:
-        raise ValueError(f"Posição do extremo desconhecida: {locate}.")
+        raise ValueError(tr("spectra.unknownLocate", locate=locate))
     if mode == "reference":
         if reference is None:
-            raise ValueError("Marque o λ de referência: clique no vale no gráfico do espectro "
-                             "ou digite o valor.")
+            raise ValueError(tr("spectra.markReference"))
         if window is not None and not window > 0:
-            raise ValueError("A janela de busca deve ser maior que zero (vazio = sem limite).")
+            raise ValueError(tr("spectra.windowPositive"))
     itens = [dict(e) for e in entries]
     if not itens:
-        raise ValueError("Nenhum espectro para acompanhar.")
+        raise ValueError(tr("spectra.nothingToTrack"))
     dias = {e["acquired"].date() for e in itens
             if isinstance(e.get("acquired"), datetime) and e.get("acquired_from") != "filename"}
     if len(dias) == 1:
@@ -591,7 +591,10 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
             p["wavelength"], p["located"] = x[locate], locate
         return p
 
+    # A chave das trilhas fica em português (o estilo da figura e o projeto a
+    # guardam); o nome, que a interface mostra, segue o idioma do pedido
     nome = "vale" if kind == "min" else "pico"
+    exibido = tr("spectra.valley" if kind == "min" else "spectra.peak")
     if mode == "reference":
         centro, pontos = float(reference), []
         for xs in extremos:
@@ -600,22 +603,22 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
             pontos.append(ponto(x))
             if x is not None and follow:
                 centro = x["wavelength"]
-        trilhas = [{"key": f"{nome} em λ ref", "name": f"{nome} perto de {_nm(reference)} nm",
+        trilhas = [{"key": f"{nome} em λ ref", "name": tr("spectra.trackNear", kind=exibido, ref=_nm(reference)),
                     "points": pontos}]
     elif mode == "prominent":
-        trilhas = [{"key": f"{nome} mais proeminente", "name": f"{nome} mais proeminente",
+        trilhas = [{"key": f"{nome} mais proeminente", "name": tr("spectra.trackProminent", kind=exibido),
                     "points": [ponto(max(xs, key=lambda x: x["prominence"])) if xs else None
                                for xs in extremos]}]
     else:
         iniciais = sorted(extremos[0], key=lambda x: x["wavelength"])
         if not iniciais:
-            raise ValueError(f"O primeiro arquivo não tem {nome}s para acompanhar: "
-                             "ajuste o recorte ou a proeminência.")
+            raise ValueError(tr("spectra.firstHasNone", kind=exibido))
         if tolerance is None:
             espacos = np.diff([x["wavelength"] for x in iniciais])
             tolerance = 0.5 * float(espacos.min()) if len(espacos) else np.inf
         posicoes = [x["wavelength"] for x in iniciais]
-        trilhas = [{"key": f"{nome} {i + 1}", "name": f"{nome} {i + 1} (≈ {_nm(x['wavelength'])} nm no 1º)",
+        trilhas = [{"key": f"{nome} {i + 1}",
+                    "name": tr("spectra.trackFollow", kind=exibido, i=i + 1, lam=_nm(x["wavelength"])),
                     "points": [ponto(x)]} for i, x in enumerate(iniciais)]
         for xs in extremos[1:]:
             livres = list(xs)

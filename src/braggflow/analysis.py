@@ -21,6 +21,8 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
+from .i18n import tr
+
 REFERENCES = ("previous", "first", "none")
 
 
@@ -45,14 +47,14 @@ def intervals_from_markers(markers: Sequence[dict], t_min: float, t_max: float,
         key=lambda m: m["time"],
     )
     if not pontos:
-        return [Interval("todo o sinal", t_min, t_max)]
+        return [Interval(tr("analysis.wholeSignal"), t_min, t_max)]
 
     intervalos = []
     if include_before and pontos[0]["time"] > t_min:
-        intervalos.append(Interval("antes da 1ª marcação", t_min, pontos[0]["time"]))
+        intervalos.append(Interval(tr("analysis.beforeFirst"), t_min, pontos[0]["time"]))
     for i, marcacao in enumerate(pontos):
         fim = pontos[i + 1]["time"] if i + 1 < len(pontos) else t_max
-        rotulo = (marcacao.get("label") or "").strip() or f"marcação {i + 1}"
+        rotulo = (marcacao.get("label") or "").strip() or tr("analysis.marker", n=i + 1)
         intervalos.append(Interval(rotulo, marcacao["time"], fim))
     return intervalos
 
@@ -140,7 +142,7 @@ def selection_statistics(time: np.ndarray, values: np.ndarray, start: float, end
     time = np.asarray(time, dtype=float)
     values = np.asarray(values, dtype=float)
     if not end > start:
-        raise ValueError("O fim do trecho precisa ser maior que o início.")
+        raise ValueError(tr("analysis.endBeforeStart"))
     linha = interval_statistics(time, values, Interval("seleção", float(start), float(end)))
 
     validos = np.isfinite(time) & np.isfinite(values)
@@ -179,7 +181,7 @@ def add_differences(linhas: List[dict], reference: str = "previous") -> List[dic
     acumulada desde a linha de base).
     """
     if reference not in REFERENCES:
-        raise ValueError(f"Referência inválida: {reference}. Use {', '.join(REFERENCES)}.")
+        raise ValueError(tr("analysis.badReference", reference=reference, options=", ".join(REFERENCES)))
 
     for i, linha in enumerate(linhas):
         linha["delta"] = None
@@ -210,7 +212,7 @@ def marker_steps(time: np.ndarray, values: np.ndarray, markers: Sequence[dict],
     "quanto o sinal mudou nesta marcação".
     """
     if window <= 0:
-        raise ValueError("A janela do degrau deve ser maior que zero.")
+        raise ValueError(tr("analysis.stepWindow"))
 
     degraus = []
     for i, marcacao in enumerate(sorted(markers, key=lambda m: m["time"])):
@@ -222,7 +224,7 @@ def marker_steps(time: np.ndarray, values: np.ndarray, markers: Sequence[dict],
         espalhamento = (None if antes["std"] is None or depois["std"] is None
                         else float(np.hypot(antes["std"], depois["std"])))
         degraus.append({
-            "label": (marcacao.get("label") or "").strip() or f"marcação {i + 1}",
+            "label": (marcacao.get("label") or "").strip() or tr("analysis.marker", n=i + 1),
             "time": float(instante),
             "before": antes["mean"], "before_std": antes["std"], "before_n": antes["n"],
             "after": depois["mean"], "after_std": depois["std"], "after_n": depois["n"],
@@ -241,7 +243,7 @@ def analyse_curve(time: np.ndarray, values: np.ndarray, markers: Sequence[dict],
     values = np.asarray(values, dtype=float)
     finitos = np.isfinite(time)
     if not finitos.any():
-        raise ValueError("A curva não tem amostras com tempo válido.")
+        raise ValueError(tr("analysis.noValidTime"))
     t_min, t_max = float(np.min(time[finitos])), float(np.max(time[finitos]))
 
     intervalos = [interval_statistics(time, values, intervalo, settle_window)

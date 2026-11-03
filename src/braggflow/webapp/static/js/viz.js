@@ -1,7 +1,8 @@
 // Aba Figura: fontes de dados, estilo por canal, estilos salvos,
 // marcações, geração e download da figura.
 
-import { $, fmtNum, icon, showError } from "./core.js";
+import { $, fmtNum, hintHtml, icon, setPlain, setText, showError } from "./core.js";
+import { onLanguageChange, t } from "./i18n.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectrumSettingsFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
 import { ensureEvolution, evolutionEventsList, evolutionPayload, saveCurrentSpectrumState, setEvolutionY } from "./spectra.js";
@@ -23,22 +24,20 @@ const FIGURE_PRESETS = {
   a4: { unit: "cm", width: 16, height: "", font_size: 11 },
   slide: { unit: "cm", width: 25.4, height: 14.29, font_size: 16 },
 };
-const LINESTYLE_LABELS = { "": "auto", "-": "——", "--": "– –", "-.": "–·–", ":": "···", none: "sem" };
-const MARKER_LABELS = {
-  "": "auto", none: "sem", o: "●", s: "■", "^": "▲", v: "▼", D: "◆",
+const LINESTYLE_LABELS = () => ({ "": t("common.auto"), "-": "——", "--": "– –", "-.": "–·–", ":": "···", none: t("viz.noneShort") });
+const MARKER_LABELS = () => ({
+  "": t("common.auto"), none: t("viz.noneShort"), o: "●", s: "■", "^": "▲", v: "▼", D: "◆",
   x: "✕", "+": "+", "*": "★", P: "✚", X: "✖", h: "⬢", ".": "·",
-};
+});
 
 const styleInput = (path) => document.querySelector(`[data-style="${path}"]`);
 export const vizSource = () => $("viz-source").value;
 
+// [dica das marcações, placeholder do instante, dica do cartão Dados]
 const SOURCE_HINTS = {
-  series: ["t (s, na escala do CSV) · legenda · cor", "t (s)",
-           "Marque os CSVs processados e escolha as curvas no cartão Curvas. Limites de X na unidade escolhida."],
-  spectra: ["λ (nm) · legenda · cor", "λ (nm)",
-            "Cada traço do arquivo vira uma curva. Limites de X em nm; recorte, suavização e normalização vêm da aba Espectros."],
-  evolution: ["t (s, na escala do CSV) · legenda · cor", "t (s)",
-              "A evolução da aba Espectros: os mesmos espectros, preparo, λ de referência e eventos. Cada trilha vira uma curva; X é o tempo desde o 1º espectro."],
+  series: ["markers.hintCsv", "t (s)", "viz.dataHintSeries"],
+  spectra: ["markers.hintSpectra", "λ (nm)", "viz.dataHintSpectra"],
+  evolution: ["markers.hintCsv", "t (s)", "viz.dataHintEvolution"],
 };
 
 // Mostra só os campos que fazem sentido para a fonte escolhida (data-for)
@@ -47,8 +46,8 @@ export function applySourceMode() {
   document.querySelectorAll("#tab-viz-sidebar [data-for]").forEach((el) =>
     el.classList.toggle("hidden", !el.dataset.for.split(" ").includes(fonte)));
   const [marcacoes, placeholder, dica] = SOURCE_HINTS[fonte] || SOURCE_HINTS.series;
-  $("marker-hint").textContent = marcacoes;
-  $("viz-data-hint").textContent = dica;
+  setText($("marker-hint"), marcacoes);
+  setText($("viz-data-hint"), dica);
   document.querySelectorAll(".marker-time").forEach((el) => { el.placeholder = placeholder; });
 }
 
@@ -67,14 +66,13 @@ async function loadEvolutionCurves() {
   if (request !== evolutionCurvesRequest) return;
   if (!evolucao) {
     shared.evolutionCurves = {};
-    box.innerHTML = '<span class="hint">Calcule a evolução na aba Espectros: dois ou mais espectros e, ' +
-      "no modo λ de referência, o λ marcado.</span>";
+    box.innerHTML = hintHtml("viz.evolutionMissing");
     return;
   }
   shared.evolutionCurves = Object.fromEntries(evolucao.tracks.map((t) => [t.key, t]));
   const fragment = document.createDocumentFragment();
   evolucao.tracks.forEach((trilha, i) =>
-    fragment.appendChild(channelRow(trilha.key, i, `${trilha.name} · ${evolucao.files.length} espectros`)));
+    fragment.appendChild(channelRow(trilha.key, i, `${trilha.name} · ${t("viz.spectraNote", { n: evolucao.files.length })}`)));
   box.innerHTML = "";
   box.appendChild(fragment);
   applyVizChannelSelection();
@@ -100,7 +98,7 @@ async function loadSpectrumCurves() {
 
   if (!files.length) {
     shared.spectrumCurves = {};
-    box.innerHTML = '<span class="hint">Marque um ou mais arquivos de espectro.</span>';
+    box.innerHTML = hintHtml("viz.checkSpectrumFiles");
     return;
   }
 
@@ -111,12 +109,13 @@ async function loadSpectrumCurves() {
     const resp = await fetch("/api/spectra/traces?file=" + encodeURIComponent(file));
     const data = await resp.json();
     if (request !== spectrumRequest) return;   // já houve outra mudança
-    if (!resp.ok) { showError(data.error || "Erro ao ler o espectro."); continue; }
+    if (!resp.ok) { showError(data.error || t("spectra.readError")); continue; }
     data.traces.forEach((trace) => {
       curves[trace.key] = { file, trace: trace.name };
       fragment.appendChild(channelRow(
         trace.key, index++,
-        `${trace.n_points.toLocaleString("pt-BR")} pts · ${trace.range[0]}–${trace.range[1]} nm`));
+        `${fmtNum(trace.n_points, 0)} pts · ${fmtNum(trace.range[0])}–${fmtNum(trace.range[1])} nm`,
+        true, trace.label ?? trace.key));
     });
   }
   shared.spectrumCurves = curves;
@@ -175,7 +174,7 @@ export async function loadVizSources(pending) {
     box.innerHTML = "";
     arquivos.forEach((f) => box.appendChild(sourceRow("viz-series-source", f, checked.has(f))));
     if (!arquivos.length) {
-      box.innerHTML = '<span class="hint">Processe os arquivos na aba Séries temporais.</span>';
+      box.innerHTML = hintHtml("viz.processFirst");
     }
   } catch (err) {
     showError(err.message);
@@ -187,7 +186,7 @@ export async function loadVizSources(pending) {
   projectSpectraPaths().forEach((path) =>
     box.appendChild(sourceRow("viz-spectrum-source", path, checkedSpectra.has(path))));
   if (!box.children.length) {
-    box.innerHTML = '<span class="hint">Adicione espectros ao projeto na aba Espectros.</span>';
+    box.innerHTML = hintHtml("viz.addSpectraFirst");
   }
 }
 
@@ -204,7 +203,9 @@ function currentPalette() {
   return shared.figureOptions?.palettes?.[$("viz-palette").value] || ["#000000"];
 }
 
-function channelRow(ch, index, note, defaultVisible = true) {
+// `ch` é a chave da curva; `nome`, o que se mostra (o servidor traduz os nomes
+// que ele mesmo inventa para os traços sem rótulo)
+function channelRow(ch, index, note, defaultVisible = true, nome = ch) {
   const saved = channelStyleMemory[ch] || {};
   const palette = currentPalette();
 
@@ -218,7 +219,7 @@ function channelRow(ch, index, note, defaultVisible = true) {
   visible.type = "checkbox"; visible.className = "viz-channel"; visible.value = ch;
   visible.checked = saved.visible ?? defaultVisible;
   const name = document.createElement("span");
-  name.textContent = ch;
+  name.textContent = nome;
   const unitSpan = document.createElement("span");
   unitSpan.className = "unit";
   unitSpan.textContent = note || "";
@@ -227,19 +228,19 @@ function channelRow(ch, index, note, defaultVisible = true) {
   const color = document.createElement("input");
   color.type = "color"; color.className = "color-input ch-color";
   color.value = saved.color || palette[index % palette.length];
-  color.title = "Cor da curva";
+  color.title = t("viz.curveColor");
 
-  const label = makeInput("text", "ch-label", saved.label ?? "", ch);
-  label.title = "Texto na legenda";
-  label.setAttribute("aria-label", `Legenda de ${ch}`);
-  visible.setAttribute("aria-label", `Mostrar ${ch} na figura`);
-  color.setAttribute("aria-label", `Cor de ${ch}`);
-  const linestyle = makeSelect("ch-linestyle", LINESTYLE_LABELS, saved.linestyle);
-  linestyle.title = "Estilo da linha";
-  const marker = makeSelect("ch-marker", MARKER_LABELS, saved.marker);
-  marker.title = "Marcador";
-  linestyle.setAttribute("aria-label", `Estilo da linha de ${ch}`);
-  marker.setAttribute("aria-label", `Marcador de ${ch}`);
+  const label = makeInput("text", "ch-label", saved.label ?? "", nome);
+  label.title = t("viz.legendText");
+  label.setAttribute("aria-label", t("viz.legendOf", { ch: nome }));
+  visible.setAttribute("aria-label", t("viz.showOf", { ch: nome }));
+  color.setAttribute("aria-label", t("viz.colorOf", { ch: nome }));
+  const linestyle = makeSelect("ch-linestyle", LINESTYLE_LABELS(), saved.linestyle);
+  linestyle.title = t("viz.lineStyle");
+  const marker = makeSelect("ch-marker", MARKER_LABELS(), saved.marker);
+  marker.title = t("viz.marker");
+  linestyle.setAttribute("aria-label", t("viz.lineStyleOf", { ch: nome }));
+  marker.setAttribute("aria-label", t("viz.markerOf", { ch: nome }));
 
   row.append(head, label, linestyle, marker, color);
   return row;
@@ -274,7 +275,7 @@ async function loadSeriesCurves() {
 
   if (!files.length) {
     shared.seriesCurves = {};
-    box.innerHTML = '<span class="hint">Marque um ou mais CSVs processados.</span>';
+    box.innerHTML = hintHtml("viz.checkCsvs");
     return;
   }
 
@@ -287,7 +288,7 @@ async function loadSeriesCurves() {
     const resp = await fetch("/api/processed-channels?file=" + encodeURIComponent(file));
     const data = await resp.json();
     if (request !== curvesRequest) return;
-    if (!resp.ok) { showError(data.error || "Erro ao ler canais do CSV."); continue; }
+    if (!resp.ok) { showError(data.error || t("viz.csvChannelsError")); continue; }
 
     // A chave precisa ser a mesma que o servidor monta ao desenhar
     const stem = shortName(file).split("/").pop().replace(/\.csv$/, "").replace(/_processado$/, "");
@@ -378,13 +379,15 @@ function persistStyle() {
 
 function fillFontSelect(fonts) {
   const sel = $("viz-font");
+  const atual = sel.value;
   sel.innerHTML = "";
-  [["serif", "Serifada (Times New Roman)"], ["sans-serif", "Sem serifa (Arial)"],
-   ["monospace", "Monoespaçada"]].forEach(([value, text]) => sel.add(new Option(text, value)));
+  [["serif", "viz.fontSerif"], ["sans-serif", "viz.fontSans"],
+   ["monospace", "viz.fontMono"]].forEach(([value, chave]) => sel.add(new Option(t(chave), value)));
   const group = document.createElement("optgroup");
-  group.label = "Fontes instaladas";
+  group.label = t("viz.fontsInstalled");
   fonts.forEach((font) => group.appendChild(new Option(font, font)));
   sel.appendChild(group);
+  if (atual) sel.value = atual;
 }
 
 export async function loadFigureOptions() {
@@ -422,41 +425,41 @@ function differsFromBaseline(el) {
   return atual !== ref;
 }
 
-const PLURAL = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const opcaoEscolhida = (sel) => sel?.selectedOptions?.[0]?.textContent.split("(")[0].trim() || "";
 
 // Resumo que aparece no título de cada cartão (para não precisar abrir)
 const CARD_SUMMARIES = {
   dados: () => {
     if (vizSource() === "spectra") {
-      return PLURAL(document.querySelectorAll(".viz-spectrum-source:checked").length, "espectro", "espectros");
+      return t("viz.sumSpectra", { n: document.querySelectorAll(".viz-spectrum-source:checked").length });
     }
     if (vizSource() === "evolution") {
       const eventos = evolutionEventsList().length;
-      return `evolução · y = ${opcaoEscolhida($("viz-evo-y")) || "λ"} · x em ${styleInput("data.time_unit")?.value || "s"}` +
-        (eventos ? ` · ${PLURAL(eventos, "evento", "eventos")}` : "");
+      return t("viz.sumEvolution", { y: opcaoEscolhida($("viz-evo-y")) || "λ", unit: styleInput("data.time_unit")?.value || "s" }) +
+        (eventos ? ` · ${t("viz.sumEvents", { n: eventos })}` : "");
     }
-    const partes = [PLURAL(document.querySelectorAll(".viz-series-source:checked").length, "CSV", "CSVs"),
-                    `x em ${styleInput("data.time_unit")?.value || "s"}`];
+    const partes = [t("viz.sumCsvs", { n: document.querySelectorAll(".viz-series-source:checked").length }),
+                    t("viz.sumXIn", { unit: styleInput("data.time_unit")?.value || "s" })];
     if (styleInput("data.relative_first")?.checked) partes.push("Δ");
     if (styleInput("data.to_pm")?.checked) partes.push("pm");
     return partes.join(" · ");
   },
   curvas: () => {
-    const partes = [PLURAL(document.querySelectorAll(".viz-channel:checked").length, "curva", "curvas")];
-    partes.push(styleInput("legend.show")?.checked ? `legenda ${opcaoEscolhida(styleInput("legend.position")).toLowerCase()}` : "sem legenda");
+    const partes = [t("viz.sumCurves", { n: document.querySelectorAll(".viz-channel:checked").length })];
+    partes.push(styleInput("legend.show")?.checked
+      ? t("viz.sumLegend", { position: opcaoEscolhida(styleInput("legend.position")).toLowerCase() }) : t("viz.sumNoLegend"));
     return partes.join(" · ");
   },
   figura: () => {
     const unidade = styleInput("figure.unit")?.value || "cm";
     const largura = fmtNum(styleInput("figure.width")?.value || 0, 2);
-    const altura = styleInput("figure.height")?.value ? fmtNum(styleInput("figure.height").value, 2) : "auto";
+    const altura = styleInput("figure.height")?.value ? fmtNum(styleInput("figure.height").value, 2) : t("common.auto");
     return `${largura} × ${altura} ${unidade} · ${opcaoEscolhida(styleInput("figure.layout")).toLowerCase()}`;
   },
   marcacoes: () => {
-    const partes = [PLURAL(collectMarkers().filter((m) => String(m.time).trim() !== "").length, "marcação", "marcações")];
-    if (styleInput("markers.shade")?.checked) partes.push("faixas");
-    if (styleInput("axes.grid")?.checked) partes.push("grade");
+    const partes = [t("viz.sumMarkers", { n: collectMarkers().filter((m) => String(m.time).trim() !== "").length })];
+    if (styleInput("markers.shade")?.checked) partes.push(t("viz.sumShade"));
+    if (styleInput("axes.grid")?.checked) partes.push(t("viz.sumGrid"));
     return partes.join(" · ");
   },
 };
@@ -475,7 +478,7 @@ export function refreshStyleState() {
     if (alteradas) {
       const marca = document.createElement("span");
       marca.className = "alteradas";
-      marca.textContent = ` · ${PLURAL(alteradas, "alterada", "alteradas")}`;
+      marca.textContent = ` · ${t("viz.sumChanged", { n: alteradas })}`;
       alvo.appendChild(marca);
     }
   });
@@ -563,7 +566,7 @@ async function loadStyleList(selectValue) {
   const data = await resp.json();
   const sel = $("style-select");
   const current = selectValue ?? sel.value;
-  sel.innerHTML = '<option value="">— nenhum —</option>';
+  sel.innerHTML = `<option value="" data-i18n="common.none">${t("common.none")}</option>`;
   data.styles.forEach((name) => sel.add(new Option(name, name)));
   sel.value = data.styles.includes(current) ? current : "";
 }
@@ -572,7 +575,7 @@ async function loadStyle(name) {
   if (!name) return;
   const resp = await fetch("/api/styles/" + encodeURIComponent(name));
   const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || "Erro ao carregar estilo.");
+  if (!resp.ok) throw new Error(data.error || t("viz.styleLoadError"));
   styleBaseline = data.style;
   applyStyle(data.style);
   $("style-name").value = data.name;
@@ -581,7 +584,7 @@ async function loadStyle(name) {
 
 async function saveStyle() {
   const name = $("style-name").value.trim();
-  if (!name) { showError("Informe um nome para o estilo."); return; }
+  if (!name) { showError(t("viz.styleNameRequired")); return; }
   showError("");
   try {
     const resp = await fetch("/api/styles", {
@@ -590,9 +593,9 @@ async function saveStyle() {
       body: JSON.stringify({ name, style: collectStyle() }),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro ao salvar estilo.");
+    if (!resp.ok) throw new Error(data.error || t("viz.styleSaveError"));
     await loadStyleList(data.name);
-    $("viz-status").textContent = `Estilo "${data.name}" salvo em data/styles.`;
+    setText($("viz-status"), "viz.styleSaved", { name: data.name });
   } catch (err) {
     showError(err.message);
   }
@@ -625,18 +628,13 @@ export function addMarkerRow(time = "", label = "", color = null) {
   const n = $("marker-list").children.length;
 
   const tIn = makeInput("number", "marker-time", time, "t (s)");
-  const lIn = makeInput("text", "marker-label", label, "legenda");
+  const lIn = makeInput("text", "marker-label", label, "");
   const cIn = document.createElement("input");
   cIn.type = "color"; cIn.className = "marker-color";
   cIn.value = color || MARKER_COLORS[n % MARKER_COLORS.length];
-  tIn.setAttribute("aria-label", `Instante da marcação ${n + 1} (s)`);
-  lIn.setAttribute("aria-label", `Legenda da marcação ${n + 1}`);
-  cIn.setAttribute("aria-label", `Cor da marcação ${n + 1}`);
 
   const del = document.createElement("button");
   del.type = "button"; del.className = "marker-del"; del.append(icon("x"));
-  del.setAttribute("aria-label", `Remover a marcação ${n + 1}`);
-  del.title = "Remover marcação";
   del.addEventListener("click", () => {
     row.remove();
     markProjectDirty();
@@ -646,7 +644,19 @@ export function addMarkerRow(time = "", label = "", color = null) {
 
   row.append(tIn, lIn, cIn, del);
   $("marker-list").appendChild(row);
+  labelMarkerRow(row, n);
   return row;
+}
+
+// Textos de uma linha de marcação (de novo quando o idioma muda)
+function labelMarkerRow(row, indice) {
+  const vars = { n: indice + 1 };
+  row.querySelector(".marker-label").placeholder = t("markers.labelPlaceholder");
+  row.querySelector(".marker-time").setAttribute("aria-label", t("markers.timeOf", vars));
+  row.querySelector(".marker-label").setAttribute("aria-label", t("markers.labelOf", vars));
+  row.querySelector(".marker-color").setAttribute("aria-label", t("markers.colorOf", vars));
+  row.querySelector(".marker-del").setAttribute("aria-label", t("markers.removeOf", vars));
+  row.querySelector(".marker-del").title = t("markers.remove");
 }
 
 export function sortMarkerRows() {
@@ -697,9 +707,8 @@ export function drawPlotMarkers() {
   scheduleAnalysis();
   const n = collectMarkers().length;
   $("marker-count").textContent = n ? `(${n})` : "";
-  $("viz-marker-count").textContent = n
-    ? `${n} marcação(ões), feitas na aba Séries temporais.`
-    : "Nenhuma marcação: clique no gráfico da aba Séries temporais para criar.";
+  if (n) setText($("viz-marker-count"), "viz.markerCountSome", { n });
+  else setText($("viz-marker-count"), "viz.markerCountNone");
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
   refreshStyleState();
 }
@@ -779,15 +788,13 @@ export async function generateFigure() {
   const opts = collectVizOptions();
   const curves = chosenCurves(opts);
   if (!curves.length) {
-    showError({ spectra: "Marque pelo menos um traço de espectro.",
-                evolution: "Marque pelo menos uma trilha da evolução (calcule-a na aba Espectros)." }[opts.source]
-              || "Marque pelo menos um canal de um CSV processado.");
+    showError(t({ spectra: "viz.checkSpectrumTrace", evolution: "viz.checkTrack" }[opts.source] || "viz.checkChannel"));
     return;
   }
   const request = ++figureRequest;
   const curveCount = curves.length;
   showError("");
-  $("viz-status").textContent = "Gerando figura…";
+  setText($("viz-status"), "viz.generating");
   try {
     const resp = await fetch("/api/figure", {
       method: "POST",
@@ -796,7 +803,7 @@ export async function generateFigure() {
     });
     const data = await resp.json();
     if (request !== figureRequest) return;
-    if (!resp.ok) throw new Error(data.error || "Erro ao gerar figura.");
+    if (!resp.ok) throw new Error(data.error || t("viz.figureError"));
 
     const img = $("viz-img");
     img.src = "data:image/png;base64," + data.image;
@@ -805,23 +812,35 @@ export async function generateFigure() {
     lastFigureInfo = data.info;
     applyZoom();
 
-    const info = data.info;
-    const format = opts.style.export.format;
-    const size = ["png", "tiff"].includes(format)
-      ? ` → ${info.width_px} × ${info.height_px} px a ${info.dpi} dpi` : " (vetorial)";
-    $("viz-status").textContent =
-      `${fmtNum(info.width_cm, 2)} × ${fmtNum(info.height_cm, 2)} cm · ${format.toUpperCase()}${size}` +
-      ` · ${curveCount} curva(s)` +
-      (opts.source === "evolution"
-        ? (opts.evolution.events.length ? ` · ${opts.evolution.events.length} evento(s)` : "")
-        : (opts.markers.length ? ` · ${opts.markers.length} marcação(ões)` : ""));
-    $("viz-status").title = $("viz-status").textContent;
+    figureStatus = {
+      info: data.info, format: opts.style.export.format, curvas: curveCount,
+      eventos: opts.source === "evolution" ? opts.evolution.events.length : 0,
+      marcacoes: opts.source === "evolution" ? 0 : opts.markers.length,
+    };
+    renderFigureStatus();
     persistStyle();
   } catch (err) {
     if (request !== figureRequest) return;
     showError(err.message);
-    $("viz-status").textContent = `Falha ao gerar figura: ${err.message}`;
+    setText($("viz-status"), "viz.generateFailed", { msg: err.message });
   }
+}
+
+// Tamanho, formato e curvas da última figura. Fica sem data-i18n: quando o
+// idioma muda, só é montado de novo se ainda for o que o status mostra
+let figureStatus = null;
+
+function renderFigureStatus() {
+  const { info, format, curvas, eventos, marcacoes } = figureStatus;
+  const size = ["png", "tiff"].includes(format)
+    ? ` → ${t("viz.pixels", { w: String(info.width_px), h: String(info.height_px), dpi: String(info.dpi) })}`
+    : ` (${t("viz.vector")})`;
+  const partes = [`${fmtNum(info.width_cm, 2)} × ${fmtNum(info.height_cm, 2)} cm · ${format.toUpperCase()}${size}`,
+                  t("viz.curveCount", { n: curvas })];
+  if (eventos) partes.push(t("viz.eventCount", { n: eventos }));
+  if (marcacoes) partes.push(t("viz.markerTotal", { n: marcacoes }));
+  setPlain($("viz-status"), partes.join(" · "));
+  $("viz-status").title = $("viz-status").textContent;
 }
 
 let figureTimer = null;
@@ -856,10 +875,10 @@ export async function onVizChange(el) {
 async function copyFigure() {
   const opts = collectVizOptions();
   const curvas = chosenCurves(opts);
-  if (!curvas.length) { showError("Marque pelo menos uma curva."); return; }
+  if (!curvas.length) { showError(t("viz.checkCurve")); return; }
   const dpi = Math.min(Number(opts.style.export?.dpi) || 300, 300);
   opts.style.export = { ...opts.style.export, preview_dpi: dpi };
-  $("viz-status").textContent = "Copiando figura…";
+  setText($("viz-status"), "viz.copying");
   try {
     const resp = await fetch("/api/figure", {
       method: "POST",
@@ -867,24 +886,24 @@ async function copyFigure() {
       body: JSON.stringify(opts),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro ao gerar a figura.");
+    if (!resp.ok) throw new Error(data.error || t("viz.figureError"));
     const bytes = Uint8Array.from(atob(data.image), (c) => c.charCodeAt(0));
     await navigator.clipboard.write([new ClipboardItem({ "image/png": new Blob([bytes], { type: "image/png" }) })]);
-    $("viz-status").textContent = `Figura copiada (PNG, ${dpi} dpi): cole num slide ou documento.`;
+    setText($("viz-status"), "viz.copied", { dpi: String(dpi) });
   } catch (err) {
-    showError(`Não foi possível copiar a figura: ${err.message}. Use "Baixar figura".`);
-    $("viz-status").textContent = "Falha ao copiar a figura.";
+    showError(t("viz.copyFailed", { msg: err.message }));
+    setText($("viz-status"), "viz.copyFailedStatus");
   }
 }
 
 async function downloadFigure() {
   const opts = collectVizOptions();
   if (!chosenCurves(opts).length) {
-    showError("Marque as curvas da figura primeiro."); return;
+    showError(t("viz.checkCurvesFirst")); return;
   }
   const format = opts.style.export.format;
   showError("");
-  $("viz-status").textContent = `Exportando ${format.toUpperCase()}…`;
+  setText($("viz-status"), "viz.exporting", { format: format.toUpperCase() });
   try {
     const resp = await fetch("/api/figure/download", {
       method: "POST",
@@ -893,7 +912,7 @@ async function downloadFigure() {
     });
     if (!resp.ok) {
       const data = await resp.json();
-      throw new Error(data.error || "Erro ao gerar figura.");
+      throw new Error(data.error || t("viz.figureError"));
     }
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -904,10 +923,10 @@ async function downloadFigure() {
     a.download = `${base}_figura.${format}`;
     a.click();
     URL.revokeObjectURL(url);
-    $("viz-status").textContent = `${format.toUpperCase()} exportado.`;
+    setText($("viz-status"), "viz.exported", { format: format.toUpperCase() });
   } catch (err) {
     showError(err.message);
-    $("viz-status").textContent = `Falha ao exportar: ${err.message}`;
+    setText($("viz-status"), "viz.exportFailed", { msg: err.message });
   }
 }
 $("btn-add-marker").addEventListener("click", () => {
@@ -923,4 +942,13 @@ $("btn-style-reset").addEventListener("click", resetStyle);
 $("viz-zoom").addEventListener("change", applyZoom);
 $("status-viz").addEventListener("change", (e) => {
   if (e.target.dataset.style) { markProjectDirty(); scheduleFigure(); }
+});
+
+// ── Idioma trocado: o que esta aba desenha fora do HTML ─────────────────────
+onLanguageChange(() => {
+  if (shared.figureOptions) fillFontSelect(shared.figureOptions.fonts);
+  document.querySelectorAll(".marker-row").forEach(labelMarkerRow);
+  refreshStyleState();
+  if (figureStatus && !$("viz-status").dataset.i18n) renderFigureStatus();
+  if (document.querySelector(".viz-ch-row")) refreshVizCurves().catch((err) => showError(err.message));
 });

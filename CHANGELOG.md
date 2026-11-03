@@ -114,6 +114,27 @@ itself did not change: the same input gives the same output as before.
   app.
 - `braggflow.webapp.app.create_app(data_dir)`: each app has its own data folder
   and read caches (`braggflow.webapp.state`).
+- Bilingual interface: Brazilian Portuguese (the default) and English, with a
+  PT · EN switch at the end of the header and in the project dialog. The
+  choice is kept in the browser (`localStorage`), `<html lang>` follows it,
+  and switching redraws status lines, tables and plots without reloading or
+  touching the project.
+  - Every text of the page is in `static/js/strings.js`; the HTML marks its
+    texts with `data-i18n*` attributes and the modules call `t()`
+    (`static/js/i18n.js`).
+  - Numbers follow the interface language (`1.550,25` or `1,550.25`),
+    including the CSVs the page builds (statistics, peaks and valleys,
+    evolution): `;` and decimal comma in Portuguese, `,` and decimal point in
+    English.
+  - Server messages (errors, warnings, the processing report, the names of
+    evolution tracks) come back in the interface language: the page sends
+    `Accept-Language` with every request, and `braggflow.i18n` keeps the
+    messages in both languages (`tr`, `use_language`). Without the header,
+    and in `braggflow process`, they stay in Portuguese.
+  - Figures keep their own language setting (automatic labels and legends).
+  - Tests: `tests/test_i18n.py` checks the dictionary and the server messages;
+    browser tests switch to English and back, check that the choice survives
+    a reload, and look for untranslated text on every tab.
 
 ### Changed
 
@@ -169,6 +190,8 @@ itself did not change: the same input gives the same output as before.
   its own copy of the steps. The CSV is byte for byte the same; the JSON no
   longer lists the empty time-window step and records `None` for the optional
   parameters, as the web app does.
+- `API_BUILD` is `2026-11-03`: the page sends its language and expects the
+  messages in it, so an older server asks to be restarted.
 - The page script and styles left `index.html`: ES modules in
   `webapp/static/js/` (no build step) and `webapp/static/css/app.css`. The
   code of each function is unchanged.

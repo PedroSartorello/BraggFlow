@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from .i18n import tr
 from .processing.spectra import (
     parse_evolution_events,
     resolve_evolution_options,
@@ -33,7 +34,7 @@ def _clean_processing(processing: Optional[dict]) -> Dict[str, dict]:
     """Mantém só as seções conhecidas, com valores simples (str/número/bool)."""
     processing = processing or {}
     if not isinstance(processing, dict):
-        raise ValueError("Opções de processamento inválidas.")
+        raise ValueError(tr("project.invalidProcessing"))
 
     clean: Dict[str, dict] = {}
     for section in PROCESSING_SECTIONS:
@@ -41,7 +42,7 @@ def _clean_processing(processing: Optional[dict]) -> Dict[str, dict]:
         if values is None:
             continue
         if not isinstance(values, dict):
-            raise ValueError(f"Opções inválidas na etapa '{section}'.")
+            raise ValueError(tr("project.invalidStep", section=section))
         clean[section] = {
             str(key): value for key, value in values.items()
             if value is None or isinstance(value, (str, int, float, bool))
@@ -79,7 +80,7 @@ class Project:
     def __post_init__(self):
         self.name = str(self.name).strip()
         if not self.name:
-            raise ValueError("Informe um nome para o projeto.")
+            raise ValueError(tr("project.nameRequired"))
         self.file = str(self.file or "")
         self.processing = _clean_processing(self.processing)
         self.markers = parse_markers(self.markers)
@@ -87,7 +88,7 @@ class Project:
         if self.source == "timeseries":
             self.source = "series"          # nome antigo da fonte
         if self.source not in ("series", "spectra", "evolution"):
-            raise ValueError(f"Fonte da figura inválida: {self.source}.")
+            raise ValueError(tr("project.badSource", source=self.source))
 
         self.series = [self._clean_series_entry(entry) for entry in (self.series or [])
                        if isinstance(entry, dict) and entry.get("file")]
@@ -165,7 +166,7 @@ class Project:
     @classmethod
     def from_dict(cls, data: dict) -> "Project":
         if not isinstance(data, dict):
-            raise ValueError("Projeto inválido.")
+            raise ValueError(tr("project.invalid"))
         return cls(
             name=data.get("name", ""),
             file=data.get("file", ""),

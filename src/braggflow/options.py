@@ -15,6 +15,8 @@ from typing import Optional
 
 from matplotlib import colors as mcolors
 
+from .i18n import field, tr
+
 ANY_RANGE = (None, None)
 
 
@@ -42,29 +44,30 @@ def coerce(kind: str, value, default, extra, label: str):
         try:
             number = float(str(value).replace(",", ".")) if isinstance(value, str) else float(value)
         except (TypeError, ValueError):
-            raise ValueError(f"{label}: número inválido ({value!r}).") from None
+            raise ValueError(tr("options.invalidNumber", label=label, value=repr(value))) from None
         if not math.isfinite(number):
-            raise ValueError(f"{label}: número inválido ({value!r}).")
+            raise ValueError(tr("options.invalidNumber", label=label, value=repr(value)))
         if base == "int":
             if number != int(number):
-                raise ValueError(f"{label}: use um número inteiro ({value!r}).")
+                raise ValueError(tr("options.notInteger", label=label, value=repr(value)))
             number = int(number)
         low, high = extra or ANY_RANGE
         if (low is not None and number < low) or (high is not None and number > high):
-            limits = f"≥ {low:g}" if high is None else f"entre {low:g} e {high:g}"
-            raise ValueError(f"{label}: valor deve ser {limits} (recebido {number:g}).")
+            limits = (tr("options.atLeast", low=f"{low:g}") if high is None
+                      else tr("options.between", low=f"{low:g}", high=f"{high:g}"))
+            raise ValueError(tr("options.outOfRange", label=label, limits=limits, value=f"{number:g}"))
         return number
 
     if base == "choice":
         text = str(value).strip()
         if text not in extra:
-            raise ValueError(f"{label}: opção inválida ({text!r}).")
+            raise ValueError(tr("options.invalidChoice", label=label, value=repr(text)))
         return text
 
     if base == "color":
         text = str(value).strip()
         if not mcolors.is_color_like(text):
-            raise ValueError(f"{label}: cor inválida ({text!r}).")
+            raise ValueError(tr("options.invalidColor", label=label, value=repr(text)))
         return text
 
     raise AssertionError(f"tipo desconhecido: {kind}")
@@ -74,8 +77,8 @@ def resolve_section(spec: dict, user: Optional[dict], prefix: str = "") -> dict:
     """Aplica um spec a um dicionário parcial, completando com os padrões."""
     user = user or {}
     if not isinstance(user, dict):
-        raise ValueError(f"Opções inválidas{(' em ' + prefix) if prefix else ''}.")
+        raise ValueError(tr("options.invalidIn", prefix=prefix) if prefix else tr("options.invalid"))
     return {
-        key: coerce(kind, user.get(key), default, extra, f"{prefix}{label}")
+        key: coerce(kind, user.get(key), default, extra, f"{prefix}{field(label)}")
         for key, (kind, default, extra, label) in spec.items()
     }

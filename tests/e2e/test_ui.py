@@ -930,3 +930,169 @@ def test_symbols_and_units_keep_their_case(lmr, app):
     rotulo = app.locator('.step[data-step="savgol"] .step-switch')
     expect(rotulo).to_have_attribute("aria-labelledby", re.compile(r"step-name-"))
 
+
+
+# ── idioma da interface ──────────────────────────────────────────────────────
+
+def textos_em_portugues(page: Page) -> list[str]:
+    """
+    Textos à vista e atributos (title, placeholder, aria-label) com acento do
+    português: na interface em inglês, o que sobrou sem tradução. O seletor de
+    idioma fica de fora (cada idioma é escrito nele mesmo).
+    """
+    return page.evaluate(r"""() => {
+      const acento = /[ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ]/;
+      const fora = (el) => el.closest(".lang-switch, script, style, .icon-sprite");
+      const achados = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const el = n.parentElement;
+        if (!el || fora(el) || !acento.test(n.textContent)) continue;
+        if (!(el.closest("select") || el).checkVisibility()) continue;
+        achados.push(n.textContent.trim());
+      }
+      document.querySelectorAll("[title], [placeholder], [aria-label]").forEach((el) => {
+        if (fora(el)) return;
+        ["title", "placeholder", "aria-label"].forEach((attr) => {
+          const valor = el.getAttribute(attr);
+          if (valor && acento.test(valor)) achados.push(`${attr}: ${valor}`);
+        });
+      });
+      return achados;
+    }""")
+
+
+def test_switching_to_english_translates_the_page_and_survives_a_reload(app):
+    novo_projeto(app, "Idioma")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+
+    app.locator('#project-bar .lang-switch label[lang="en"]').click()
+    expect(app.locator("html")).to_have_attribute("lang", "en")
+
+    # cabeçalho
+    expect(app.locator("#tab-series")).to_have_text("Time series")
+    expect(app.locator("#tab-spectra")).to_have_text("Spectra")
+    expect(app.locator("#btn-projects")).to_have_text("Projects")
+    expect(app.locator("#btn-undo")).to_have_attribute("aria-label", "Undo")
+
+    # a leitura do status é montada de novo no idioma (e os números com ele)
+    expect(app.locator("#status-text")).to_contain_text("CSV saved")
+    expect(app.locator("#status-text")).to_contain_text("samples")
+    expect(app.locator("#status-details")).to_contain_text("Cleaning:")     # relatório do servidor
+
+    # o servidor responde no idioma da página
+    with app.expect_request(lambda r: r.url.endswith("/api/process")) as pedido:
+        app.click("#btn-process")
+    assert pedido.value.headers["accept-language"] == "en"
+    expect(app.locator("#status-text")).to_contain_text("CSV saved")
+
+    # erro de campo
+    app.locator('.step[data-step="savgol"] .step-name').click()
+    app.fill("#savgol-window", "4")
+    app.click("#btn-process")
+    expect(app.locator(".field-error")).to_have_text("Use an odd number, 3 or more.")
+    expect(app.locator("#status-text")).to_have_text("Fix the highlighted field: Window (odd).")
+    expect(app.locator("#plot")).to_have_attribute("data-stale", "Out of date: fix the highlighted field in the sidebar")
+    app.fill("#savgol-window", "11")
+    expect(app.locator(".field-error")).to_have_count(0)
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV saved")
+    assert textos_em_portugues(app) == []
+
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text="espectro.txt").click()
+    app.check('[data-spec="find_max"]')
+    expect(app.locator("#spectra-summary")).to_contain_text("global max")
+    expect(app.locator("#spectra-status")).to_contain_text("points")
+    expect(app.locator("#evolution-status")).to_have_text("Add more spectra to the project: the evolution needs "
+                                                          "two or more (source, dark and the ones taken out do not count).")
+    assert textos_em_portugues(app) == []
+
+    app.click('#tabs .tab[data-tab="viz"]')
+    expect(app.locator("#viz-img")).to_be_visible()
+    expect(app.locator("#viz-status")).to_contain_text("3 curves")
+    assert textos_em_portugues(app) == []
+
+    # a escolha fica no navegador
+    app.reload()
+    expect(app.locator("html")).to_have_attribute("lang", "en")
+    expect(app.locator('input[name="ui-language"][value="en"]')).to_be_checked()
+    expect(app.locator('input[name="ui-language-gate"][value="en"]')).to_be_checked()
+    expect(app.locator("#project-gate small")).to_have_text("Choose a project to continue, or start a new one")
+    expect(app.locator("#tab-series")).to_have_text("Time series")
+    projeto = app.locator("#gate-projects .gate-row", has_text="Idioma")
+    expect(projeto).to_contain_text("1 series · 1 spectrum · 0 markers")
+    assert textos_em_portugues(app) == []
+
+    projeto.click()
+    expect(app.locator("#status-text")).to_contain_text("samples")
+
+
+def test_back_to_portuguese_restores_every_text(app):
+    """O português do dicionário é o mesmo da página: ir e voltar não muda nada."""
+    novo_projeto(app, "Volta")
+    antes = app.evaluate("document.body.innerText")
+    app.locator('#project-bar .lang-switch label[lang="en"]').click()
+    expect(app.locator("#tab-series")).to_have_text("Time series")
+    app.locator('#project-bar .lang-switch label[lang="pt-BR"]').click()
+    expect(app.locator("html")).to_have_attribute("lang", "pt-BR")
+    expect(app.locator("#tab-series")).to_have_text("Séries temporais")
+    assert app.evaluate("document.body.innerText") == antes
+
+
+def test_statistics_evolution_and_events_in_english(pasta_lmr, app):
+    novo_projeto(app, "Language")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#card-markers > summary").click()
+    app.click("#btn-add-marker")
+    app.locator(".marker-time").fill("300")
+    app.keyboard.press("Tab")
+    app.locator("#analysis-panel > summary").click()
+    expect(app.locator("#analysis-result")).to_contain_text("marcação 1")
+    app.keyboard.press("m")
+    arrastar_no_grafico(app, 1 / 3, 1 / 2)
+    expect(app.locator("#selection-note")).to_contain_text("Sinal processado inteiro")
+
+    app.locator('#project-bar .lang-switch label[lang="en"]').click()
+    expect(app.locator("#analysis-result")).to_contain_text("Intervals (nm)")
+    expect(app.locator("#analysis-result")).to_contain_text("marker 1")      # rótulo do servidor, pedido de novo
+    expect(app.locator("#selection-note")).to_contain_text("Whole processed signal")
+    expect(app.locator("#selection-table th").first).to_have_text("Channel")
+    expect(app.locator("#plot-hint")).to_have_text("drag = measure stretch · Esc clears")
+    assert curvas(app)[0] == "EFBG1 (raw)"
+    assert textos_em_portugues(app) == []
+
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 spectra · 1 track")
+    expect(app.locator("#spectra-files-summary")).to_have_text("3 spectra")
+    assert curvas(app, "evolution-plot")[0] == "most prominent valley"
+    app.click("#btn-evo-event")
+    expect(app.locator("#evolution-events-hint")).to_contain_text("Click the plot to mark an event")
+    app.mouse.click(*ponto_da_evolucao(app, 0.8))
+    expect(app.locator("#evolution-events .event-label")).to_be_focused()
+    app.keyboard.type("Water")
+    app.keyboard.press("Enter")
+    app.keyboard.press("Escape")
+    app.locator("#evolution-table-box > summary").click()
+    expect(app.locator("#evolution-table-summary")).to_have_text("Table (3 rows)")
+    expect(app.locator("#evolution-table th").last).to_have_text("Event")
+    assert textos_em_portugues(app) == []
+
+    app.click("#btn-evolution-figure")
+    expect(app.locator("#viz-status")).to_contain_text("1 curve · 1 event")
+    expect(app.locator('#tab-viz-sidebar [data-summary="dados"]')).to_have_text("evolution · y = λ · x in s · 1 event")
+    assert textos_em_portugues(app) == []
+
+
+def test_language_can_be_chosen_before_opening_a_project(app):
+    """O diálogo de projetos cobre o cabeçalho ao abrir a página: ele tem o seu seletor."""
+    app.locator('#project-gate .lang-switch label[lang="en"]').click()
+    expect(app.locator("#btn-gate-new")).to_have_text("New project")
+    expect(app.locator("#gate-name")).to_have_attribute("placeholder", "name of the new project")
+    expect(app.locator('input[name="ui-language"][value="en"]')).to_be_checked()
+    novo_projeto(app, "Gate")
+    expect(app.locator("#status-text")).to_have_text('Project "Gate": add the time-series files.')
