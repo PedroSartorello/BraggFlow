@@ -336,6 +336,21 @@ def _compute_evolution(options: dict) -> dict:
     return resultado
 
 
+def _track_label(trilha: dict, resultado: dict, index: int, language: str) -> str:
+    """
+    Legenda automática de uma trilha no idioma da figura: o nome que a aba
+    Espectros mostra é sempre em português, mas a figura vai para o artigo.
+    """
+    pt = language == "pt"
+    nome = ("vale" if pt else "valley") if resultado["kind"] == "min" else ("pico" if pt else "peak")
+    if resultado["mode"] == "reference":
+        lam = f"{resultado['reference']:.1f}"
+        return f"{nome} perto de {lam.replace('.', ',')} nm" if pt else f"{nome} near {lam} nm"
+    if resultado["mode"] == "prominent":
+        return f"{nome} mais proeminente" if pt else f"most prominent {nome}"
+    return f"{nome} {index + 1}"
+
+
 def _evolution_items(options: dict, style: dict, markers: list):
     """
     Curvas da evolução para a figura: uma por trilha marcada, com a grandeza
@@ -369,12 +384,13 @@ def _evolution_items(options: dict, style: dict, markers: list):
 
     marcadas = options.get("tracks")
     items = []
-    for trilha in resultado["tracks"]:
+    for indice, trilha in enumerate(resultado["tracks"]):
         if marcadas is not None and trilha["key"] not in marcadas:
             continue
         y = np.array([np.nan if p is None or p.get(opts["y"]) is None else p[opts["y"]]
                       for p in trilha["points"]], dtype=float)
-        items.append({"key": trilha["key"], "label": trilha["name"], "x": x, "y": y})
+        items.append({"key": trilha["key"], "x": x, "y": y,
+                      "label": _track_label(trilha, resultado, indice, style["axes"]["language"])})
     if not items:
         raise ValueError("Marque pelo menos uma trilha da evolução.")
     xlabel, ylabel = evolution_labels(opts["y"], resultado["unit"], resultado["kind"],

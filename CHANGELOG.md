@@ -117,6 +117,51 @@ itself did not change: the same input gives the same output as before.
 
 ### Changed
 
+- Interface review (Impeccable critique, 25/40): the visual system stays
+  ("A Bancada Organizada", recorded in `DESIGN.md`) and its weak points are
+  fixed:
+  - Text keeps its case: table headers and labels no longer turn λ, nm and σ
+    into Λ, NM and Σ.
+  - Functional text is at least 11.5px, and hints and labels are 12px. Faded
+    text reaches 5:1 contrast, field borders reach 3:1, and figures are
+    tabular.
+  - A value the processing would refuse is marked at its field, with the
+    reason under it, before any request. Examples are an even Savitzky-Golay
+    window or a search window ≤ 0. The status names the field, and the plot
+    keeps its last result with a "Desatualizado" badge instead of being
+    blanked. The server explains a bad Savitzky-Golay window in Portuguese,
+    naming the step.
+  - The error notice sits fixed under the header, can be closed, and is
+    announced to screen readers. A failed autosave says why.
+  - The project screen is a real dialog that keeps focus, and the tabs follow
+    the ARIA tab pattern with arrow keys. Step switches and the fields in
+    sensor, marker and curve rows have accessible names, and keyboard focus is
+    visible everywhere.
+  - Shortcuts are shown where they act, as key caps. In Espectros, ← and →
+    step through the spectra.
+  - Evolution card:
+    - the plot follows its container's width;
+    - the selects are no longer cut;
+    - controls are grouped into "Acompanhar" and "Mostrar", with one primary
+      action.
+  - "Gravar o CSV a cada mudança" names what the toggle does. Séries imports
+    files with a button instead of the browser's native file control.
+  - Automatic legends of the evolution figure follow the figure's language.
+  - Narrow windows and 200% zoom stack the sidebar above the work area, and
+    reduced motion is respected.
+- Visual pass on the same system:
+  - The sidebar is one surface divided by hairlines instead of a stack of
+    boxed cards, and its section labels are larger (15px).
+  - The header reads "BraggFlow / project name · Projetos", with the tabs in
+    the centre and undo, redo and save as icon buttons.
+  - Text glyphs (▶ ↶ ⭳ ×) gave way to a drawn icon set, one stroke weight.
+  - The status bar reads like an instrument: values with their unit, and the
+    CSV's state ("CSV salvo", "CSV ainda não gravado") in a pill.
+  - Long hints fold into "Como funciona" disclosures, and the Plotly toolbar
+    is hidden, since the plot tools already sit above each plot.
+- The README presents BraggFlow as a product, with screenshots made from
+  synthetic data (`docs/images/`).
+
 - `main.py` became `examples/01_process_file.py`; without arguments it
   processes the synthetic example.
 - `requirements.txt` is a shortcut for `-e .[dev]`.

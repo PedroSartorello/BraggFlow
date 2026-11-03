@@ -36,7 +36,7 @@ and processing steps, the concatenation order, the time markers, the spectra
 settings, the selected curves and the figure style
 (`data/projects/<name>.json`). Processed CSVs go to `data/processed/<project>/`, so two
 projects never overwrite each other's results. Opening a project only shows the
-saved state; "Processar ▶" (or automatic reprocessing) writes the CSV.
+saved state; "Processar" (or automatic reprocessing) writes the CSV.
 
 *Saving and undoing.* With "Salvar sozinho" on (the default, remembered in
 this browser), the project saves itself about 2 s after each change; the
@@ -48,7 +48,8 @@ under another name makes a copy. A project deleted while open is not saved
 again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
 asks before leaving a project with unsaved changes.
 
-↶ / ↷ (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y outside text fields) undo and redo
+The undo and redo buttons in the header (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y
+outside text fields) undo and redo
 changes to the project — files, steps, sensors, markers, figure style — up to
 50 steps back to how it was when it was opened; changes less than half a
 second apart (typing a value) count as one step, and the project name is not
@@ -167,7 +168,7 @@ valley, which uses tens of points and is several times less noisy than the
 of mass above half depth. Where the fit is not possible, the 3-point vertex is
 used and a warning says how many points.
 
-Clicking a point of the evolution opens that spectrum above; ◀ ▶ walk through
+Clicking a point of the evolution opens that spectrum above; the arrow buttons walk through
 the files in evolution order, and "Tirar da evolução" leaves an outlier out
 (the file stays in the project, struck through in the list; "Devolver todos"
 brings them back). Files that cannot be read are skipped with a warning
@@ -218,6 +219,23 @@ card back. The search box at the top filters the options by name or section
 tela" shows the whole figure; "Copiar figura" puts it on the clipboard as a PNG
 (export resolution, up to 300 dpi) for slides and documents; "Baixar figura"
 exports PDF/PNG/SVG/EPS/TIFF.
+
+**Errors and keyboard.**
+- **Refused values.** A value the processing would refuse is marked at its
+  field, with the reason right under it, and nothing is sent. Examples are an
+  even Savitzky-Golay window, a value below a field's minimum, or a search
+  window ≤ 0. The status bar names the field to fix.
+- **Failed runs.** When a run fails, the plot keeps its last good result under
+  a "Desatualizado" badge until the next success.
+- **Errors from the server.** They appear fixed under the header; × or Esc
+  closes them.
+- **Shortcuts.** They are shown on the plot tools (1, 2, Z, M, A). The tabs
+  move with the arrow keys, and ← and → step through the spectra in
+  Espectros.
+- **Status bar.** It reads like an instrument: the values with their unit,
+  and at the end the CSV's state ("CSV salvo", or "CSV ainda não gravado" while
+  you only preview).
+- **Visual system.** It is recorded in `DESIGN.md`.
 
 ## For developers
 

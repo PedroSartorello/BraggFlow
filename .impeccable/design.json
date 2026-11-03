@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-03T18:16:40+00:00",
+  "title": "Design System: BraggFlow",
+  "extensions": {
+    "colorMeta": {
+      "azul-tinta-de-caneta": {
+        "role": "primary",
+        "displayName": "Azul Tinta de Caneta",
+        "canonical": "oklch(42.3% 0.114 254.6)",
+        "tonalRamp": [
+          "#000a20",
+          "#062446",
+          "#1a406e",
+          "#305f97",
+          "#5282bf",
+          "#7da8dd",
+          "#abcefa",
+          "#d7f1ff"
+        ]
+      },
+      "azul-tinta-profunda": {
+        "role": "primary",
+        "displayName": "Azul Tinta Profunda",
+        "canonical": "oklch(35.9% 0.095 254.7)",
+        "tonalRamp": [
+          "#010b1d",
+          "#0d2440",
+          "#224166",
+          "#3a5f8e",
+          "#5b83b5",
+          "#84a7d4",
+          "#b0cdf2",
+          "#dbf1ff"
+        ]
+      },
+      "azul-tinta-lavada": {
+        "role": "primary",
+        "displayName": "Azul Tinta Lavada",
+        "canonical": "oklch(95.5% 0.015 251.2)",
+        "tonalRamp": [
+          "#090b0e",
+          "#212429",
+          "#3b4046",
+          "#585e65",
+          "#7a8189",
+          "#9fa5ac",
+          "#c6cbd1",
+          "#ebeff3"
+        ]
+      },
+      "nevoa-de-laboratorio": {
+        "role": "neutral",
+        "displayName": "Névoa de Laboratório",
+        "canonical": "oklch(95.7% 0.006 255.5)",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#232426",
+          "#3e4042",
+          "#5b5e61",
+          "#7e8084",
+          "#a2a5a8",
+          "#c9cbcd",
+          "#edeef0"
+        ]
+      },
+      "superficie": {
+        "role": "neutral",
+        "displayName": "Superfície",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a4a4a4",
+          "#cacaca",
+          "#eeeeee"
+        ]
+      },
+      "borda": {
+        "role": "neutral",
+        "displayName": "Borda",
+        "canonical": "oklch(92.6% 0.011 256.7)",
+        "tonalRamp": [
+          "#0a0b0d",
+          "#222427",
+          "#3d4044",
+          "#5a5e63",
+          "#7c8186",
+          "#a1a5aa",
+          "#c8cbcf",
+          "#eceff2"
+        ]
+      },
+      "borda-firme": {
+        "role": "neutral",
+        "displayName": "Borda Firme",
+        "canonical": "oklch(86.3% 0.021 254.9)",
+        "tonalRamp": [
+          "#080b0f",
+          "#20242b",
+          "#3a4049",
+          "#565e69",
+          "#78818c",
+          "#9ea5af",
+          "#c5cbd3",
+          "#eaeff5"
+        ]
+      },
+      "borda-campo": {
+        "role": "neutral",
+        "displayName": "Borda de Campo",
+        "canonical": "oklch(65.8% 0.033 256.1)",
+        "tonalRamp": [
+          "#070b11",
+          "#1d252e",
+          "#37404d",
+          "#535f6f",
+          "#748193",
+          "#9aa6b5",
+          "#c2cbd8",
+          "#e8eff9"
+        ]
+      },
+      "tinta": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "canonical": "oklch(24.4% 0.030 253.1)",
+        "tonalRamp": [
+          "#070c11",
+          "#1e252d",
+          "#37414c",
+          "#535f6d",
+          "#758291",
+          "#9ba6b3",
+          "#c2ccd7",
+          "#e8eff8"
+        ]
+      },
+      "tinta-apagada": {
+        "role": "neutral",
+        "displayName": "Tinta Apagada",
+        "canonical": "oklch(51.0% 0.032 258.4)",
+        "tonalRamp": [
+          "#080b11",
+          "#1e242e",
+          "#38404d",
+          "#535e6f",
+          "#758193",
+          "#9ba5b5",
+          "#c3cbd8",
+          "#e9eff9"
+        ]
+      },
+      "perigo": {
+        "role": "error",
+        "displayName": "Perigo",
+        "canonical": "oklch(50.1% 0.178 28.7)",
+        "tonalRamp": [
+          "#240000",
+          "#4d0000",
+          "#790e0a",
+          "#a62820",
+          "#d24e41",
+          "#f17f70",
+          "#ffaea0",
+          "#ffdbcf"
+        ]
+      },
+      "perigo-fundo": {
+        "role": "error",
+        "displayName": "Perigo Fundo",
+        "canonical": "oklch(95.6% 0.019 25.6)",
+        "tonalRamp": [
+          "#0f0a09",
+          "#2a2221",
+          "#473d3c",
+          "#675a59",
+          "#8b7c7b",
+          "#aea1a0",
+          "#d2c8c6",
+          "#f4eceb"
+        ]
+      },
+      "aviso": {
+        "role": "warning",
+        "displayName": "Aviso",
+        "canonical": "oklch(50.8% 0.108 73.3)",
+        "tonalRamp": [
+          "#170700",
+          "#371d00",
+          "#5a3700",
+          "#7f5306",
+          "#a57633",
+          "#c69c66",
+          "#e6c499",
+          "#ffeacb"
+        ]
+      },
+      "aviso-fundo": {
+        "role": "warning",
+        "displayName": "Aviso Fundo",
+        "canonical": "oklch(96.8% 0.041 90.2)",
+        "tonalRamp": [
+          "#0e0b04",
+          "#292415",
+          "#463f2c",
+          "#665d45",
+          "#898066",
+          "#aca48e",
+          "#d1cab8",
+          "#f3eee1"
+        ]
+      },
+      "aviso-borda": {
+        "role": "warning",
+        "displayName": "Aviso Borda",
+        "canonical": "oklch(88.0% 0.099 89.8)",
+        "tonalRamp": [
+          "#130900",
+          "#302200",
+          "#503d00",
+          "#725b11",
+          "#967d38",
+          "#b8a36a",
+          "#dbc99c",
+          "#faeecd"
+        ]
+      },
+      "laranja-referencia": {
+        "role": "tertiary",
+        "displayName": "Laranja Referência",
+        "canonical": "oklch(69.6% 0.160 55.5)",
+        "tonalRamp": [
+          "#200000",
+          "#460e00",
+          "#6e2600",
+          "#993f00",
+          "#c26300",
+          "#e18e50",
+          "#feb989",
+          "#ffe3c0"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "brand": {
+        "displayName": "Brand",
+        "purpose": "BraggFlow wordmark in the header and project screen."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Project name in the header."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Controls, buttons, status text."
+      },
+      "card-title": {
+        "displayName": "Card title",
+        "purpose": "Card headers in sidebar and main area."
+      },
+      "field-label": {
+        "displayName": "Field label",
+        "purpose": "Label above every input."
+      },
+      "hint": {
+        "displayName": "Hint",
+        "purpose": "Explanations under groups of fields."
+      },
+      "panel-title": {
+        "displayName": "Panel title",
+        "purpose": "Headers of the panels in the main area."
+      },
+      "section-label": {
+        "displayName": "Section label",
+        "purpose": "Numbered step labels and the evolution group titles; sentence case, never uppercase."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "File metadata, badges and key caps; the floor for functional text."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Table cells; tabular figures."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pousada",
+        "value": "0 1px 2px rgba(16, 24, 40, .06)",
+        "purpose": "Every in-flow surface: cards, plot frames, status bars, panels, the active tab."
+      },
+      {
+        "name": "elevada",
+        "value": "0 4px 16px rgba(16, 24, 40, .09)",
+        "purpose": "Dialogs and floating panels only."
+      },
+      {
+        "name": "barra-de-acao",
+        "value": "0 -6px 12px -10px rgba(16, 24, 40, .35)",
+        "purpose": "Sticky action footer of the Séries sidebar."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "120ms ease",
+        "purpose": "Input border and focus ring."
+      },
+      {
+        "name": "state",
+        "value": "150ms ease",
+        "purpose": "Button, tab, row and chip colour changes."
+      },
+      {
+        "name": "switch",
+        "value": "180ms ease",
+        "purpose": "Switch track colour and knob slide."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action per area: Processar, Atualizar, Fazer figura.",
+      "html": "<button class=\"ds-btn-primary\">Processar ▶</button>",
+      "css": ".ds-btn-primary{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);padding:10px 12px;font-size:13px;font-weight:600;color:#fff;background:var(--accent,#1a4e8a);border:1px solid var(--accent,#1a4e8a);border-radius:8px;box-shadow:0 1px 2px rgba(16,24,40,.06);cursor:pointer;transition:background .15s}.ds-btn-primary:hover{background:var(--accent-hover,#143d6d)}.ds-btn-primary:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(26,78,138,.25)}.ds-btn-primary:disabled{opacity:.55;cursor:wait}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outlined companion action: Baixar CSV, Recalcular, Copiar figura.",
+      "html": "<button class=\"ds-btn-secondary\">Baixar CSV</button>",
+      "css": ".ds-btn-secondary{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);padding:10px 12px;font-size:13px;font-weight:600;color:var(--accent,#1a4e8a);background:#fff;border:1px solid var(--border-strong,#c9d3e0);border-radius:8px;cursor:pointer;transition:background .15s,border-color .15s}.ds-btn-secondary:hover{background:var(--accent-soft,#e9f1fa);border-color:var(--accent,#1a4e8a)}.ds-btn-secondary:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(26,78,138,.2)}"
+    },
+    {
+      "name": "Dashed Add Button",
+      "kind": "button",
+      "refersTo": "button-dashed",
+      "description": "Adds or copies something: + Adicionar marcação, Aplicar este preparo a todos.",
+      "html": "<button class=\"ds-btn-dashed\">+ Adicionar marcação</button>",
+      "css": ".ds-btn-dashed{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);padding:7px 8px;font-size:12px;font-weight:600;color:var(--accent,#1a4e8a);background:#fff;border:1px dashed var(--border-strong,#c9d3e0);border-radius:7px;cursor:pointer;transition:border-color .15s,background .15s}.ds-btn-dashed:hover{border-color:var(--accent,#1a4e8a);background:var(--accent-soft,#e9f1fa)}.ds-btn-dashed:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(26,78,138,.2)}"
+    },
+    {
+      "name": "Labelled Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Label above, 30px field; focus turns the border blue with a washed ring.",
+      "html": "<label class=\"ds-field\">λ mínimo (nm)<input class=\"ds-input\" type=\"number\" value=\"450\"></label>",
+      "css": ".ds-field{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted,#64748b);width:160px}.ds-input{height:30px;padding:4px 8px;font-size:12.5px;font-family:inherit;color:var(--text,#16212e);background:#fff;border:1px solid var(--field-border,#8593a6);border-radius:7px;transition:border-color .12s,box-shadow .12s}.ds-input:focus{outline:none;border-color:var(--accent,#1a4e8a);box-shadow:0 0 0 3px rgba(26,78,138,.14)}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Segmented control for the three workspaces; the active tab is a white pill with blue text.",
+      "html": "<nav class=\"ds-tabs\"><button class=\"ds-tab ds-on\">Séries temporais</button><button class=\"ds-tab\">Espectros</button><button class=\"ds-tab\">Figura</button></nav>",
+      "css": ".ds-tabs{display:inline-flex;gap:2px;background:var(--bg,#eef1f5);border:1px solid var(--border,#e2e7ee);border-radius:9px;padding:3px}.ds-tab{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);padding:6px 18px;font-size:12.5px;font-weight:600;border:none;background:transparent;color:var(--muted,#64748b);border-radius:7px;cursor:pointer;transition:color .15s,background .15s}.ds-tab:hover{color:var(--text,#16212e)}.ds-tab.ds-on{background:#fff;color:var(--accent,#1a4e8a);box-shadow:0 1px 2px rgba(16,24,40,.06)}.ds-tab:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(26,78,138,.2)}"
+    },
+    {
+      "name": "Step Card with Switch",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A sidebar card: title, state summary, switch; the border tints blue when the step is on.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-head\"><span class=\"ds-card-title\">Savitzky-Golay</span><span class=\"ds-card-state\">janela 21 · ordem 3</span><span class=\"ds-switch ds-switch-on\" role=\"switch\" aria-checked=\"true\"></span></div></div>",
+      "css": ".ds-card{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);width:300px;border:1px solid rgba(26,78,138,.35);border-radius:10px;padding:11px 13px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.06)}.ds-card-head{display:flex;align-items:center;gap:8px}.ds-card-title{font-size:12.5px;font-weight:600;color:var(--text,#16212e)}.ds-card-state{margin-left:auto;font-size:11px;color:var(--muted,#64748b)}.ds-switch{width:34px;height:19px;border-radius:99px;background:var(--border-strong,#c9d3e0);position:relative;flex:0 0 34px;transition:background .18s}.ds-switch::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:left .18s}.ds-switch-on{background:var(--accent,#1a4e8a)}.ds-switch-on::after{left:17px}"
+    },
+    {
+      "name": "Field with Error",
+      "kind": "input",
+      "refersTo": "field-error",
+      "description": "A refused value is marked at its field, with the reason right under it.",
+      "html": "<label class=\"ds-field-e\">Janela (ímpar)<input class=\"ds-input-e\" type=\"number\" value=\"4\" aria-invalid=\"true\"><span class=\"ds-field-error\">Use um número ímpar a partir de 3.</span></label>",
+      "css": ".ds-field-e{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted,#5b6779);width:180px}.ds-input-e{height:30px;padding:4px 8px;font-size:12.5px;font-family:inherit;color:var(--text,#16212e);background:#fff;border:1px solid var(--danger,#b3261e);border-radius:7px;box-shadow:0 0 0 3px rgba(179,38,30,.12)}.ds-field-error{font-size:12px;line-height:1.35;color:var(--danger,#b3261e)}"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Pill links in status bars; the warning variant flags something to check.",
+      "html": "<span class=\"ds-chip\">Abrir na Figura →</span> <span class=\"ds-chip ds-chip-warn\">não salvo</span>",
+      "css": ".ds-chip{font-family:var(--font, 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif);display:inline-block;padding:3px 9px;font-size:11.5px;font-weight:600;color:var(--accent,#1a4e8a);background:#fff;border:1px solid var(--border-strong,#c9d3e0);border-radius:99px;cursor:pointer}.ds-chip:hover{border-color:var(--accent,#1a4e8a);background:var(--accent-soft,#e9f1fa)}.ds-chip-warn{color:#8a5a00;background:#fff4d6;border-color:#f1d58a}"
+    },
+    {
+      "name": "Reference Annotation",
+      "kind": "custom",
+      "refersTo": "laranja-referencia",
+      "description": "Signature plot mark: dashed λ ref line, pale search band and the ring on the tracked valley.",
+      "html": "<div class=\"ds-plot\"><div class=\"ds-band\"></div><div class=\"ds-ref\"><span>λ ref 880</span></div><div class=\"ds-ring\"></div></div>",
+      "css": ".ds-plot{position:relative;width:320px;height:140px;background:#fff;border:1px solid #e2e7ee;border-radius:12px;overflow:hidden}.ds-band{position:absolute;top:0;bottom:0;left:120px;width:80px;background:rgba(230,126,34,.08)}.ds-ref{position:absolute;top:0;bottom:0;left:160px;border-left:1.5px dashed #e67e22}.ds-ref span{position:absolute;top:4px;left:4px;font:11px sans-serif;color:#c0601a;white-space:nowrap}.ds-ring{position:absolute;left:150px;top:88px;width:17px;height:17px;border:2.5px solid #e67e22;border-radius:50%}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Bancada Organizada",
+    "overview": "**Creative North Star: \"A Bancada Organizada\"** (the tidy bench)\n\nBraggFlow is a working bench for one test at a time. Everything sits where the work needs it:\n\n- a white sidebar of numbered sections follows the order of the job (files,   sensors, processing steps). It is one surface divided by hairlines, not a   stack of boxes; - the plot takes the rest of the screen; - the results sit in panels stacked under the plot.\n\nNothing floats free. Each card has a header that says its state even when it is closed, and a small blue dot marks every option that differs from the default.\n\nThe mood is soft and orderly. Cool neutrals form the room: a pale blue-grey ground behind white surfaces, with dark blue-black ink. One pen-ink blue does every job that needs attention:\n\n- the active tab; - the primary button; - a switch that is on; - the focus ring.\n\nDensity is high but calm:\n\n- body text is 13px; - labels and hints are 12px; - the sidebar is 350px wide; - figures are tabular everywhere, so numbers line up.\n\nLong explanations fold into a \"Como funciona ›\" disclosure, so the hint you see is one line long. Shortcuts sit where they act, as small key caps.\n\nIcons are drawn in one stroke (24 × 24, 2px, round caps) from a sprite in the page, never text glyphs. The header reads like a path, **BraggFlow / LMR demo**, with the project switcher beside the name. The status bar reads like an instrument: values in ink with their unit in faded ink, and the CSV's state in a pill at the end.\n\nThe character comes from the plots, not the chrome. The plots carry the domain's own marks:\n\n- the reference wavelength as a dashed orange line; - the search window as a pale orange band; - the tracked valley as an orange ring; - the FWHM as dashed level lines; - events as dashed vertical lines.\n\nTrouble is never hidden. A refused value is marked at its field, with the reason under it. A plot that no longer matches the options carries a \"Desatualizado\" badge instead of disappearing.",
+    "keyCharacteristics": [
+      "Cool neutral room (Névoa de Laboratório ground, white surfaces) with one blue",
+      "Numbered sidebar sections in the order of the work, separated by hairlines,",
+      "Soft cards that rest on the ground with a hairline shadow and gently rounded",
+      "Plots fill the main area; results stack under the plot.",
+      "Text keeps its case: λ, nm and σ stay λ, nm and σ.",
+      "Errors at the field, stale plots marked, shortcuts visible.",
+      "Drawn icons in one stroke; the status bar as an instrument readout."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink Rule",
+        "body": "Pen-ink blue is the only colour the chrome uses for emphasis. If something needs to stand out and it is not an error or a warning, it is blue or it is bold.",
+        "section": "colors"
+      },
+      {
+        "name": "The Orange Is Data Rule",
+        "body": "Reference orange belongs to the plot: what the evolution follows and where it looked. Never use it for chrome, buttons or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Voice Rule",
+        "body": "One family carries brand, labels, data and plots. Size and weight make the hierarchy; a second typeface is never needed.",
+        "section": "typography"
+      },
+      {
+        "name": "The Case Is Meaning Rule",
+        "body": "Text keeps the case it was written in. λ, Δλ, σ, t, nm and s change meaning in capitals. No label, header or summary is ever transformed to uppercase; hierarchy comes from weight, size and ink.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled Sidebar Rule",
+        "body": "The sidebar is one surface divided by hairlines. Boxes, with border, radius and shadow, belong to the panels of the main area. A box inside the sidebar is a box inside a box.",
+        "section": "layout"
+      },
+      {
+        "name": "The Rest, Don't Float Rule",
+        "body": "A surface in the flow of the page gets the Pousada shadow at most. Lift is reserved for things that sit above the page: dialogs, the error notice and floating panels.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep pen-ink blue as the only emphasis colour in the chrome. Errors and warnings use their own state colours.",
+      "**Do** order sidebar sections as the work happens, numbered, and let every card header summarise its own state.",
+      "**Do** give in-flow surfaces the Pousada shadow at most. Keep the Elevada shadow for dialogs, the error notice and floating panels.",
+      "**Do** keep orange for what the evolution tracks and where it looked, on the plot.",
+      "**Do** use tabular figures for every number, so columns line up.",
+      "**Do** mark a refused value at its field with the reason under it, and badge the plot as stale instead of blanking it."
+    ],
+    "donts": [
+      "**Don't** uppercase text that can carry a symbol or unit (The Case Is Meaning Rule).",
+      "**Don't** put essential information only in a `title` tooltip. Shortcuts, what a mode does, and what a delete keeps must be visible or reachable by keyboard.",
+      "**Don't** add a second accent colour to the chrome. New emphasis is blue, bold, or a state colour.",
+      "**Don't** set functional text below 11.5px, or labels and hints below 12px.",
+      "**Don't** leave a control without an accessible name. Fields in tables and repeated rows get one through `aria-label`.",
+      "**Don't** use text glyphs (▶ × ↶ ⭳ ›) as icons. Draw them from the sprite.",
+      "**Don't** box a block inside the sidebar (The Ruled Sidebar Rule)."
+    ]
+  }
+}
