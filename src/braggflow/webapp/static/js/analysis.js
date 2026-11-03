@@ -1,7 +1,8 @@
 // Estatísticas por intervalo entre marcações, abaixo do gráfico da aba Séries
 // temporais: do sinal processado que está no gráfico, um canal por linha.
 
-import { $, fmtNum, fmtSig, showError } from "./core.js";
+import { $, fmtNum, fmtSig, hintHtml, setText, showError, toCsv } from "./core.js";
+import { onLanguageChange, t } from "./i18n.js";
 import { currentPlotOptions, plotRelative } from "./series.js";
 import { collectMarkers } from "./viz.js";
 
@@ -10,40 +11,43 @@ let analysisData = null;
 
 export const numeroOuTraco = (v, casas) => (v === null || v === undefined ? "—" : fmtNum(v, casas));
 
+// [chave do título, valor]; os rótulos dos intervalos vêm do servidor, no idioma do pedido
 const COLUNAS_INTERVALO = [
-  ["curva", (l) => l.curva],
-  ["intervalo", (l) => l.label],
-  ["início (s)", (l) => numeroOuTraco(l.start, 2)],
-  ["fim (s)", (l) => numeroOuTraco(l.end, 2)],
-  ["n", (l) => l.n.toLocaleString("pt-BR")],
-  ["média", (l) => fmtSig(l.mean)],
-  ["σ", (l) => fmtSig(l.std)],
-  ["mín", (l) => fmtSig(l.min)],
-  ["máx", (l) => fmtSig(l.max)],
-  ["pico a pico", (l) => fmtSig(l.peak_to_peak)],
-  ["deriva (/s)", (l) => fmtSig(l.slope)],
-  ["ruído", (l) => fmtSig(l.noise)],
-  ["regime", (l) => fmtSig(l.settle_mean)],
-  ["Δ vs ref.", (l) => fmtSig(l.delta)],
-  ["referência", (l) => l.reference || "—"],
+  ["stats.col.curve", (l) => l.curva],
+  ["stats.col.interval", (l) => l.label],
+  ["stats.col.start", (l) => numeroOuTraco(l.start, 2)],
+  ["stats.col.end", (l) => numeroOuTraco(l.end, 2)],
+  ["stats.col.n", (l) => fmtNum(l.n, 0)],
+  ["stats.col.mean", (l) => fmtSig(l.mean)],
+  ["stats.col.std", (l) => fmtSig(l.std)],
+  ["stats.col.min", (l) => fmtSig(l.min)],
+  ["stats.col.max", (l) => fmtSig(l.max)],
+  ["stats.col.peakToPeak", (l) => fmtSig(l.peak_to_peak)],
+  ["stats.col.drift", (l) => fmtSig(l.slope)],
+  ["stats.col.noise", (l) => fmtSig(l.noise)],
+  ["stats.col.settle", (l) => fmtSig(l.settle_mean)],
+  ["stats.col.delta", (l) => fmtSig(l.delta)],
+  ["stats.col.reference", (l) => l.reference || "—"],
 ];
 
 const COLUNAS_DEGRAU = [
-  ["curva", (l) => l.curva],
-  ["marcação", (l) => l.label],
-  ["t (s)", (l) => numeroOuTraco(l.time, 2)],
-  ["antes", (l) => fmtSig(l.before)],
-  ["depois", (l) => fmtSig(l.after)],
-  ["degrau", (l) => fmtSig(l.step)],
-  ["dispersão", (l) => fmtSig(l.step_spread)],
+  ["stats.col.curve", (l) => l.curva],
+  ["stats.col.marker", (l) => l.label],
+  ["stats.col.time", (l) => numeroOuTraco(l.time, 2)],
+  ["stats.col.before", (l) => fmtSig(l.before)],
+  ["stats.col.after", (l) => fmtSig(l.after)],
+  ["stats.col.step", (l) => fmtSig(l.step)],
+  ["stats.col.spread", (l) => fmtSig(l.step_spread)],
 ];
+
+const escapeHtml = (texto) => String(texto).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export function tabela(titulo, colunas, linhas) {
   if (!linhas.length) return "";
-  const cabecalho = colunas.map(([nome]) => `<th>${nome}</th>`).join("");
+  const cabecalho = colunas.map(([chave]) => `<th>${t(chave)}</th>`).join("");
   const corpo = linhas.map((linha) =>
-    `<tr>${colunas.map(([, valor]) => `<td>${valor(linha)}</td>`).join("")}</tr>`).join("");
-  return `<div class="sub-label">${titulo}</div>` +
+    `<tr>${colunas.map(([, valor]) => `<td>${escapeHtml(valor(linha))}</td>`).join("")}</tr>`).join("");
+  return `<div class="sub-label">${escapeHtml(titulo)}</div>` +
          `<div class="table-wrap"><table class="data-table">` +
          `<thead><tr>${cabecalho}</tr></thead><tbody>${corpo}</tbody></table></div>`;
 }
@@ -57,13 +61,12 @@ function renderAnalysis(dados) {
   analysisData = dados;
   const intervalos = achatar(dados, "intervals");
   const degraus = achatar(dados, "steps");
-  const unidade = dados.unit ? ` (${dados.unit}${dados.relative ? ", relativo ao início" : ""})` : "";
+  const unidade = dados.unit
+    ? ` (${dados.relative ? t("stats.unitRelative", { unit: dados.unit }) : dados.unit})` : "";
   $("analysis-result").innerHTML =
-    tabela(`Intervalos${unidade}`, COLUNAS_INTERVALO, intervalos) +
-    tabela(`Degrau em cada marcação${unidade}`, COLUNAS_DEGRAU, degraus) +
-    (dados.n_markers ? "" :
-      '<span class="hint">Sem marcações, o sinal inteiro vira um único intervalo. ' +
-      "Marque instantes com a ferramenta Marcar do gráfico.</span>");
+    tabela(`${t("stats.intervalsTitle")}${unidade}`, COLUNAS_INTERVALO, intervalos) +
+    tabela(`${t("stats.stepsTitle")}${unidade}`, COLUNAS_DEGRAU, degraus) +
+    (dados.n_markers ? "" : hintHtml("stats.noMarkers"));
 }
 
 let analysisRequest = 0;
@@ -87,11 +90,11 @@ export function scheduleAnalysis() {
 async function runAnalysis() {
   const options = currentPlotOptions();
   if (!options) {
-    $("analysis-result").innerHTML = '<span class="hint">Escolha um arquivo para ver o sinal processado.</span>';
+    $("analysis-result").innerHTML = hintHtml("stats.pickFile");
     return;
   }
   const request = ++analysisRequest;
-  $("analysis-result").innerHTML = '<span class="hint">Calculando…</span>';
+  $("analysis-result").innerHTML = hintHtml("stats.calculating");
   try {
     const resp = await fetch("/api/series/intervals", {
       method: "POST",
@@ -109,37 +112,38 @@ async function runAnalysis() {
     });
     const dados = await resp.json();
     if (request !== analysisRequest) return;
-    if (!resp.ok) throw new Error(dados.error || "Erro ao calcular as estatísticas.");
+    if (!resp.ok) throw new Error(dados.error || t("stats.error"));
     renderAnalysis(dados);
   } catch (err) {
     if (request !== analysisRequest) return;
     showError(err.message);
-    $("analysis-result").innerHTML = `<span class="hint">Falha: ${err.message}</span>`;
+    const falha = document.createElement("span");
+    falha.className = "hint";
+    setText(falha, "common.failed", { msg: err.message });
+    $("analysis-result").replaceChildren(falha);
   }
 }
 
-// CSV com ponto e vírgula e vírgula decimal, que é o que o Excel brasileiro abre
+// CSV no formato da planilha do idioma (ver toCsv)
 function analysisCsv() {
   if (!analysisData) return "";
   const linhasCsv = [];
   const bloco = (titulo, colunas, linhas) => {
     if (!linhas.length) return;
-    linhasCsv.push(titulo);
-    linhasCsv.push(colunas.map(([nome]) => nome).join(";"));
-    linhas.forEach((linha) => {
-      linhasCsv.push(colunas.map(([, valor]) => valor(linha).replace(/—/, "")).join(";"));
-    });
-    linhasCsv.push("");
+    linhasCsv.push([titulo]);
+    linhasCsv.push(colunas.map(([chave]) => t(chave)));
+    linhas.forEach((linha) => linhasCsv.push(colunas.map(([, valor]) => valor(linha))));
+    linhasCsv.push([""]);
   };
   const unidade = analysisData.unit ? ` (${analysisData.unit})` : "";
-  bloco(`Intervalos${unidade}`, COLUNAS_INTERVALO, achatar(analysisData, "intervals"));
-  bloco(`Degrau em cada marcacao${unidade}`, COLUNAS_DEGRAU, achatar(analysisData, "steps"));
-  return linhasCsv.join("\n");
+  bloco(`${t("stats.intervalsTitle")}${unidade}`, COLUNAS_INTERVALO, achatar(analysisData, "intervals"));
+  bloco(`${t("stats.stepsCsvTitle")}${unidade}`, COLUNAS_DEGRAU, achatar(analysisData, "steps"));
+  return toCsv(linhasCsv);
 }
 
 function downloadAnalysis() {
   const csv = analysisCsv();
-  if (!csv) { showError("Calcule as estatísticas antes de baixar."); return; }
+  if (!csv) { showError(t("stats.calculateFirst")); return; }
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -165,3 +169,6 @@ $("analysis-panel").addEventListener("toggle", () => {
 });
 ["an-settle", "an-step", "an-reference"].forEach((id) =>
   $(id).addEventListener("change", () => { if (analysisData) runAnalysis(); }));
+
+// Idioma trocado: calcula de novo (os rótulos dos intervalos vêm do servidor)
+onLanguageChange(() => { if (analysisData) runAnalysis(); });

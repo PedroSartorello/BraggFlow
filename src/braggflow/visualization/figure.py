@@ -41,6 +41,7 @@ from matplotlib.ticker import (
     ScalarFormatter,
 )
 
+from ..i18n import tr
 from ..options import ANY_RANGE, resolve_section
 from .publication import SENSOR_COLORS, SENSOR_LINES, SENSOR_MARKERS
 
@@ -201,12 +202,12 @@ def resolve_style(user: Optional[dict] = None) -> dict:
 
     family = style["figure"]["font_family"].strip() or "serif"
     if family not in GENERIC_FONTS and family not in available_fonts():
-        raise ValueError(f"Fonte não instalada: {family}.")
+        raise ValueError(tr("figure.fontMissing", family=family))
     style["figure"]["font_family"] = family
 
     channels = user.get("channels") or {}
     if not isinstance(channels, dict):
-        raise ValueError("Estilo dos canais inválido.")
+        raise ValueError(tr("figure.channelStyle"))
     style["channels"] = {
         str(name): resolve_section(CHANNEL_SPEC, given, prefix=f"[{name}] ")
         for name, given in channels.items()
@@ -232,10 +233,10 @@ def parse_markers(raw_markers: Optional[list]) -> List[dict]:
         try:
             t = float(t.replace(",", "."))
         except ValueError:
-            raise ValueError(f"Tempo inválido na marcação '{m.get('label', '')}': {t!r}") from None
+            raise ValueError(tr("figure.markerTime", label=m.get("label", ""), value=repr(t))) from None
         color = str(m.get("color", "")).strip() or "#4682B4"
         if not mcolors.is_color_like(color):
-            raise ValueError(f"Cor inválida na marcação '{m.get('label', '')}': {color!r}")
+            raise ValueError(tr("figure.markerColor", label=m.get("label", ""), value=repr(color)))
         markers.append({"time": t, "label": str(m.get("label", "")).strip(), "color": color})
     markers.sort(key=lambda m: m["time"])
     return markers
@@ -361,7 +362,7 @@ def channel_values(df: pd.DataFrame, units: Dict[str, Optional[str]],
             finite = np.flatnonzero(np.isfinite(y))
             window[finite[:1]] = True
         if not window.any():
-            raise ValueError(f"Canal {channel}: nenhuma leitura válida na janela de referência.")
+            raise ValueError(tr("figure.noReferenceReading", channel=channel))
         y = y - np.mean(y[window])
 
     if data_s["to_pm"] and unit == "nm":
@@ -417,7 +418,7 @@ def evolution_labels(quantity: str, unit: str, kind: str = "min",
         "fwhm": "FWHM (nm)",
     }
     if quantity not in ylabels:
-        raise ValueError(f"Grandeza desconhecida: {quantity}.")
+        raise ValueError(tr("figure.unknownQuantity", quantity=quantity))
     return xlabel, ylabels[quantity]
 
 
@@ -560,15 +561,15 @@ def _build_curves_figure(curves: List[Curve], markers: List[dict], style: dict,
     data_s = style["data"]
     finite_x = np.concatenate([c.x[np.isfinite(c.x)] for c in curves])
     if not len(finite_x):
-        raise ValueError("Eixo X sem valores válidos.")
+        raise ValueError(tr("figure.noX"))
     x_lo = data_s["x_min"] if data_s["x_min"] is not None else float(finite_x.min())
     x_hi = data_s["x_max"] if data_s["x_max"] is not None else float(finite_x.max())
     if not x_lo < x_hi:
-        raise ValueError("X mínimo deve ser menor que X máximo.")
+        raise ValueError(tr("figure.xOrder"))
     axes[-1].set_xlim(x_lo, x_hi)
     if (data_s["y_min"] is not None and data_s["y_max"] is not None
             and not data_s["y_min"] < data_s["y_max"]):
-        raise ValueError("Y mínimo deve ser menor que Y máximo.")
+        raise ValueError(tr("figure.yOrder"))
     if data_s["y_min"] is not None or data_s["y_max"] is not None:
         for ax in axes:
             ax.set_ylim(bottom=data_s["y_min"], top=data_s["y_max"])
@@ -624,10 +625,10 @@ def build_figure(df: pd.DataFrame, units: Dict[str, Optional[str]],
     de sair do contexto.
     """
     if not channels:
-        raise ValueError("Nenhum canal selecionado.")
+        raise ValueError(tr("figure.noChannel"))
     missing = [ch for ch in channels if ch not in df.columns]
     if missing:
-        raise ValueError(f"Canais ausentes no CSV: {missing}.")
+        raise ValueError(tr("figure.missingChannels", channels=missing))
 
     offset = marker_offset(markers, style["data"])
     markers = shift_markers(markers, offset)
@@ -704,7 +705,7 @@ def _render(make_figure, style: dict, fmt: Optional[str],
             dpi: Optional[int]) -> Tuple[bytes, dict]:
     fmt = fmt or style["export"]["format"]
     if fmt not in EXPORT_FORMATS:
-        raise ValueError(f"Formato não suportado: {fmt}.")
+        raise ValueError(tr("figure.badFormat", format=fmt))
 
     with style_context(style):
         fig = make_figure()

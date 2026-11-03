@@ -84,8 +84,9 @@ repository.</sub>
   be saved and reused.
 - Automatic labels follow the figure's language, English or Portuguese.
 
-The interface is currently in Brazilian Portuguese; the documentation is in
-English.
+The interface speaks Brazilian Portuguese (the default) and English: switch
+with **PT · EN** at the top right. Figure labels have their own language
+setting. The documentation is in English.
 
 ## Quick start
 

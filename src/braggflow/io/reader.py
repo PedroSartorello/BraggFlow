@@ -30,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from ..i18n import tr
 from .processed import split_unit
 
 # Prefixos de nome de coluna reconhecidos como eixo de tempo
@@ -130,15 +131,13 @@ def concat_plan(datasets: List[InterrogatorData]) -> List[dict]:
 def _check_same_channels(datasets: List[InterrogatorData]) -> None:
     datasets = [d for d in datasets if len(d.time)]
     if not datasets:
-        raise ValueError("Nenhum arquivo com amostras para juntar.")
+        raise ValueError(tr("reader.nothingToJoin"))
     base = datasets[0]
     for outro in datasets[1:]:
         if outro.channels != base.channels:
             faltando = set(base.channels) ^ set(outro.channels)
-            raise ValueError(
-                "Só dá para juntar arquivos com os mesmos canais; "
-                f"diferem em: {sorted(faltando) or 'ordem das colunas'}."
-            )
+            raise ValueError(tr("reader.channelsDiffer",
+                                channels=sorted(faltando) or tr("reader.columnOrder")))
 
 
 def concatenate(datasets: List[InterrogatorData]) -> Tuple[InterrogatorData, List[float]]:
@@ -151,7 +150,7 @@ def concatenate(datasets: List[InterrogatorData]) -> Tuple[InterrogatorData, Lis
     """
     datasets = [d for d in datasets if len(d.time)]
     if not datasets:
-        raise ValueError("Nenhum arquivo com amostras para juntar.")
+        raise ValueError(tr("reader.nothingToJoin"))
     if len(datasets) == 1:
         return datasets[0], []
 
@@ -253,7 +252,7 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
     with open(path, "rb") as f:
         raw = f.read(_HEAD_BYTES)
     if not raw.strip():
-        raise ValueError("Arquivo vazio.")
+        raise ValueError(tr("reader.emptyFile"))
 
     encoding = _detect_encoding(raw)
     text = raw.decode(encoding, errors="replace")
@@ -261,7 +260,7 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
     # todas as linhas do arquivo: ``numbers`` guarda a posição real de cada uma.
     numbered = [(i, line) for i, line in enumerate(text.splitlines()[:max_lines]) if line.strip()]
     if not numbered:
-        raise ValueError("Arquivo sem linhas de dados.")
+        raise ValueError(tr("reader.noDataLines"))
     # a última linha pode estar cortada pelo limite de leitura
     if len(numbered) > 2:
         numbered = numbered[:-1]
@@ -290,14 +289,14 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
             candidates.append((candidate, consistency, median))
 
     if not candidates:
-        raise ValueError("Não foi possível identificar o separador de colunas.")
+        raise ValueError(tr("reader.noSeparator"))
     sep = next((c for c, consistency, _ in candidates if consistency >= 0.9),
                max(candidates, key=lambda item: item[1:])[0])
 
     rows = [_split(line, sep) for line in lines]
     first_data = next((i for i, fields in enumerate(rows) if _looks_like_data(fields)), None)
     if first_data is None:
-        raise ValueError("Não foi encontrada nenhuma linha de dados numéricos.")
+        raise ValueError(tr("reader.noNumericLines"))
 
     # Linhas de dados costumam terminar com um separador sobrando, então o
     # cabeçalho pode ter um campo a menos que elas.
@@ -352,7 +351,7 @@ def read_table(path, fmt: Optional[TextFormat] = None,
     else:
         df.columns = [f"col_{i + 1}" for i in range(df.shape[1])]
     if df.empty:
-        raise ValueError("Arquivo sem dados.")
+        raise ValueError(tr("reader.noData"))
     return df, fmt
 
 
@@ -516,7 +515,7 @@ def parse_time_column(values: pd.Series) -> Tuple[np.ndarray, Optional[str]]:
 
     valid = stamps.notna().to_numpy()
     if not valid.any():
-        raise ValueError("A coluna de tempo não é numérica nem uma data reconhecível.")
+        raise ValueError(tr("reader.badTimeColumn"))
 
     first = stamps[valid].iloc[0]
     seconds = np.full(len(stamps), np.nan)
@@ -545,9 +544,7 @@ def load_interrogator_file(path) -> InterrogatorData:
     df, fmt = read_table(path)
     if classify_table(df, fmt) == "spectrum":
         raise ValueError(
-            f"{Path(path).name} é um espectro (intensidade por comprimento de onda), "
-            "não uma série de picos no tempo. Use a aba Visualização, em "
-            "'Espectros', para abri-lo."
+            tr("reader.isSpectrum", name=Path(path).name)
         )
 
     time_col = next(
@@ -558,13 +555,13 @@ def load_interrogator_file(path) -> InterrogatorData:
     if time_col is None:
         time_col = next(iter(numeric), None)
         if time_col is None:
-            raise ValueError("Nenhuma coluna de tempo encontrada (Time, Tempo, Timestamp ou Date).")
+            raise ValueError(tr("reader.noTimeColumn"))
 
     ch_cols = [c for c in df.columns if str(c).upper().startswith("CH")]
     if not ch_cols:
         ch_cols = [c for c in numeric if c != time_col]
     if not ch_cols:
-        raise ValueError("Nenhuma coluna de canal encontrada no arquivo.")
+        raise ValueError(tr("reader.noChannelColumn"))
 
     time_array, origin = parse_time_column(df[time_col])
     keep = np.isfinite(time_array)
@@ -603,7 +600,7 @@ def _make_spectrum(name: str, wavelength: np.ndarray, intensity: np.ndarray) -> 
 def _spectra_from_table(df: pd.DataFrame, fmt: TextFormat, source: str) -> SpectrumSet:
     numeric = _numeric_columns(df, fmt.decimal)
     if len(numeric) < 2:
-        raise ValueError("O arquivo não tem duas colunas numéricas (comprimento de onda e intensidade).")
+        raise ValueError(tr("reader.noSpectrumColumns"))
 
     label = _label_column(df, numeric)
     spectra: List[Spectrum] = []
@@ -633,7 +630,7 @@ def _spectra_from_table(df: pd.DataFrame, fmt: TextFormat, source: str) -> Spect
                 spectra.append(spectrum)
 
     if not spectra:
-        raise ValueError("Nenhum traço espectral válido encontrado no arquivo.")
+        raise ValueError(tr("reader.noSpectrumTrace"))
     return SpectrumSet(spectra=spectra, source=source)
 
 

@@ -9,6 +9,10 @@ parâmetros e vê o resultado em um gráfico Plotly em tempo real.
 seus caches (``webapp.state``); a receita de processamento é
 ``braggflow.recipe.run_recipe``, a mesma do comando ``braggflow process``.
 
+As mensagens de erro e os avisos saem no idioma da interface: a página envia
+o cabeçalho ``Accept-Language`` em todo pedido, e cada pedido usa esse idioma
+(``braggflow.i18n``); sem o cabeçalho, português.
+
 Uso:
     braggflow-web [--port 5000] [--data-dir DIR]
     # abra http://127.0.0.1:5000
@@ -26,12 +30,13 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from flask import Blueprint, Flask, current_app, jsonify, render_template, request, send_file
+from flask import Blueprint, Flask, current_app, g, jsonify, render_template, request, send_file
 
 import matplotlib
 matplotlib.use("Agg")  # backend sem janela — obrigatório em servidor
 
 from braggflow.analysis import analyse_curve, selection_statistics
+from braggflow.i18n import DEFAULT_LANGUAGE, LANGUAGES, num, reset_language, set_language, tr, use_language
 from braggflow.io.processed import (
     channel_quantities,
     metadata_path_for,
@@ -112,7 +117,7 @@ MAX_UPLOAD_DEPTH = 3
 
 # Mude junto com o literal API_BUILD em static/js/core.js sempre que as
 # rotas mudarem: é assim que a página percebe um servidor ainda sem reiniciar.
-API_BUILD = "2026-10-27"
+API_BUILD = "2026-11-03"
 
 bp = Blueprint("braggflow", __name__)
 
@@ -129,6 +134,27 @@ def create_app(data_dir=None, *, create: bool = True) -> Flask:
     app.extensions["braggflow"] = AppState(DataFolder(data_dir, create=create))
     app.register_blueprint(bp)
     return app
+
+
+# Idioma das mensagens: o que a página pede (Accept-Language), por pedido
+def _request_language() -> str:
+    for valor, _ in request.accept_languages:
+        idioma = valor.split("-")[0].lower()
+        if idioma in LANGUAGES:
+            return idioma
+    return DEFAULT_LANGUAGE
+
+
+@bp.before_request
+def _use_request_language():
+    g.braggflow_language = set_language(_request_language())
+
+
+@bp.teardown_request
+def _restore_language(_erro=None):
+    token = g.pop("braggflow_language", None)
+    if token is not None:
+        reset_language(token)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -189,6 +215,18 @@ def _curve_key(path: Path, spectra, trace_name: str) -> str:
     return stem if len(spectra.spectra) == 1 else f"{stem} · {trace_name}"
 
 
+# Nomes que o leitor dá aos traços sem rótulo ("Traço", "Traço 2"): ficam como
+# chave (o projeto os guarda), mas a interface e a figura os mostram no idioma delas
+_DEFAULT_TRACE = re.compile(r"Traço(?: (\d+))?")
+
+
+def _trace_label(nome: str) -> str:
+    achado = _DEFAULT_TRACE.fullmatch(nome)
+    if not achado:
+        return nome
+    return tr("app.traceNumber", n=achado.group(1)) if achado.group(1) else tr("app.trace")
+
+
 def _first_trace(rel_path: str):
     """``(λ, intensidade)`` do primeiro traço de um arquivo de espectro (fonte, fundo)."""
     path = _resolve_data_file(rel_path)
@@ -229,7 +267,7 @@ def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
         nome = trace or (spectra.names[0] if spectra.names else "")
         spectrum = spectra.get(nome)
         if spectrum is None:
-            raise ValueError(f"Traço '{nome}' não encontrado em {path.name}.")
+            raise ValueError(tr("app.traceNotFound", trace=nome, file=path.name))
         wavelength, intensity = _prepared(spectrum, settings)
         pronto = {
             "extrema": analyse_spectrum(wavelength, intensity, settings)["extrema"],
@@ -284,9 +322,9 @@ def _compute_evolution(options: dict) -> dict:
     if len(entradas) < 2:
         motivo = ""
         if ignorados:
-            motivo = " Não deu para ler: " + "; ".join(
-                f"{Path(i['file']).name or '(sem nome)'} ({i['error']})" for i in ignorados[:3])
-        raise ValueError("Escolha dois ou mais espectros para ver a evolução." + motivo)
+            motivo = tr("app.couldNotRead", files="; ".join(
+                f"{Path(i['file']).name or tr('app.noName')} ({i['error']})" for i in ignorados[:3]))
+        raise ValueError(tr("app.evolutionNeedsTwo") + motivo)
 
     resultado = spectra_evolution(entradas, kind=kind, mode=opts["mode"],
                                   tolerance=opts["tolerance"], reference=opts["reference"],
@@ -301,32 +339,29 @@ def _compute_evolution(options: dict) -> dict:
         if e["acquired_from"] == "filename" and arquivo["acquired"]:
             arquivo["acquired"] = arquivo["acquired"].split("T")[1]     # só a hora
 
-    nome = "vale" if kind == "min" else "pico"
+    nome = tr("spectra.valley" if kind == "min" else "spectra.peak")
     avisos = []
     if ignorados:
-        nomes = ", ".join(Path(i["file"]).name or "(sem nome)" for i in ignorados[:3])
-        mais = f" e mais {len(ignorados) - 3}" if len(ignorados) > 3 else ""
-        avisos.append(f"{len(ignorados)} arquivo(s) ignorado(s) por erro de leitura: {nomes}{mais}.")
+        nomes = ", ".join(Path(i["file"]).name or tr("app.noName") for i in ignorados[:3])
+        mais = tr("app.andMore", n=len(ignorados) - 3) if len(ignorados) > 3 else ""
+        avisos.append(tr("app.skippedFiles", n=len(ignorados), names=nomes, more=mais))
     if resultado["x"] == "order":
-        avisos.append("Nem todos os arquivos têm o instante da aquisição (cabeçalho Date: "
-                      "ou hora no nome); a evolução está na ordem dos arquivos.")
+        avisos.append(tr("app.byFileOrder"))
     elif len({e["acquired_from"] == "filename" for e in entradas}) > 1:
-        avisos.append("Alguns instantes vêm do cabeçalho e outros só do nome do arquivo "
-                      "(sem data): o tempo decorrido supõe que todos são do mesmo dia.")
+        avisos.append(tr("app.mixedTimes"))
     if len(unidades) > 1:
-        avisos.append("Os espectros estão em unidades diferentes (" + ", ".join(sorted(unidades))
-                      + "): confira o preparo de cada arquivo.")
+        avisos.append(tr("app.mixedUnits", units=", ".join(sorted(unidades))))
     if opts["mode"] != "follow":
         vazios = sum(p is None for p in resultado["tracks"][0]["points"])
         if vazios:
-            onde = " na janela" if opts["mode"] == "reference" and opts["window"] else ""
-            avisos.append(f"Nenhum {nome}{onde} em {vazios} espectro(s): o ponto fica vazio.")
+            onde = tr("app.inWindow") if opts["mode"] == "reference" and opts["window"] else ""
+            avisos.append(tr("app.noneFound", kind=nome, where=onde, n=vazios))
     if opts["locate"] != "vertex":
         sem = sum(1 for t in resultado["tracks"] for p in t["points"]
                   if p is not None and p["located"] != opts["locate"])
         if sem:
-            metodo = "o ajuste no fundo" if opts["locate"] == "fit" else "o centroide"
-            avisos.append(f"Sem {metodo} em {sem} ponto(s): ficou o vértice de 3 pontos.")
+            metodo = tr("app.methodFit" if opts["locate"] == "fit" else "app.methodCentroid")
+            avisos.append(tr("app.locateFallback", method=metodo, n=sem))
     inicio = datetime.fromisoformat(resultado["start"]) if resultado["start"] else None
     for evento in eventos:
         evento["elapsed_s"] = ((datetime.fromisoformat(evento["at"]) - inicio).total_seconds()
@@ -339,7 +374,7 @@ def _compute_evolution(options: dict) -> dict:
 def _track_label(trilha: dict, resultado: dict, index: int, language: str) -> str:
     """
     Legenda automática de uma trilha no idioma da figura: o nome que a aba
-    Espectros mostra é sempre em português, mas a figura vai para o artigo.
+    Espectros mostra segue o idioma da interface, mas a figura vai para o artigo.
     """
     pt = language == "pt"
     nome = ("vale" if pt else "valley") if resultado["kind"] == "min" else ("pico" if pt else "peak")
@@ -392,18 +427,18 @@ def _evolution_items(options: dict, style: dict, markers: list):
         items.append({"key": trilha["key"], "x": x, "y": y,
                       "label": _track_label(trilha, resultado, indice, style["axes"]["language"])})
     if not items:
-        raise ValueError("Marque pelo menos uma trilha da evolução.")
+        raise ValueError(tr("app.checkTrack"))
     xlabel, ylabel = evolution_labels(opts["y"], resultado["unit"], resultado["kind"],
                                       data_s["time_unit"] if por_tempo else None,
                                       style["axes"]["language"])
     return items, xlabel, ylabel, divisor, markers
 
 
-def _spectrum_items(options: dict) -> list[dict]:
+def _spectrum_items(options: dict, language: str) -> list[dict]:
     """
     Curvas de espectro pedidas pela interface. Cada entrada traz o seu próprio
     preparo (recorte, suavização, normalização e deslocamento), aplicado só a
-    ela.
+    ela. A legenda automática fica no idioma da figura (``language``).
     """
     items = []
     for entry in options.get("spectra") or []:
@@ -412,15 +447,16 @@ def _spectrum_items(options: dict) -> list[dict]:
         name = entry.get("trace") or (spectra.names[0] if spectra.names else "")
         spectrum = spectra.get(name)
         if spectrum is None:
-            raise ValueError(f"Traço '{name}' não encontrado em {path.name}.")
+            raise ValueError(tr("app.traceNotFound", trace=name, file=path.name))
 
         key = _curve_key(path, spectra, name)
         settings = resolve_spectrum_settings(entry.get("settings"), prefix=f"[{key}] ")
         wavelength, intensity = _prepared(spectrum, settings)
-        items.append({"key": key, "label": entry.get("label") or key,
-                      "x": wavelength, "y": intensity})
+        with use_language(language):
+            legenda = entry.get("label") or _curve_key(path, spectra, _trace_label(name))
+        items.append({"key": key, "label": legenda, "x": wavelength, "y": intensity})
     if not items:
-        raise ValueError("Selecione pelo menos um espectro.")
+        raise ValueError(tr("app.selectSpectrum"))
     return items
 
 
@@ -447,7 +483,7 @@ def _series_items(options: dict, style: dict, markers: list):
     """
     entries = _series_entries(options)
     if not entries:
-        raise ValueError("Selecione pelo menos uma curva.")
+        raise ValueError(tr("app.selectCurve"))
 
     offset = marker_offset(markers, style["data"])
     markers = shift_markers(markers, offset)
@@ -459,7 +495,7 @@ def _series_items(options: dict, style: dict, markers: list):
         df, units, quantities = _state().processed.get(path)
         channel = entry["channel"]
         if channel not in df.columns:
-            raise ValueError(f"Canal '{channel}' não existe em {path.name}.")
+            raise ValueError(tr("app.channelMissing", channel=channel, file=path.name))
 
         x, divisor = time_axis(df, style["data"], offset)
         y, unit, is_shift = channel_values(df, units, quantities, channel, style["data"])
@@ -502,7 +538,7 @@ def _requested_files(options: dict) -> list[Path]:
     """Arquivos do processamento: um só, ou vários a juntar em sequência."""
     pedidos = options.get("files") or ([options["file"]] if options.get("file") else [])
     if not pedidos:
-        raise ValueError("Nenhum arquivo selecionado.")
+        raise ValueError(tr("recipe.noFile"))
     return [_resolve_data_file(caminho) for caminho in pedidos]
 
 
@@ -621,7 +657,7 @@ def _render_requested_figure(options: dict, fmt=None, preview: bool = False):
     markers = parse_markers(options.get("markers"))
 
     if _is_spectrum_request(options):
-        items = _spectrum_items(options)
+        items = _spectrum_items(options, style["axes"]["language"])
         xlabel, ylabel = spectrum_labels(style)
         divisor = 1.0
     elif _is_evolution_request(options):
@@ -637,14 +673,14 @@ def _render_requested_figure(options: dict, fmt=None, preview: bool = False):
 def _style_path(name: str) -> Path:
     safe = _safe_name(name)
     if not safe:
-        raise ValueError("Informe um nome para o estilo.")
+        raise ValueError(tr("app.styleNameRequired"))
     return _data().styles / f"{safe}.json"
 
 
 def _project_path(name: str) -> Path:
     safe = _safe_name(name)
     if not safe:
-        raise ValueError("Informe um nome para o projeto.")
+        raise ValueError(tr("project.nameRequired"))
     return _data().projects / f"{safe}.json"
 
 
@@ -716,11 +752,11 @@ def api_setups():
 def api_setup_get(name):
     path = _data().setups / f"{_safe_name(name)}.json"
     if not _safe_name(name) or not path.is_file():
-        return jsonify({"error": f"Setup não encontrado: {name}"}), 404
+        return jsonify({"error": tr("app.setupNotFound", name=name)}), 404
     try:
         return jsonify(SensorSetup.load(path).to_dict())
     except (ValueError, KeyError) as e:
-        return jsonify({"error": f"Setup inválido: {e}"}), 400
+        return jsonify({"error": tr("app.setupInvalid", error=e)}), 400
 
 
 @bp.route("/api/setups", methods=["POST"])
@@ -729,11 +765,11 @@ def api_setup_save():
     options = request.get_json(silent=True) or {}
     name = _safe_name(str(options.get("setup_name", "")))
     if not name:
-        return jsonify({"error": "Informe um nome para o setup."}), 400
+        return jsonify({"error": tr("app.setupNameRequired")}), 400
     try:
         setup = setup_from_options({**options, "setup_name": name})
         if not options.get("sensors"):
-            raise ValueError("Nenhum sensor para salvar.")
+            raise ValueError(tr("app.noSensors"))
         setup.save(_data().setups / f"{name}.json")
     except (ValueError, TypeError, KeyError, OSError) as e:
         return jsonify({"error": str(e)}), 400
@@ -758,6 +794,7 @@ def api_spectrum_traces():
             {
                 "name": spectrum.name,
                 "key": _curve_key(path, spectra, spectrum.name),
+                "label": _curve_key(path, spectra, _trace_label(spectrum.name)),
                 "n_points": spectrum.n_points,
                 "range": [round(float(spectrum.wavelength[0]), 3),
                           round(float(spectrum.wavelength[-1]), 3)],
@@ -784,6 +821,7 @@ def api_spectrum_preview():
             (x, y), stride = _downsample(wavelength, intensity)
             traces.append({
                 "name": spectrum.name,
+                "label": _trace_label(spectrum.name),
                 "key": _curve_key(path, spectra, spectrum.name),
                 "wavelength": _to_jsonable(x),
                 "intensity": _to_jsonable(y),
@@ -825,7 +863,7 @@ def api_concat_preview():
     try:
         caminhos = _requested_files(options)
         if len(caminhos) < 2:
-            raise ValueError("Escolha dois ou mais arquivos para juntar.")
+            raise ValueError(tr("app.joinNeedsTwo"))
         plano = concat_plan([_state().interrogator.get(caminho)[0] for caminho in caminhos])
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -839,11 +877,7 @@ def api_concat_preview():
     taxas = sorted({round(1 / parte["step"], 3) for parte in plano if parte["step"] > 0})
     avisos = []
     if len(taxas) > 1:
-        avisos.append(
-            "Os arquivos têm taxas de amostragem diferentes ("
-            + ", ".join(f"{taxa:g} Hz" for taxa in taxas)
-            + "); os filtros supõem amostragem uniforme. "
-            "Reamostre na etapa 'Eixo de tempo'.")
+        avisos.append(tr("app.mixedRates", rates=", ".join(f"{num(taxa, 'g')} Hz" for taxa in taxas)))
 
     return jsonify({
         "parts": partes,
@@ -908,7 +942,7 @@ def api_figure():
     """
     options = request.get_json(silent=True) or {}
     if not _has_figure_data(options):
-        return jsonify({"error": "Requisição sem dados selecionados."}), 400
+        return jsonify({"error": tr("app.noFigureData")}), 400
 
     with _figure_lock:
         try:
@@ -924,7 +958,7 @@ def api_figure_download():
     """Figura final no formato e na resolução definidos em ``style.export``."""
     options = request.get_json(silent=True) or {}
     if not _has_figure_data(options):
-        return jsonify({"error": "Requisição sem dados selecionados."}), 400
+        return jsonify({"error": tr("app.noFigureData")}), 400
 
     with _figure_lock:
         try:
@@ -951,11 +985,11 @@ def _analysis_curves(options: dict, style: dict):
     gráfico. Retorna ``(curvas, unidade)``.
     """
     if _is_spectrum_request(options) or _is_evolution_request(options):
-        raise ValueError("A análise estatística é das séries no tempo, não dos espectros.")
+        raise ValueError(tr("app.analysisSeriesOnly"))
 
     entries = _series_entries(options)
     if not entries:
-        raise ValueError("Marque pelo menos uma curva.")
+        raise ValueError(tr("app.checkCurve"))
     several = len({entry["file"] for entry in entries}) > 1
 
     curvas, unidade = [], "nm"
@@ -964,7 +998,7 @@ def _analysis_curves(options: dict, style: dict):
         df, units, quantities = _state().processed.get(path)
         channel = entry["channel"]
         if channel not in df.columns:
-            raise ValueError(f"Canal '{channel}' não existe em {path.name}.")
+            raise ValueError(tr("app.channelMissing", channel=channel, file=path.name))
         values, unidade, _ = channel_values(df, units, quantities, channel, style["data"])
         stem = path.stem.removesuffix("_processado")
         curvas.append({
@@ -1039,7 +1073,7 @@ def api_style_get(name):
             raise FileNotFoundError
         style = resolve_style(json.loads(path.read_text(encoding="utf-8")))
     except (ValueError, FileNotFoundError):
-        return jsonify({"error": f"Estilo não encontrado ou inválido: {name}"}), 404
+        return jsonify({"error": tr("app.styleNotFound", name=name)}), 404
     return jsonify({"name": path.stem, "style": style})
 
 
@@ -1079,7 +1113,7 @@ def api_project_get(name):
             raise FileNotFoundError
         project = Project.load(path)
     except (ValueError, FileNotFoundError):
-        return jsonify({"error": f"Projeto não encontrado ou inválido: {name}"}), 404
+        return jsonify({"error": tr("app.projectNotFound", name=name)}), 404
     try:
         _adopt_legacy_processed(project)
     except OSError:
@@ -1100,7 +1134,7 @@ def api_project_save():
         project.name = path.stem
         project.save(path)
     except (ValueError, TypeError, KeyError, OSError) as e:
-        return jsonify({"error": f"Projeto inválido: {e}"}), 400
+        return jsonify({"error": tr("app.projectInvalid", error=e)}), 400
     return jsonify(project.summary())
 
 
@@ -1111,7 +1145,7 @@ def api_project_delete(name):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     if not path.is_file():
-        return jsonify({"error": f"Projeto não encontrado: {name}"}), 404
+        return jsonify({"error": tr("app.projectMissing", name=name)}), 404
     path.unlink()
     return jsonify({"deleted": path.stem})
 
@@ -1138,12 +1172,11 @@ def _save_upload(file) -> str:
     if suffix in DESCRIPTOR_EXTENSIONS:
         # O catman grava um descritor do ensaio sem os dados dentro
         info = read_descriptor(file.read().decode("utf-8", errors="replace"))
-        alvo = info.get("data_file") or "o arquivo .ASC ou .txt do ensaio"
-        raise ValueError(f"{nome} descreve o ensaio, mas não contém os dados. "
-                         f"Envie {alvo}, que é o arquivo indicado dentro dele.")
+        alvo = info.get("data_file") or tr("app.descriptorTarget")
+        raise ValueError(tr("app.descriptorOnly", name=nome, target=alvo))
     if suffix not in RAW_EXTENSIONS:
-        raise ValueError(f"{nome}: extensão não suportada ({suffix or 'sem extensão'}). "
-                         f"Aceito: {', '.join(sorted(RAW_EXTENSIONS))}.")
+        raise ValueError(tr("app.badExtension", name=nome, suffix=suffix or tr("app.noExtension"),
+                            accepted=", ".join(sorted(RAW_EXTENSIONS))))
     dest = _upload_destination(file.filename)
     dest.parent.mkdir(parents=True, exist_ok=True)
     file.save(dest)
@@ -1159,7 +1192,7 @@ def api_upload():
     """
     files = [f for f in request.files.getlist("file") if f and f.filename]
     if not files:
-        return jsonify({"error": "Nenhum arquivo enviado."}), 400
+        return jsonify({"error": tr("app.noUpload")}), 400
     salvos, erros = [], []
     for file in files:
         try:
@@ -1175,7 +1208,7 @@ def api_upload():
 def api_process():
     options = request.get_json(silent=True) or {}
     if not (options.get("file") or options.get("files")):
-        return jsonify({"error": "Requisição sem arquivo selecionado."}), 400
+        return jsonify({"error": tr("app.noFileInRequest")}), 400
 
     try:
         pipeline, (raw_time, raw_signals), messages = _run_pipeline(options)
@@ -1194,7 +1227,7 @@ def api_process():
         try:
             processed_file = _save_processed(pipeline, nome, pasta)
         except OSError as e:
-            messages["warnings"].append(f"CSV processado não foi salvo: {e}")
+            messages["warnings"].append(tr("app.csvNotSaved", error=e))
 
     (t_ds, *sig_cols), stride = _downsample(
         t, *[sig[:, i] for i in range(sig.shape[1])]
@@ -1239,9 +1272,9 @@ def api_series_stats():
     try:
         inicio, fim = as_float(corpo.get("start")), as_float(corpo.get("end"))
         if inicio is None or fim is None or not fim > inicio:
-            raise ValueError("Escolha um trecho com início e fim diferentes.")
+            raise ValueError(tr("app.emptyStretch"))
         if not (options.get("file") or options.get("files")):
-            raise ValueError("Requisição sem arquivo selecionado.")
+            raise ValueError(tr("app.noFileInRequest"))
         t, sig, channels, units = _processed_result(options)
         relativo = bool(corpo.get("relative"))
         linhas = [{"channel": ch, "unit": unit,
@@ -1264,7 +1297,7 @@ def api_series_intervals():
     options = corpo.get("options") or {}
     try:
         if not (options.get("file") or options.get("files")):
-            raise ValueError("Processe um arquivo antes de calcular as estatísticas.")
+            raise ValueError(tr("app.processFirst"))
         markers = parse_markers(corpo.get("markers"))
         settings = corpo.get("analysis") or {}
         t, sig, channels, units = _processed_result(options)
@@ -1292,7 +1325,7 @@ def api_download():
     """Reprocessa com as mesmas opções e devolve o CSV completo (sem downsample)."""
     options = request.get_json(silent=True) or {}
     if not (options.get("file") or options.get("files")):
-        return jsonify({"error": "Requisição sem arquivo selecionado."}), 400
+        return jsonify({"error": tr("app.noFileInRequest")}), 400
 
     try:
         pipeline, _, _ = _run_pipeline(options)

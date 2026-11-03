@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BraggFlow — séries, espectros e figuras</title>
+<title data-i18n="doc.title">BraggFlow — séries, espectros e figuras</title>
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
 <!-- Ícones: um traço só (24 × 24, 2 px, pontas redondas), usados com <use href="#i-nome"> -->
+<!-- Textos: data-i18n e afins apontam para static/js/strings.js (português e inglês) -->
 <svg class="icon-sprite" aria-hidden="true" focusable="false">
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
   <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
@@ -37,17 +38,22 @@
       </svg>
       <div>
         <strong id="gate-title">BraggFlow</strong>
-        <small>Escolha um projeto para continuar ou comece um novo</small>
+        <small data-i18n="gate.subtitle">Escolha um projeto para continuar ou comece um novo</small>
+      </div>
+      <!-- O mesmo seletor do cabeçalho: o diálogo o cobre ao abrir a página -->
+      <div class="segmented lang-switch" role="radiogroup" aria-label="Idioma da interface" data-i18n-aria-label="header.language">
+        <label lang="pt-BR" title="Português (Brasil)"><input type="radio" name="ui-language-gate" value="pt-BR" aria-label="Português (Brasil)" checked>PT</label>
+        <label lang="en" title="English"><input type="radio" name="ui-language-gate" value="en" aria-label="English">EN</label>
       </div>
     </div>
     <div id="gate-projects" class="gate-list"></div>
     <div class="gate-new">
-      <input type="text" id="gate-name" placeholder="nome do novo projeto">
-      <button type="button" id="btn-gate-new" class="btn-primary">Novo projeto</button>
+      <input type="text" id="gate-name" placeholder="nome do novo projeto" data-i18n-placeholder="gate.newName">
+      <button type="button" id="btn-gate-new" class="btn-primary" data-i18n="gate.new">Novo projeto</button>
     </div>
-    <span class="gate-error hidden" id="gate-error">Dê um nome ao projeto: os resultados ficam numa pasta com esse nome.</span>
-    <button type="button" id="btn-gate-back" class="btn-secondary hidden">← Voltar ao projeto atual</button>
-    <span class="hint">Um projeto guarda os arquivos escolhidos, o processamento de cada um, as marcações e o estilo da figura.
+    <span class="gate-error hidden" id="gate-error" data-i18n="gate.nameRequired">Dê um nome ao projeto: os resultados ficam numa pasta com esse nome.</span>
+    <button type="button" id="btn-gate-back" class="btn-secondary hidden" data-i18n="gate.back">← Voltar ao projeto atual</button>
+    <span class="hint" data-i18n-html="gate.hint">Um projeto guarda os arquivos escolhidos, o processamento de cada um, as marcações e o estilo da figura.
       Excluir um projeto apaga só o projeto: os arquivos de dados e os CSVs processados ficam.
       Atalhos: <kbd>Ctrl</kbd>+<kbd>Enter</kbd> processa (ou atualiza a figura) · <kbd>Ctrl</kbd>+<kbd>S</kbd> salva o projeto.</span>
   </div>
@@ -55,16 +61,16 @@
 
 <div id="leave-dialog" class="gate hidden" role="dialog" aria-modal="true" aria-labelledby="leave-title">
   <div class="gate-card dialog-card">
-    <strong id="leave-title">Alterações não salvas</strong>
+    <strong id="leave-title" data-i18n="leave.title">Alterações não salvas</strong>
     <p id="leave-text"></p>
     <span class="gate-error hidden" id="leave-error"></span>
-    <label class="field hidden" id="leave-name-field">Nome do projeto
-      <input type="text" id="leave-name" placeholder="nome do projeto">
+    <label class="field hidden" id="leave-name-field" data-i18n="project.name">Nome do projeto
+      <input type="text" id="leave-name" placeholder="nome do projeto" data-i18n-placeholder="project.namePlaceholder">
     </label>
     <div class="dialog-actions">
-      <button type="button" id="leave-cancel" class="btn-secondary">Cancelar</button>
-      <button type="button" id="leave-discard" class="btn-secondary btn-danger-quiet">Descartar</button>
-      <button type="button" id="leave-save" class="btn-primary">Salvar e continuar</button>
+      <button type="button" id="leave-cancel" class="btn-secondary" data-i18n="common.cancel">Cancelar</button>
+      <button type="button" id="leave-discard" class="btn-secondary btn-danger-quiet" data-i18n="leave.discard">Descartar</button>
+      <button type="button" id="leave-save" class="btn-primary" data-i18n="leave.save">Salvar e continuar</button>
     </div>
   </div>
 </div>
@@ -87,41 +93,48 @@
     <div class="project-crumb">
       <span class="crumb-sep" aria-hidden="true">/</span>
       <input type="text" id="project-name" class="project-title" placeholder="nome do projeto" aria-label="Nome do projeto"
-             title="Nome do projeto. Salvar com outro nome cria uma cópia.">
+             title="Nome do projeto. Salvar com outro nome cria uma cópia."
+             data-i18n-placeholder="project.namePlaceholder" data-i18n-aria-label="project.name" data-i18n-title="header.projectNameTitle">
       <button type="button" id="btn-projects" class="btn-ghost"
-              title="Abrir, criar ou excluir projetos"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Projetos</button>
+              title="Abrir, criar ou excluir projetos" data-i18n="header.projects" data-i18n-title="header.projectsTitle"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Projetos</button>
     </div>
   </div>
 
-  <div id="tabs" role="tablist" aria-label="Área de trabalho">
-    <button type="button" class="tab active" data-tab="series" role="tab" id="tab-series" aria-selected="true" aria-controls="tab-series-main">Séries temporais</button>
-    <button type="button" class="tab" data-tab="spectra" role="tab" id="tab-spectra" aria-selected="false" aria-controls="tab-spectra-main" tabindex="-1">Espectros</button>
-    <button type="button" class="tab" data-tab="viz" role="tab" id="tab-viz" aria-selected="false" aria-controls="tab-viz-main" tabindex="-1">Figura</button>
+  <div id="tabs" role="tablist" aria-label="Área de trabalho" data-i18n-aria-label="tabs.label">
+    <button type="button" class="tab active" data-tab="series" role="tab" id="tab-series" aria-selected="true" aria-controls="tab-series-main" data-i18n="tabs.series">Séries temporais</button>
+    <button type="button" class="tab" data-tab="spectra" role="tab" id="tab-spectra" aria-selected="false" aria-controls="tab-spectra-main" tabindex="-1" data-i18n="tabs.spectra">Espectros</button>
+    <button type="button" class="tab" data-tab="viz" role="tab" id="tab-viz" aria-selected="false" aria-controls="tab-viz-main" tabindex="-1" data-i18n="tabs.viz">Figura</button>
   </div>
 
   <div id="project-bar">
-    <span id="project-dirty" class="hidden" title="Há alterações que ainda não foram salvas">não salvo</span>
+    <span id="project-dirty" class="hidden" title="Há alterações que ainda não foram salvas" data-i18n="header.dirty" data-i18n-title="header.dirtyTitle">não salvo</span>
     <span id="save-state" class="save-state" aria-live="polite"></span>
-    <label class="autosave-toggle" title="Salva o projeto sozinho, alguns segundos depois de cada mudança">
+    <label class="autosave-toggle" title="Salva o projeto sozinho, alguns segundos depois de cada mudança" data-i18n="header.autosave" data-i18n-title="header.autosaveTitle">
       <input type="checkbox" id="autosave" checked> Salvar sozinho</label>
     <span class="bar-sep" aria-hidden="true"></span>
-    <button type="button" id="btn-undo" class="btn-icon-only" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></button>
-    <button type="button" id="btn-redo" class="btn-icon-only" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg></button>
-    <button type="button" id="btn-project-save" class="btn-icon-only" title="Salvar agora (Ctrl+S)" aria-label="Salvar agora"><svg class="icon" aria-hidden="true"><use href="#i-save"/></svg></button>
+    <button type="button" id="btn-undo" class="btn-icon-only" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" data-i18n-title="header.undoTitle" data-i18n-aria-label="header.undo" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></button>
+    <button type="button" id="btn-redo" class="btn-icon-only" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" data-i18n-title="header.redoTitle" data-i18n-aria-label="header.redo" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg></button>
+    <button type="button" id="btn-project-save" class="btn-icon-only" title="Salvar agora (Ctrl+S)" aria-label="Salvar agora" data-i18n-title="header.saveTitle" data-i18n-aria-label="header.save"><svg class="icon" aria-hidden="true"><use href="#i-save"/></svg></button>
+    <span class="bar-sep" aria-hidden="true"></span>
+    <!-- Cada idioma escrito nele mesmo: quem não lê o atual ainda acha o seu -->
+    <div class="segmented lang-switch" role="radiogroup" aria-label="Idioma da interface" data-i18n-aria-label="header.language">
+      <label lang="pt-BR" title="Português (Brasil)"><input type="radio" name="ui-language" value="pt-BR" aria-label="Português (Brasil)" checked>PT</label>
+      <label lang="en" title="English"><input type="radio" name="ui-language" value="en" aria-label="English">EN</label>
+    </div>
   </div>
 </header>
 
 <div id="content">
 <div id="error-bar" role="alert" aria-live="assertive">
   <span id="error-text"></span>
-  <button type="button" id="error-close" aria-label="Fechar aviso" title="Fechar (Esc)"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+  <button type="button" id="error-close" aria-label="Fechar aviso" title="Fechar (Esc)" data-i18n-aria-label="error.close" data-i18n-title="error.closeTitle"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
 </div>
 
 <div id="sidebar">
 
   <div id="tab-series-sidebar">
 
-  <div class="section-label step-label"><span class="step-num">1</span> Arquivos</div>
+  <div class="section-label step-label" data-i18n="sidebar.files"><span class="step-num">1</span> Arquivos</div>
 
   <div class="card enabled">
     <div class="card-body" style="grid-template-columns: 1fr;">
@@ -129,18 +142,18 @@
       <select id="file-select" class="hidden"></select>
       <div id="series-files" class="file-list"></div>
       <details class="advanced">
-        <summary>Adicionar arquivos ao projeto</summary>
+        <summary data-i18n="files.add">Adicionar arquivos ao projeto</summary>
         <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 8px;">
           <div id="series-picker" class="file-list"></div>
-          <button type="button" id="btn-add-series" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
+          <button type="button" id="btn-add-series" class="btn-dashed" data-i18n="files.addChecked"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
-            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
+            <label class="btn-secondary btn-sm" data-i18n="files.import"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
               <input type="file" id="file-upload" class="file-hidden" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
           </div>
         </div>
       </details>
-      <button type="button" id="btn-copy-series" class="btn-dashed">Copiar opções para os outros arquivos</button>
-      <span class="hint" title="Um arquivo aberto pela primeira vez começa com as opções que estão na tela; depois disso, as mudanças valem só para ele.">Cada arquivo guarda os próprios sensores e etapas. Marque os do lote.</span>
+      <button type="button" id="btn-copy-series" class="btn-dashed" data-i18n="series.copyOptions">Copiar opções para os outros arquivos</button>
+      <span class="hint" title="Um arquivo aberto pela primeira vez começa com as opções que estão na tela; depois disso, as mudanças valem só para ele." data-i18n="series.filesHint" data-i18n-title="series.filesHintTitle">Cada arquivo guarda os próprios sensores e etapas. Marque os do lote.</span>
       <span class="hint" id="raw-kind-hint"></span>
       <span class="hint" id="file-info"></span>
     </div>
@@ -149,92 +162,92 @@
   <div class="needs-series">
 
   <details class="card enabled collapsible hidden" id="card-concat">
-    <summary class="card-header"><span>Concatenação</span></summary>
+    <summary class="card-header"><span data-i18n="concat.title">Concatenação</span></summary>
     <div class="card-body" style="grid-template-columns: 1fr;">
-      <span class="hint">Para um ensaio gravado em vários arquivos: os marcados na lista acima
+      <span class="hint" data-i18n="concat.hint">Para um ensaio gravado em vários arquivos: os marcados na lista acima
         viram um sinal contínuo, nesta ordem, com os sensores e as etapas do primeiro.</span>
       <div id="concat-list" class="concat-list"></div>
       <span class="hint" id="concat-summary"></span>
-      <button type="button" id="btn-process-join" class="btn-primary"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar juntos</button>
+      <button type="button" id="btn-process-join" class="btn-primary" data-i18n="concat.process"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar juntos</button>
     </div>
   </details>
 
-  <div class="section-label step-label"><span class="step-num">2</span> Sensores</div>
+  <div class="section-label step-label" data-i18n="sidebar.sensors"><span class="step-num">2</span> Sensores</div>
 
   <div class="card enabled" id="card-sensors">
     <div class="card-body" style="grid-template-columns: 1fr;">
-      <label class="field">Setup salvo
-        <select id="setup-select"><option value="">— nenhum —</option></select>
+      <label class="field" data-i18n="sensors.setup">Setup salvo
+        <select id="setup-select"><option value="" data-i18n="common.none">— nenhum —</option></select>
       </label>
-      <div id="sensor-list"><span class="hint">Selecione um arquivo…</span></div>
-      <button type="button" id="btn-suggest-bands" class="btn-dashed">Sugerir bandas vazias (λ₀ ± até 2 nm)</button>
+      <div id="sensor-list"><span class="hint" data-i18n="sensors.pickFile">Selecione um arquivo…</span></div>
+      <button type="button" id="btn-suggest-bands" class="btn-dashed" data-i18n="sensors.suggestBands">Sugerir bandas vazias (λ₀ ± até 2 nm)</button>
       <div class="setup-row">
-        <input type="text" id="setup-name" placeholder="nome do setup">
-        <button type="button" id="btn-setup-save" class="btn-dashed">Salvar setup</button>
+        <input type="text" id="setup-name" placeholder="nome do setup" data-i18n-placeholder="sensors.setupName">
+        <button type="button" id="btn-setup-save" class="btn-dashed" data-i18n="sensors.saveSetup">Salvar setup</button>
       </div>
-      <details class="more"><summary>Como preencher</summary><p class="hint">Nome, banda permitida (nm) e sensibilidade térmica K<sub>T</sub> (pm/°C) de cada grade. O K<sub>T</sub> vem da calibração em temperatura e é usado pela compensação de temperatura. O setup salvo fica em data/setups e serve para outras aquisições da mesma montagem.</p></details>
+      <details class="more"><summary data-i18n="sensors.howTo">Como preencher</summary><p class="hint" data-i18n-html="sensors.howToText">Nome, banda permitida (nm) e sensibilidade térmica K<sub>T</sub> (pm/°C) de cada grade. O K<sub>T</sub> vem da calibração em temperatura e é usado pela compensação de temperatura. O setup salvo fica em data/setups e serve para outras aquisições da mesma montagem.</p></details>
     </div>
   </div>
 
-  
 
-  <div class="section-label step-label" title="As etapas são aplicadas de cima para baixo."><span class="step-num">3</span> Etapas · de cima para baixo</div>
+
+  <div class="section-label step-label" title="As etapas são aplicadas de cima para baixo." data-i18n="sidebar.steps" data-i18n-title="sidebar.stepsTitle"><span class="step-num">3</span> Etapas · de cima para baixo</div>
 
   <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Limpeza e amostragem</span></summary>
+    <summary class="card-header"><span data-i18n="steps.cleaningCard">Limpeza e amostragem</span></summary>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div class="step" data-step="window">
         <div class="step-head">
           <span class="step-switch-placeholder"></span>
-          <button type="button" class="step-name">Janela de tempo (s)</button>
+          <button type="button" class="step-name" data-i18n="steps.window">Janela de tempo (s)</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Início <input type="number" id="win-start" data-opt="window.start" step="any" placeholder="auto"></label>
-      <label class="field">Fim <input type="number" id="win-end" data-opt="window.end" step="any" placeholder="auto"></label>
+      <label class="field" data-i18n="steps.start">Início <input type="number" id="win-start" data-opt="window.start" step="any" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="steps.end">Fim <input type="number" id="win-end" data-opt="window.end" step="any" placeholder="auto" data-i18n-placeholder="common.auto"></label>
     </div>
       </div>
       <div class="step" data-step="cleaning">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="cleaning-enabled" data-opt="cleaning.enabled" checked>
-          <button type="button" class="step-name">Limpeza do interrogador</button>
+          <button type="button" class="step-name" data-i18n="steps.cleaning">Limpeza do interrogador</button>
         </div>
         <div class="step-body hidden">
-      <label class="check-row" style="grid-column: span 2;">
+      <label class="check-row" style="grid-column: span 2;" data-i18n="cleaning.zeros">
         <input type="checkbox" id="cleaning-zeros" data-opt="cleaning.zeros" checked> Leitura ≤ 0 = pico perdido
       </label>
-      <label class="check-row" style="grid-column: span 2;">
+      <label class="check-row" style="grid-column: span 2;" data-i18n="cleaning.bands">
         <input type="checkbox" id="cleaning-bands" data-opt="cleaning.bands" checked> Descartar leituras fora da banda
       </label>
-      <label class="field">Salto de pico (nm) <input type="number" id="cleaning-jump" data-opt="cleaning.jump_threshold" step="any" min="0" placeholder="desligado"></label>
-      <label class="field">Duração máx. (s) <input type="number" id="cleaning-jump-duration" data-opt="cleaning.jump_duration" step="any" min="0" placeholder="sem limite"></label>
+      <label class="field" data-i18n="cleaning.jump">Salto de pico (nm) <input type="number" id="cleaning-jump" data-opt="cleaning.jump_threshold" step="any" min="0" placeholder="desligado" data-i18n-placeholder="common.off"></label>
+      <label class="field" data-i18n="cleaning.jumpDuration">Duração máx. (s) <input type="number" id="cleaning-jump-duration" data-opt="cleaning.jump_duration" step="any" min="0" placeholder="sem limite" data-i18n-placeholder="common.noLimit"></label>
     </div>
       </div>
       <div class="step" data-step="timebase">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="timebase-enabled" data-opt="timebase.enabled" checked>
-          <button type="button" class="step-name">Eixo de tempo</button>
+          <button type="button" class="step-name" data-i18n="steps.timebase">Eixo de tempo</button>
         </div>
         <div class="step-body hidden">
-      <label class="field" style="grid-column: span 2;">Tempos repetidos
+      <label class="field" style="grid-column: span 2;" data-i18n="timebase.duplicates">Tempos repetidos
         <select id="timebase-duplicates" data-opt="timebase.duplicates">
-          <option value="mean">média das leituras</option>
-          <option value="first">manter a primeira</option>
+          <option value="mean" data-i18n="timebase.dupMean">média das leituras</option>
+          <option value="first" data-i18n="timebase.dupFirst">manter a primeira</option>
         </select>
       </label>
-      <label class="check-row" style="grid-column: span 2;">
+      <label class="check-row" style="grid-column: span 2;" data-i18n="timebase.resample">
         <input type="checkbox" id="timebase-resample" data-opt="timebase.resample"> Reamostrar em grade uniforme
       </label>
-      <label class="field">fs (Hz) <input type="number" id="timebase-fs" data-opt="timebase.fs" step="any" placeholder="auto"></label>
-      <label class="field">Lacuna máx. (s) <input type="number" id="timebase-max-gap" data-opt="timebase.max_gap" step="any" min="0" placeholder="sem limite"></label>
+      <label class="field">fs (Hz) <input type="number" id="timebase-fs" data-opt="timebase.fs" step="any" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="timebase.maxGap">Lacuna máx. (s) <input type="number" id="timebase-max-gap" data-opt="timebase.max_gap" step="any" min="0" placeholder="sem limite" data-i18n-placeholder="common.noLimit"></label>
     </div>
       </div>
       <div class="step" data-step="nulls">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="nulls-enabled" data-opt="nulls.enabled" checked>
-          <button type="button" class="step-name">Remoção de nulos (NaN/Inf)</button>
+          <button type="button" class="step-name" data-i18n="steps.nulls">Remoção de nulos (NaN/Inf)</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Estratégia
+      <label class="field" data-i18n="common.strategy">Estratégia
         <select id="nulls-strategy" data-opt="nulls.strategy">
           <option value="linear">linear</option>
           <option value="remove">remove</option>
@@ -248,10 +261,10 @@
       <div class="step" data-step="outliers">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="outliers-enabled" data-opt="outliers.enabled" checked>
-          <button type="button" class="step-name">Remoção de outliers</button>
+          <button type="button" class="step-name" data-i18n="steps.outliers">Remoção de outliers</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Método
+      <label class="field" data-i18n="outliers.method">Método
         <select id="outliers-method" data-opt="outliers.method">
           <option value="rolling">rolling (local)</option>
           <option value="mad">mad (global)</option>
@@ -260,7 +273,7 @@
         </select>
       </label>
       <label class="field">Threshold <input type="number" id="outliers-threshold" data-opt="outliers.threshold" step="any" value="3.5"></label>
-      <label class="field">Estratégia
+      <label class="field" data-i18n="common.strategy">Estratégia
         <select id="outliers-strategy" data-opt="outliers.strategy">
           <option value="linear">linear</option>
           <option value="remove">remove</option>
@@ -268,61 +281,61 @@
           <option value="constant">constant</option>
         </select>
       </label>
-      <label class="field">Janela (rolling) <input type="number" id="outliers-window" data-opt="outliers.window_size" value="51" step="2"></label>
+      <label class="field" data-i18n="outliers.window">Janela (rolling) <input type="number" id="outliers-window" data-opt="outliers.window_size" value="51" step="2"></label>
     </div>
       </div>
     </div>
   </details>
 
   <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Filtros</span></summary>
+    <summary class="card-header"><span data-i18n="steps.filtersCard">Filtros</span></summary>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div class="step" data-step="savgol">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="savgol-enabled" data-opt="savgol.enabled" checked>
-          <button type="button" class="step-name">Filtro Savitzky-Golay</button>
+          <button type="button" class="step-name" data-i18n="steps.savgol">Filtro Savitzky-Golay</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Janela (ímpar) <input type="number" id="savgol-window" data-opt="savgol.window_length" value="11" step="2" min="3"></label>
-      <label class="field">Ordem polin. <input type="number" id="savgol-poly" data-opt="savgol.polyorder" value="2" min="1"></label>
+      <label class="field" data-i18n="savgol.window">Janela (ímpar) <input type="number" id="savgol-window" data-opt="savgol.window_length" value="11" step="2" min="3"></label>
+      <label class="field" data-i18n="savgol.order">Ordem polin. <input type="number" id="savgol-poly" data-opt="savgol.polyorder" value="2" min="1"></label>
     </div>
       </div>
       <div class="step" data-step="movavg">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="movavg-enabled" data-opt="moving_average.enabled" checked>
-          <button type="button" class="step-name">Média móvel</button>
+          <button type="button" class="step-name" data-i18n="common.movingAverage">Média móvel</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Janela <input type="number" id="movavg-window" data-opt="moving_average.window_size" value="30" min="1"></label>
+      <label class="field" data-i18n="common.window">Janela <input type="number" id="movavg-window" data-opt="moving_average.window_size" value="30" min="1"></label>
     </div>
       </div>
       <div class="step" data-step="lowpass">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="lowpass-enabled" data-opt="lowpass.enabled">
-          <button type="button" class="step-name">Passa-baixa (Butterworth)</button>
+          <button type="button" class="step-name" data-i18n="steps.lowpass">Passa-baixa (Butterworth)</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">fs (Hz) <input type="number" id="lowpass-fs" data-opt="lowpass.fs" placeholder="auto" step="any"></label>
-      <label class="field">Corte (Hz) <input type="number" id="lowpass-cutoff" data-opt="lowpass.cutoff" value="20" step="any"></label>
-      <label class="field">Ordem <input type="number" id="lowpass-order" data-opt="lowpass.order" value="4" min="1"></label>
+      <label class="field">fs (Hz) <input type="number" id="lowpass-fs" data-opt="lowpass.fs" placeholder="auto" step="any" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="filters.cutoff">Corte (Hz) <input type="number" id="lowpass-cutoff" data-opt="lowpass.cutoff" value="20" step="any"></label>
+      <label class="field" data-i18n="filters.order">Ordem <input type="number" id="lowpass-order" data-opt="lowpass.order" value="4" min="1"></label>
     </div>
       </div>
       <div class="step" data-step="highpass">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="highpass-enabled" data-opt="highpass.enabled">
-          <button type="button" class="step-name">Passa-alta (Butterworth)</button>
+          <button type="button" class="step-name" data-i18n="steps.highpass">Passa-alta (Butterworth)</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">fs (Hz) <input type="number" id="highpass-fs" data-opt="highpass.fs" placeholder="auto" step="any"></label>
-      <label class="field">Corte (Hz) <input type="number" id="highpass-cutoff" data-opt="highpass.cutoff" value="5" step="any"></label>
-      <label class="field">Ordem <input type="number" id="highpass-order" data-opt="highpass.order" value="4" min="1"></label>
+      <label class="field">fs (Hz) <input type="number" id="highpass-fs" data-opt="highpass.fs" placeholder="auto" step="any" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="filters.cutoff">Corte (Hz) <input type="number" id="highpass-cutoff" data-opt="highpass.cutoff" value="5" step="any"></label>
+      <label class="field" data-i18n="filters.order">Ordem <input type="number" id="highpass-order" data-opt="highpass.order" value="4" min="1"></label>
     </div>
       </div>
     </div>
   </details>
 
   <details class="card enabled collapsible" open>
-    <summary class="card-header"><span>Conversão</span></summary>
+    <summary class="card-header"><span data-i18n="steps.conversionCard">Conversão</span></summary>
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div class="step" data-step="delta">
         <div class="step-head">
@@ -330,20 +343,20 @@
           <button type="button" class="step-name">Δλ (baseline)</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Amostras baseline <input type="number" id="delta-baseline" data-opt="delta_lambda.baseline_samples" value="20" min="1"></label>
+      <label class="field" data-i18n="delta.baselineSamples">Amostras baseline <input type="number" id="delta-baseline" data-opt="delta_lambda.baseline_samples" value="20" min="1"></label>
     </div>
       </div>
       <div class="step" data-step="tempcomp">
         <div class="step-head">
           <input class="step-switch" type="checkbox" id="tempcomp-enabled" data-opt="temp_comp.enabled">
-          <button type="button" class="step-name">Compensação de temperatura</button>
+          <button type="button" class="step-name" data-i18n="steps.tempcomp">Compensação de temperatura</button>
         </div>
         <div class="step-body hidden">
-      <label class="field">Canal de referência
+      <label class="field" data-i18n="tempcomp.channel">Canal de referência
         <select id="tempcomp-channel" data-opt="temp_comp.channel"><option value="FBG">FBG</option></select>
       </label>
-      <label class="field" title="k dos sensores sem K_T no cartão Sensores. Redes iguais, com o mesmo encapsulamento: k = 1.">k padrão <input type="number" id="tempcomp-k" data-opt="temp_comp.k_coeff" value="1.0" step="0.05" min="0"></label>
-      <span class="hint step-note">Δλ<sub>comp</sub> = Δλ<sub>s</sub> − (K<sub>T,s</sub>/K<sub>T,r</sub>)·Δλ<sub>r</sub>: tira de cada sensor a parte térmica medida pela rede de referência. O K<sub>T</sub> de cada rede fica no cartão Sensores; o sensor sem K<sub>T</sub> usa o k ao lado. Precisa do Δλ (ligado junto).</span>
+      <label class="field" title="k dos sensores sem K_T no cartão Sensores. Redes iguais, com o mesmo encapsulamento: k = 1." data-i18n="tempcomp.k" data-i18n-title="tempcomp.kTitle">k padrão <input type="number" id="tempcomp-k" data-opt="temp_comp.k_coeff" value="1.0" step="0.05" min="0"></label>
+      <span class="hint step-note" data-i18n-html="tempcomp.note">Δλ<sub>comp</sub> = Δλ<sub>s</sub> − (K<sub>T,s</sub>/K<sub>T,r</sub>)·Δλ<sub>r</sub>: tira de cada sensor a parte térmica medida pela rede de referência. O K<sub>T</sub> de cada rede fica no cartão Sensores; o sensor sem K<sub>T</sub> usa o k ao lado. Precisa do Δλ (ligado junto).</span>
     </div>
       </div>
     </div>
@@ -352,14 +365,14 @@
   <div class="sidebar-actions">
     <div class="row">
       <button id="btn-process" class="btn-primary"
-              title="Processa e grava o CSV usado na aba Figura (Ctrl+Enter)"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar</button>
-      <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
+              title="Processa e grava o CSV usado na aba Figura (Ctrl+Enter)" data-i18n="series.process" data-i18n-title="series.processTitle"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar</button>
+      <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo" data-i18n="common.downloadCsv" data-i18n-title="series.downloadTitle"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
     </div>
     <div class="row actions-sub">
-      <label class="check-row" title="A cada mudança nas opções, processa e grava o CSV de novo. Abrir ou adicionar um arquivo só mostra a prévia.">
+      <label class="check-row" title="A cada mudança nas opções, processa e grava o CSV de novo. Abrir ou adicionar um arquivo só mostra a prévia." data-i18n="series.autoProcess" data-i18n-title="series.autoProcessTitle">
         <input type="checkbox" id="auto-process" checked> Gravar o CSV a cada mudança</label>
       <button type="button" id="btn-process-all" class="btn-link"
-              title="Processa, um por um, os arquivos marcados na lista"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Processar marcados</button>
+              title="Processa, um por um, os arquivos marcados na lista" data-i18n="series.processAll" data-i18n-title="series.processAllTitle"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Processar marcados</button>
     </div>
   </div>
 
@@ -369,30 +382,30 @@
 
   <div id="tab-spectra-sidebar" class="hidden">
 
-  <div class="section-label step-label"><span class="step-num">1</span> Arquivos</div>
+  <div class="section-label step-label" data-i18n="sidebar.files"><span class="step-num">1</span> Arquivos</div>
 
   <div class="card enabled">
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div class="files-head">
         <span class="hint" id="spectra-files-summary"></span>
         <input type="search" id="spectra-filter" class="list-filter hidden" placeholder="Filtrar pelo nome…"
-               aria-label="Filtrar os espectros do projeto">
+               aria-label="Filtrar os espectros do projeto" data-i18n-placeholder="common.filterByName" data-i18n-aria-label="spectra.filterAria">
       </div>
       <div id="spectra-files" class="file-list scroll-list"></div>
       <details class="advanced" id="spectra-add">
-        <summary>Adicionar arquivos ao projeto</summary>
+        <summary data-i18n="files.add">Adicionar arquivos ao projeto</summary>
         <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 8px;">
           <input type="search" id="spectrum-picker-filter" class="list-filter" placeholder="Filtrar pelo nome…"
-                 aria-label="Filtrar os arquivos disponíveis">
+                 aria-label="Filtrar os arquivos disponíveis" data-i18n-placeholder="common.filterByName" data-i18n-aria-label="spectra.pickerFilterAria">
           <div id="spectra-picker" class="file-list scroll-list"></div>
-          <button type="button" id="btn-add-spectra" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
+          <button type="button" id="btn-add-spectra" class="btn-dashed" data-i18n="files.addChecked"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
-            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
+            <label class="btn-secondary btn-sm" data-i18n="files.import"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
               <input type="file" id="spectra-upload" class="file-hidden" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
-            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar pasta
+            <label class="btn-secondary btn-sm" data-i18n="files.importFolder"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar pasta
               <input type="file" id="spectra-upload-dir" class="file-hidden" webkitdirectory multiple></label>
           </div>
-          <span class="hint">Uma pasta enviada fica em data/uploads/&lt;pasta&gt;. Arquivos em subpastas
+          <span class="hint" data-i18n-html="spectra.uploadHint">Uma pasta enviada fica em data/uploads/&lt;pasta&gt;. Arquivos em subpastas
             de data/raw também aparecem agrupados por pasta, com “adicionar todos”.</span>
         </div>
       </details>
@@ -401,35 +414,35 @@
 
   <div class="needs-spectra">
   <div class="section-label step-label"><span class="step-num">2</span>
-    <span id="spectra-prep-label">Preparo de todos os espectros</span></div>
+    <span id="spectra-prep-label" data-i18n="spectra.prepAll">Preparo de todos os espectros</span></div>
 
   <div class="card enabled">
     <div class="card-body" style="grid-template-columns: 1fr;">
-      <label class="check-row"><input type="checkbox" id="spectra-common" checked> Mesmo preparo para todos os espectros</label>
-      <span class="hint" id="spectra-common-hint">Recorte, suavização e detecção valem para todos os
+      <label class="check-row" data-i18n="spectra.common"><input type="checkbox" id="spectra-common" checked> Mesmo preparo para todos os espectros</label>
+      <span class="hint" id="spectra-common-hint" data-i18n="spectra.commonHintOn">Recorte, suavização e detecção valem para todos os
         arquivos do projeto. Desmarque para preparar cada arquivo de um jeito.</span>
     </div>
   </div>
 
   <details class="card enabled collapsible" id="card-transmission">
-    <summary class="card-header"><span>Transmissão (dados brutos)</span>
-      <span class="card-state" id="transmission-state">não usada</span></summary>
+    <summary class="card-header"><span data-i18n="transmission.title">Transmissão (dados brutos)</span>
+      <span class="card-state" id="transmission-state" data-i18n="transmission.unused">não usada</span></summary>
     <div class="card-body">
-      <label class="field span2">Espectro da fonte (referência)
+      <label class="field span2" data-i18n="transmission.source">Espectro da fonte (referência)
         <select data-spec="reference_file" class="spec-file-select"></select>
       </label>
-      <label class="field span2">Ruído de fundo (dark)
+      <label class="field span2" data-i18n="transmission.dark">Ruído de fundo (dark)
         <select data-spec="dark_file" class="spec-file-select"></select>
       </label>
-      <label class="field span2">Saída
+      <label class="field span2" data-i18n="transmission.output">Saída
         <select data-spec="transmission_output">
-          <option value="percent">Transmissão (%)</option>
-          <option value="fraction">Transmissão (0–1)</option>
-          <option value="db">Transmissão (dB)</option>
-          <option value="absorbance">Absorbância (−log₁₀ T)</option>
+          <option value="percent" data-i18n="transmission.percent">Transmissão (%)</option>
+          <option value="fraction" data-i18n="transmission.fraction">Transmissão (0–1)</option>
+          <option value="db" data-i18n="transmission.db">Transmissão (dB)</option>
+          <option value="absorbance" data-i18n="transmission.absorbance">Absorbância (−log₁₀ T)</option>
         </select>
       </label>
-      <details class="more span2"><summary>Como funciona</summary><p class="hint">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
+      <details class="more span2"><summary data-i18n="common.howItWorks">Como funciona</summary><p class="hint" data-i18n="transmission.howText">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
         T = (S − D)/(R − D); só a fonte, T = S/R; só o fundo, S − D. Deixe os dois vazios para
         analisar o espectro como está — bruto ou já em transmissão, como as exportações do OceanView
         em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima), aparecem
@@ -438,63 +451,63 @@
   </details>
 
   <div class="card enabled">
-    <div class="card-header"><span>Recorte e suavização</span></div>
+    <div class="card-header"><span data-i18n="spectra.cropSmooth">Recorte e suavização</span></div>
     <div class="card-body">
-      <label class="field">λ mínimo (nm) <input type="number" step="any" data-spec="lambda_min" placeholder="início"></label>
-      <label class="field">λ máximo (nm) <input type="number" step="any" data-spec="lambda_max" placeholder="fim"></label>
-      <label class="field">Suavização
+      <label class="field" data-i18n="spectra.lambdaMin">λ mínimo (nm) <input type="number" step="any" data-spec="lambda_min" placeholder="início" data-i18n-placeholder="spectra.start"></label>
+      <label class="field" data-i18n="spectra.lambdaMax">λ máximo (nm) <input type="number" step="any" data-spec="lambda_max" placeholder="fim" data-i18n-placeholder="spectra.end"></label>
+      <label class="field" data-i18n="spectra.smoothing">Suavização
         <select data-spec="smooth_method">
           <option value="savgol">Savitzky-Golay</option>
-          <option value="moving_average">Média móvel</option>
+          <option value="moving_average" data-i18n="common.movingAverage">Média móvel</option>
         </select>
       </label>
-      <label class="field">Janela (pontos) <input type="number" step="1" min="3" data-spec="smooth_window" placeholder="sem suavização"></label>
-      <label class="field" id="spec-order-field">Ordem do ajuste <input type="number" step="1" min="1" max="10" data-spec="smooth_order"></label>
-      <label class="field span2" title="Subtrai um polinômio ajustado ao espectro recortado. Vales e picos rasos sobre uma linha de base inclinada (LMR, SPR, franjas) passam a ser medidos em relação a essa linha de base.">Remover tendência
+      <label class="field" data-i18n="spectra.window">Janela (pontos) <input type="number" step="1" min="3" data-spec="smooth_window" placeholder="sem suavização" data-i18n-placeholder="spectra.noSmoothing"></label>
+      <label class="field" id="spec-order-field" data-i18n="spectra.order">Ordem do ajuste <input type="number" step="1" min="1" max="10" data-spec="smooth_order"></label>
+      <label class="field span2" title="Subtrai um polinômio ajustado ao espectro recortado. Vales e picos rasos sobre uma linha de base inclinada (LMR, SPR, franjas) passam a ser medidos em relação a essa linha de base." data-i18n="spectra.detrend" data-i18n-title="spectra.detrendTitle">Remover tendência
         <select data-spec="detrend">
-          <option value="">não</option>
-          <option value="0">média (grau 0)</option>
-          <option value="1">reta (grau 1)</option>
-          <option value="2">parábola (grau 2)</option>
-          <option value="3">polinômio de grau 3</option>
-          <option value="4">polinômio de grau 4</option>
+          <option value="" data-i18n="common.no">não</option>
+          <option value="0" data-i18n="spectra.detrend0">média (grau 0)</option>
+          <option value="1" data-i18n="spectra.detrend1">reta (grau 1)</option>
+          <option value="2" data-i18n="spectra.detrend2">parábola (grau 2)</option>
+          <option value="3" data-i18n="spectra.detrend3">polinômio de grau 3</option>
+          <option value="4" data-i18n="spectra.detrend4">polinômio de grau 4</option>
         </select>
       </label>
-      <label class="field">Normalização
+      <label class="field" data-i18n="spectra.normalize">Normalização
         <select data-spec="normalize">
-          <option value="none">nenhuma</option>
-          <option value="max">máximo = 1</option>
-          <option value="minmax">0 a 1</option>
-          <option value="baseline">subtrair a mediana</option>
+          <option value="none" data-i18n="spectra.normNone">nenhuma</option>
+          <option value="max" data-i18n="spectra.normMax">máximo = 1</option>
+          <option value="minmax" data-i18n="spectra.normMinmax">0 a 1</option>
+          <option value="baseline" data-i18n="spectra.normBaseline">subtrair a mediana</option>
         </select>
       </label>
-      <label class="field">Deslocamento vertical <input type="number" step="any" data-spec="offset"></label>
-      <button type="button" id="btn-copy-spectrum" class="btn-dashed span2 hidden">Aplicar este preparo a todos</button>
-      <details class="more span2"><summary>Qual suavização usar</summary><p class="hint">Savitzky-Golay preserva melhor a altura e a largura de picos estreitos;
+      <label class="field" data-i18n="spectra.offset">Deslocamento vertical <input type="number" step="any" data-spec="offset"></label>
+      <button type="button" id="btn-copy-spectrum" class="btn-dashed span2 hidden" data-i18n="spectra.copyPrep">Aplicar este preparo a todos</button>
+      <details class="more span2"><summary data-i18n="spectra.whichSmoothing">Qual suavização usar</summary><p class="hint" data-i18n="spectra.whichSmoothingText">Savitzky-Golay preserva melhor a altura e a largura de picos estreitos;
         a média móvel suaviza mais, mas alarga e achata os picos. Use janelas bem menores que a FWHM.
         O deslocamento ajuda a empilhar espectros na mesma figura.</p></details>
     </div>
   </div>
 
-  <div class="section-label step-label"><span class="step-num">3</span> Picos e vales</div>
+  <div class="section-label step-label" data-i18n="sidebar.peaks"><span class="step-num">3</span> Picos e vales</div>
 
   <div class="card enabled">
     <div class="card-body">
-      <label class="check-row"><input type="checkbox" data-spec="find_max"> Máximos (picos)</label>
-      <label class="check-row"><input type="checkbox" data-spec="find_min"> Mínimos (vales)</label>
-      <label class="field span2">Escala da intensidade
+      <label class="check-row" data-i18n="peaks.max"><input type="checkbox" data-spec="find_max"> Máximos (picos)</label>
+      <label class="check-row" data-i18n="peaks.min"><input type="checkbox" data-spec="find_min"> Mínimos (vales)</label>
+      <label class="field span2" data-i18n="peaks.scale">Escala da intensidade
         <select data-spec="intensity_scale">
-          <option value="linear">Linear — FWHM a meia altura</option>
-          <option value="db">dB / dBm — banda de 3 dB</option>
+          <option value="linear" data-i18n="peaks.scaleLinear">Linear — FWHM a meia altura</option>
+          <option value="db" data-i18n="peaks.scaleDb">dB / dBm — banda de 3 dB</option>
         </select>
       </label>
-      <label class="field">Proeminência mínima
-        <input type="number" step="any" min="0" data-spec="prominence" placeholder="auto: 5% da faixa"></label>
-      <label class="field">Distância mínima (nm)
-        <input type="number" step="any" min="0" data-spec="min_distance" placeholder="sem limite"></label>
-      <label class="field">Máximo por tipo
+      <label class="field" data-i18n="peaks.prominence">Proeminência mínima
+        <input type="number" step="any" min="0" data-spec="prominence" placeholder="auto: 5% da faixa" data-i18n-placeholder="peaks.prominenceAuto"></label>
+      <label class="field" data-i18n="peaks.minDistance">Distância mínima (nm)
+        <input type="number" step="any" min="0" data-spec="min_distance" placeholder="sem limite" data-i18n-placeholder="common.noLimit"></label>
+      <label class="field" data-i18n="peaks.maxPerType">Máximo por tipo
         <input type="number" step="1" min="1" max="500" data-spec="max_peaks"></label>
-      <span class="hint span2">Medido no espectro já recortado e suavizado. Resultados na tabela
+      <span class="hint span2" data-i18n="peaks.hint">Medido no espectro já recortado e suavizado. Resultados na tabela
         abaixo do gráfico; o “?” dela explica cada coluna.</span>
     </div>
   </div>
@@ -506,175 +519,175 @@
 
   <div class="viz-search">
     <input type="search" id="viz-search" placeholder="Buscar opção: fonte, legenda, ticks…"
-           aria-label="Buscar uma opção da figura" autocomplete="off">
-    <span class="hint hidden" id="viz-search-empty">Nenhuma opção com esse nome.</span>
+           aria-label="Buscar uma opção da figura" autocomplete="off" data-i18n-placeholder="viz.search" data-i18n-aria-label="viz.searchAria">
+    <span class="hint hidden" id="viz-search-empty" data-i18n="viz.searchEmpty">Nenhuma opção com esse nome.</span>
   </div>
 
   <details class="card enabled collapsible" open data-card="estilo">
-    <summary class="card-header"><span>Estilo e tamanho</span></summary>
+    <summary class="card-header"><span data-i18n="viz.styleCard">Estilo e tamanho</span></summary>
     <div class="card-body">
-      <label class="field span2" title="Aplica de uma vez um estilo salvo (todas as opções, inclusive cores e legendas das curvas)">Estilo salvo
-        <select id="style-select"><option value="">— nenhum —</option></select>
+      <label class="field span2" title="Aplica de uma vez um estilo salvo (todas as opções, inclusive cores e legendas das curvas)" data-i18n="viz.savedStyle" data-i18n-title="viz.savedStyleTitle">Estilo salvo
+        <select id="style-select"><option value="" data-i18n="common.none">— nenhum —</option></select>
       </label>
-      <label class="field span2">Tamanho
+      <label class="field span2" data-i18n="viz.size">Tamanho
         <select id="viz-preset">
-          <option value="">Personalizado</option>
-          <option value="ieee1">IEEE — 1 coluna (8,89 cm, 8 pt)</option>
-          <option value="ieee2">IEEE — 2 colunas (18,19 cm, 9 pt)</option>
-          <option value="els1">Elsevier — 1 coluna (9 cm, 8 pt)</option>
-          <option value="els2">Elsevier — 2 colunas (19 cm, 9 pt)</option>
-          <option value="a4">A4 — largura útil (16 cm, 11 pt)</option>
-          <option value="slide">Apresentação 16:9 (25,4 × 14,29 cm, 16 pt)</option>
+          <option value="" data-i18n="viz.custom">Personalizado</option>
+          <option value="ieee1" data-i18n="viz.presetIeee1">IEEE — 1 coluna (8,89 cm, 8 pt)</option>
+          <option value="ieee2" data-i18n="viz.presetIeee2">IEEE — 2 colunas (18,19 cm, 9 pt)</option>
+          <option value="els1" data-i18n="viz.presetEls1">Elsevier — 1 coluna (9 cm, 8 pt)</option>
+          <option value="els2" data-i18n="viz.presetEls2">Elsevier — 2 colunas (19 cm, 9 pt)</option>
+          <option value="a4" data-i18n="viz.presetA4">A4 — largura útil (16 cm, 11 pt)</option>
+          <option value="slide" data-i18n="viz.presetSlide">Apresentação 16:9 (25,4 × 14,29 cm, 16 pt)</option>
         </select>
       </label>
-      <label class="field span2">Fonte <select id="viz-font" data-style="figure.font_family"></select></label>
-      <label class="field">Tamanho base (pt) <input type="number" step="0.5" min="4" data-style="figure.font_size" placeholder="auto"></label>
+      <label class="field span2" data-i18n="viz.font">Fonte <select id="viz-font" data-style="figure.font_family"></select></label>
+      <label class="field" data-i18n="viz.baseSize">Tamanho base (pt) <input type="number" step="0.5" min="4" data-style="figure.font_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
       <details class="advanced span2">
-        <summary>Salvar ou restaurar estilo</summary>
+        <summary data-i18n="viz.saveRestore">Salvar ou restaurar estilo</summary>
         <div class="card-body">
           <div class="setup-row span2">
-            <input type="text" id="style-name" placeholder="nome do estilo">
-            <button type="button" id="btn-style-save" class="btn-dashed">Salvar estilo</button>
+            <input type="text" id="style-name" placeholder="nome do estilo" data-i18n-placeholder="viz.styleName">
+            <button type="button" id="btn-style-save" class="btn-dashed" data-i18n="viz.saveStyle">Salvar estilo</button>
           </div>
-          <button type="button" id="btn-style-reset" class="btn-dashed span2">Restaurar padrão</button>
-          <span class="hint span2">Guarda todas as opções da figura, inclusive cores e legendas das curvas, em data/styles. Os pontos azuis mostram o que difere do estilo carregado (ou do padrão).</span>
+          <button type="button" id="btn-style-reset" class="btn-dashed span2" data-i18n="viz.resetStyle">Restaurar padrão</button>
+          <span class="hint span2" data-i18n="viz.styleHint">Guarda todas as opções da figura, inclusive cores e legendas das curvas, em data/styles. Os pontos azuis mostram o que difere do estilo carregado (ou do padrão).</span>
         </div>
       </details>
     </div>
   </details>
 
   <details class="card enabled collapsible" open data-card="dados">
-    <summary class="card-header"><span>Dados</span><span class="card-state" data-summary="dados"></span></summary>
+    <summary class="card-header"><span data-i18n="viz.dataCard">Dados</span><span class="card-state" data-summary="dados"></span></summary>
     <div class="card-body">
-      <label class="field span2">Fonte
+      <label class="field span2" data-i18n="viz.source">Fonte
         <select id="viz-source">
-          <option value="series">Série no tempo (CSV processado)</option>
-          <option value="spectra">Espectros (arquivos brutos)</option>
-          <option value="evolution">Evolução entre espectros (vale no tempo)</option>
+          <option value="series" data-i18n="viz.sourceSeries">Série no tempo (CSV processado)</option>
+          <option value="spectra" data-i18n="viz.sourceSpectra">Espectros (arquivos brutos)</option>
+          <option value="evolution" data-i18n="viz.sourceEvolution">Evolução entre espectros (vale no tempo)</option>
         </select>
       </label>
       <div class="span2" data-for="series">
-        <span class="hint">CSVs processados:</span>
+        <span class="hint" data-i18n="viz.processedCsvs">CSVs processados:</span>
         <div id="viz-series-sources" class="file-list"></div>
       </div>
       <div class="span2 hidden" data-for="spectra">
-        <span class="hint">Arquivos de espectro (preparo na aba Espectros):</span>
+        <span class="hint" data-i18n="viz.spectrumFiles">Arquivos de espectro (preparo na aba Espectros):</span>
         <div id="viz-spectra-sources" class="file-list"></div>
       </div>
-      <label class="field span2 hidden" data-for="evolution">Grandeza no eixo Y
+      <label class="field span2 hidden" data-for="evolution" data-i18n="viz.evoY">Grandeza no eixo Y
         <select id="viz-evo-y">
           <option value="wavelength">λ (nm)</option>
-          <option value="delta">Δλ em relação ao 1º (nm)</option>
-          <option value="intensity">intensidade no extremo</option>
-          <option value="prominence">profundidade / altura</option>
-          <option value="fwhm">largura (nm)</option>
+          <option value="delta" data-i18n="evo.yDelta">Δλ em relação ao 1º (nm)</option>
+          <option value="intensity" data-i18n="evo.yIntensity">intensidade no extremo</option>
+          <option value="prominence" data-i18n="evo.yProminence">profundidade / altura</option>
+          <option value="fwhm" data-i18n="evo.yWidth">largura (nm)</option>
         </select>
       </label>
       <div class="span2 hidden" data-for="evolution">
-        <span class="hint">Eventos (linhas verticais da figura):</span>
+        <span class="hint" data-i18n="viz.events">Eventos (linhas verticais da figura):</span>
         <div class="event-list" id="viz-evo-events"></div>
-        <span class="hint">Marque clicando no gráfico da evolução, na aba Espectros (“Marcar evento”);
+        <span class="hint" data-i18n="viz.eventsHint">Marque clicando no gráfico da evolução, na aba Espectros (“Marcar evento”);
           aqui dá para mudar legenda, cor e hora.</span>
-        <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco na aba Espectros">+ adicionar evento</button>
+        <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco na aba Espectros" data-i18n="viz.addEvent" data-i18n-title="viz.addEventTitle">+ adicionar evento</button>
       </div>
-      <label class="field" data-for="series evolution">Eixo X em
+      <label class="field" data-for="series evolution" data-i18n="viz.xIn">Eixo X em
         <select data-style="data.time_unit">
-          <option value="s">segundos</option>
-          <option value="min">minutos</option>
-          <option value="h">horas</option>
+          <option value="s" data-i18n="viz.seconds">segundos</option>
+          <option value="min" data-i18n="viz.minutes">minutos</option>
+          <option value="h" data-i18n="viz.hours">horas</option>
         </select>
       </label>
-      <label class="field" data-for="series">Referência Δ (s)
-        <input type="number" step="any" min="0" data-style="data.relative_window" placeholder="1º ponto">
+      <label class="field" data-for="series" data-i18n="viz.deltaRef">Referência Δ (s)
+        <input type="number" step="any" min="0" data-style="data.relative_window" placeholder="1º ponto" data-i18n-placeholder="viz.firstPoint">
       </label>
-      <label class="check-row" data-for="series"><input type="checkbox" data-style="data.relative_first"> Δ relativo ao início</label>
+      <label class="check-row" data-for="series" data-i18n="viz.relativeFirst"><input type="checkbox" data-style="data.relative_first"> Δ relativo ao início</label>
       <label class="check-row" data-for="series"><input type="checkbox" data-style="data.to_pm"> nm → pm</label>
-      <label class="field span2 hidden" data-for="spectra">Unidade da intensidade
+      <label class="field span2 hidden" data-for="spectra" data-i18n="viz.intensityUnit">Unidade da intensidade
         <input type="text" data-style="data.intensity_unit" placeholder="a.u.">
       </label>
-      <label class="field">X mínimo <input type="number" step="any" data-style="data.x_min" placeholder="auto"></label>
-      <label class="field">X máximo <input type="number" step="any" data-style="data.x_max" placeholder="auto"></label>
-      <label class="field">Y mínimo <input type="number" step="any" data-style="data.y_min" placeholder="auto"></label>
-      <label class="field">Y máximo <input type="number" step="any" data-style="data.y_max" placeholder="auto"></label>
-      <span class="hint span2" id="viz-data-hint">Marque as fontes e escolha as curvas no cartão Curvas.</span>
-      <button type="button" class="btn-link card-reset span2" data-reset="dados">Restaurar este cartão</button>
+      <label class="field" data-i18n="viz.xMin">X mínimo <input type="number" step="any" data-style="data.x_min" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.xMax">X máximo <input type="number" step="any" data-style="data.x_max" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.yMin">Y mínimo <input type="number" step="any" data-style="data.y_min" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.yMax">Y máximo <input type="number" step="any" data-style="data.y_max" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <span class="hint span2" id="viz-data-hint" data-i18n="viz.dataHint">Marque as fontes e escolha as curvas no cartão Curvas.</span>
+      <button type="button" class="btn-link card-reset span2" data-reset="dados" data-i18n="viz.resetCard">Restaurar este cartão</button>
     </div>
   </details>
 
   <details class="card enabled collapsible" open data-card="curvas">
-    <summary class="card-header"><span>Curvas</span><span class="card-state" data-summary="curvas"></span></summary>
+    <summary class="card-header"><span data-i18n="viz.curvesCard">Curvas</span><span class="card-state" data-summary="curvas"></span></summary>
     <div class="card-body">
       <div class="inline-row span2">
-        <label class="field">Paleta
+        <label class="field" data-i18n="viz.palette">Paleta
           <select id="viz-palette">
-            <option value="publicacao">Publicação (preto, grená, azul…)</option>
-            <option value="okabe_ito">Okabe-Ito (daltonismo)</option>
+            <option value="publicacao" data-i18n="viz.palettePublication">Publicação (preto, grená, azul…)</option>
+            <option value="okabe_ito" data-i18n="viz.paletteOkabeIto">Okabe-Ito (daltonismo)</option>
             <option value="tableau">Tableau</option>
-            <option value="cinza">Tons de cinza</option>
+            <option value="cinza" data-i18n="viz.paletteGray">Tons de cinza</option>
           </select>
         </label>
-        <button type="button" id="btn-apply-palette" class="btn-dashed">Aplicar cores</button>
+        <button type="button" id="btn-apply-palette" class="btn-dashed" data-i18n="viz.applyPalette">Aplicar cores</button>
       </div>
-      <div id="viz-channels" class="span2"><span class="hint">Marque uma fonte de dados…</span></div>
-      <span class="hint span2">Por curva: legenda · estilo da linha · marcador · cor.</span>
-      <label class="field">Espessura <input type="number" step="0.1" min="0.05" data-style="lines.width"></label>
-      <label class="check-row align-end"><input type="checkbox" data-style="lines.show_markers"> Marcadores</label>
-      <label class="field">Tamanho do marcador <input type="number" step="0.5" min="0.5" data-style="lines.marker_size"></label>
-      <label class="field">Marcadores por curva <input type="number" step="1" min="2" data-style="lines.marker_count"></label>
+      <div id="viz-channels" class="span2"><span class="hint" data-i18n="viz.pickSource">Marque uma fonte de dados…</span></div>
+      <span class="hint span2" data-i18n="viz.perCurve">Por curva: legenda · estilo da linha · marcador · cor.</span>
+      <label class="field" data-i18n="common.thickness">Espessura <input type="number" step="0.1" min="0.05" data-style="lines.width"></label>
+      <label class="check-row align-end" data-i18n="viz.markers"><input type="checkbox" data-style="lines.show_markers"> Marcadores</label>
+      <label class="field" data-i18n="viz.markerSize">Tamanho do marcador <input type="number" step="0.5" min="0.5" data-style="lines.marker_size"></label>
+      <label class="field" data-i18n="viz.markerCount">Marcadores por curva <input type="number" step="1" min="2" data-style="lines.marker_count"></label>
 
-      <div class="sub-label">Legenda</div>
-      <label class="check-row"><input type="checkbox" data-style="legend.show"> Mostrar</label>
-      <label class="check-row"><input type="checkbox" data-style="legend.frame"> Moldura</label>
-      <label class="field span2">Posição
+      <div class="sub-label" data-i18n="viz.legend">Legenda</div>
+      <label class="check-row" data-i18n="viz.show"><input type="checkbox" data-style="legend.show"> Mostrar</label>
+      <label class="check-row" data-i18n="viz.frame"><input type="checkbox" data-style="legend.frame"> Moldura</label>
+      <label class="field span2" data-i18n="viz.position">Posição
         <select data-style="legend.position">
-          <option value="outside top">Fora, acima</option>
-          <option value="outside bottom">Fora, abaixo</option>
-          <option value="outside right">Fora, à direita</option>
-          <option value="best">Dentro, automática</option>
-          <option value="upper right">Dentro, canto superior direito</option>
-          <option value="upper left">Dentro, canto superior esquerdo</option>
-          <option value="lower right">Dentro, canto inferior direito</option>
-          <option value="lower left">Dentro, canto inferior esquerdo</option>
-          <option value="upper center">Dentro, topo central</option>
-          <option value="lower center">Dentro, base central</option>
-          <option value="center right">Dentro, centro à direita</option>
-          <option value="center left">Dentro, centro à esquerda</option>
+          <option value="outside top" data-i18n="legend.outsideTop">Fora, acima</option>
+          <option value="outside bottom" data-i18n="legend.outsideBottom">Fora, abaixo</option>
+          <option value="outside right" data-i18n="legend.outsideRight">Fora, à direita</option>
+          <option value="best" data-i18n="legend.best">Dentro, automática</option>
+          <option value="upper right" data-i18n="legend.upperRight">Dentro, canto superior direito</option>
+          <option value="upper left" data-i18n="legend.upperLeft">Dentro, canto superior esquerdo</option>
+          <option value="lower right" data-i18n="legend.lowerRight">Dentro, canto inferior direito</option>
+          <option value="lower left" data-i18n="legend.lowerLeft">Dentro, canto inferior esquerdo</option>
+          <option value="upper center" data-i18n="legend.upperCenter">Dentro, topo central</option>
+          <option value="lower center" data-i18n="legend.lowerCenter">Dentro, base central</option>
+          <option value="center right" data-i18n="legend.centerRight">Dentro, centro à direita</option>
+          <option value="center left" data-i18n="legend.centerLeft">Dentro, centro à esquerda</option>
         </select>
       </label>
-      <label class="field">Colunas <input type="number" step="1" min="1" data-style="legend.ncol" placeholder="auto"></label>
-      <label class="field">Tamanho do texto <input type="number" step="0.5" min="4" data-style="legend.font_size" placeholder="auto"></label>
-      <label class="field span2">Título da legenda <input type="text" data-style="legend.title" placeholder="—"></label>
-      <button type="button" class="btn-link card-reset span2" data-reset="curvas">Restaurar este cartão</button>
+      <label class="field" data-i18n="viz.columns">Colunas <input type="number" step="1" min="1" data-style="legend.ncol" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.textSize">Tamanho do texto <input type="number" step="0.5" min="4" data-style="legend.font_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field span2" data-i18n="viz.legendTitle">Título da legenda <input type="text" data-style="legend.title" placeholder="—"></label>
+      <button type="button" class="btn-link card-reset span2" data-reset="curvas" data-i18n="viz.resetCard">Restaurar este cartão</button>
     </div>
   </details>
 
   <details class="card enabled collapsible" data-card="figura">
-    <summary class="card-header"><span>Figura</span><span class="card-state" data-summary="figura"></span></summary>
+    <summary class="card-header"><span data-i18n="viz.figureCard">Figura</span><span class="card-state" data-summary="figura"></span></summary>
     <div class="card-body">
       <label class="field">Layout
         <select data-style="figure.layout">
-          <option value="stacked">Separados (subplots)</option>
-          <option value="combined">Juntos (um eixo)</option>
+          <option value="stacked" data-i18n="viz.layoutStacked">Separados (subplots)</option>
+          <option value="combined" data-i18n="viz.layoutCombined">Juntos (um eixo)</option>
         </select>
       </label>
-      <label class="field">Unidade
+      <label class="field" data-i18n="viz.unit">Unidade
         <select data-style="figure.unit">
-          <option value="cm">centímetros</option>
-          <option value="in">polegadas</option>
+          <option value="cm" data-i18n="viz.centimeters">centímetros</option>
+          <option value="in" data-i18n="viz.inches">polegadas</option>
         </select>
       </label>
-      <label class="field">Largura <input type="number" step="0.1" min="1" data-style="figure.width"></label>
-      <label class="field">Altura <input type="number" step="0.1" min="1" data-style="figure.height" placeholder="auto"></label>
-      <label class="field">Cor de fundo <input type="color" class="color-input" data-style="figure.background"></label>
-      <label class="field span2">Título <input type="text" data-style="figure.title" placeholder="(sem título)"></label>
+      <label class="field" data-i18n="viz.width">Largura <input type="number" step="0.1" min="1" data-style="figure.width"></label>
+      <label class="field" data-i18n="viz.height">Altura <input type="number" step="0.1" min="1" data-style="figure.height" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.background">Cor de fundo <input type="color" class="color-input" data-style="figure.background"></label>
+      <label class="field span2" data-i18n="viz.title">Título <input type="text" data-style="figure.title" placeholder="(sem título)" data-i18n-placeholder="viz.noTitle"></label>
 
       <details class="advanced span2">
-        <summary>Avançado</summary>
+        <summary data-i18n="common.advanced">Avançado</summary>
         <div class="card-body">
-          <label class="field">Tamanho do título <input type="number" step="0.5" min="4" data-style="figure.title_size" placeholder="auto"></label>
-          <label class="check-row align-end"><input type="checkbox" data-style="figure.title_bold"> Título em negrito</label>
-          <label class="field">Espaço entre painéis <input type="number" step="0.01" min="0" max="1" data-style="figure.panel_spacing"></label>
-          <label class="field">Letras dos painéis
+          <label class="field" data-i18n="viz.titleSize">Tamanho do título <input type="number" step="0.5" min="4" data-style="figure.title_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="check-row align-end" data-i18n="viz.titleBold"><input type="checkbox" data-style="figure.title_bold"> Título em negrito</label>
+          <label class="field" data-i18n="viz.panelSpacing">Espaço entre painéis <input type="number" step="0.01" min="0" max="1" data-style="figure.panel_spacing"></label>
+          <label class="field" data-i18n="viz.panelLetters">Letras dos painéis
             <select data-style="figure.panel_label_format">
               <option value="a)">a) b) c)</option>
               <option value="(a)">(a) (b) (c)</option>
@@ -684,119 +697,119 @@
               <option value="A">A B C</option>
             </select>
           </label>
-          <label class="check-row span2"><input type="checkbox" data-style="figure.panel_labels"> Mostrar letras dos painéis</label>
-          <label class="check-row span2"><input type="checkbox" data-style="figure.sharey"> Mesma escala Y em todos os painéis</label>
-          <label class="check-row span2"><input type="checkbox" data-style="figure.shared_ylabel"> Um único rótulo Y</label>
-          <label class="check-row span2"><input type="checkbox" data-style="export.transparent"> Fundo transparente ao exportar</label>
-          <label class="check-row span2"><input type="checkbox" data-style="export.crop"> Recortar margens (tamanho final varia)</label>
-          <label class="field span2">Resolução da pré-visualização (dpi)
+          <label class="check-row span2" data-i18n="viz.showPanelLetters"><input type="checkbox" data-style="figure.panel_labels"> Mostrar letras dos painéis</label>
+          <label class="check-row span2" data-i18n="viz.sharey"><input type="checkbox" data-style="figure.sharey"> Mesma escala Y em todos os painéis</label>
+          <label class="check-row span2" data-i18n="viz.sharedYLabel"><input type="checkbox" data-style="figure.shared_ylabel"> Um único rótulo Y</label>
+          <label class="check-row span2" data-i18n="viz.transparent"><input type="checkbox" data-style="export.transparent"> Fundo transparente ao exportar</label>
+          <label class="check-row span2" data-i18n="viz.crop"><input type="checkbox" data-style="export.crop"> Recortar margens (tamanho final varia)</label>
+          <label class="field span2" data-i18n="viz.previewDpi">Resolução da pré-visualização (dpi)
             <input type="number" step="10" min="50" max="600" data-style="export.preview_dpi">
           </label>
         </div>
       </details>
-      <button type="button" class="btn-link card-reset span2" data-reset="figura">Restaurar este cartão</button>
+      <button type="button" class="btn-link card-reset span2" data-reset="figura" data-i18n="viz.resetCard">Restaurar este cartão</button>
     </div>
   </details>
 
   <details class="card enabled collapsible" data-card="marcacoes">
-    <summary class="card-header"><span>Marcações e eixos</span><span class="card-state" data-summary="marcacoes"></span></summary>
+    <summary class="card-header"><span data-i18n="viz.markersCard">Marcações e eixos</span><span class="card-state" data-summary="marcacoes"></span></summary>
     <div class="card-body">
-      <span class="hint span2" id="viz-marker-count">As marcações são feitas na aba Séries temporais (ferramenta Marcar).</span>
-      <label class="check-row span2"><input type="checkbox" data-style="data.t0_first_marker"> t = 0 na primeira marcação</label>
-      <label class="check-row span2"><input type="checkbox" data-style="markers.shade"> Faixas alternadas entre marcações</label>
-      <label class="check-row span2" title="Ignora a cor de cada marcação; útil para impressão sem cor">
+      <span class="hint span2" id="viz-marker-count" data-i18n="viz.markerCountHint">As marcações são feitas na aba Séries temporais (ferramenta Marcar).</span>
+      <label class="check-row span2" data-i18n="viz.t0FirstMarker"><input type="checkbox" data-style="data.t0_first_marker"> t = 0 na primeira marcação</label>
+      <label class="check-row span2" data-i18n="viz.shade"><input type="checkbox" data-style="markers.shade"> Faixas alternadas entre marcações</label>
+      <label class="check-row span2" title="Ignora a cor de cada marcação; útil para impressão sem cor" data-i18n="viz.monochrome" data-i18n-title="viz.monochromeTitle">
         <input type="checkbox" data-style="markers.monochrome"> Marcações em preto</label>
 
-      <div class="sub-label">Eixos</div>
-      <label class="field span2">Rótulo X <input type="text" data-style="axes.xlabel" placeholder="auto"></label>
-      <label class="field span2">Rótulo Y <input type="text" data-style="axes.ylabel" placeholder="auto · aceita $\Delta\lambda$"></label>
-      <label class="field span2">Idioma dos rótulos automáticos
+      <div class="sub-label" data-i18n="viz.axes">Eixos</div>
+      <label class="field span2" data-i18n="viz.xlabel">Rótulo X <input type="text" data-style="axes.xlabel" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field span2" data-i18n="viz.ylabel">Rótulo Y <input type="text" data-style="axes.ylabel" placeholder="auto · aceita $\Delta\lambda$" data-i18n-placeholder="viz.ylabelPlaceholder"></label>
+      <label class="field span2" data-i18n="viz.labelLanguage">Idioma dos rótulos automáticos
         <select data-style="axes.language">
-          <option value="en">inglês (Time, Wavelength, Intensity)</option>
-          <option value="pt">português (Tempo, Comprimento de onda, Intensidade)</option>
+          <option value="en" data-i18n="viz.labelsEnglish">inglês (Time, Wavelength, Intensity)</option>
+          <option value="pt" data-i18n="viz.labelsPortuguese">português (Tempo, Comprimento de onda, Intensidade)</option>
         </select>
       </label>
-      <label class="field">Tamanho dos rótulos <input type="number" step="0.5" min="4" data-style="axes.label_size" placeholder="auto"></label>
-      <label class="field">Tamanho dos ticks <input type="number" step="0.5" min="4" data-style="ticks.label_size" placeholder="auto"></label>
-      <label class="check-row"><input type="checkbox" data-style="axes.grid"> Grade</label>
-      <label class="field">Separador decimal
+      <label class="field" data-i18n="viz.labelSize">Tamanho dos rótulos <input type="number" step="0.5" min="4" data-style="axes.label_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="field" data-i18n="viz.tickSize">Tamanho dos ticks <input type="number" step="0.5" min="4" data-style="ticks.label_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+      <label class="check-row" data-i18n="viz.grid"><input type="checkbox" data-style="axes.grid"> Grade</label>
+      <label class="field" data-i18n="viz.decimalSeparator">Separador decimal
         <select data-style="ticks.decimal_separator">
-          <option value=".">ponto (1.5)</option>
-          <option value=",">vírgula (1,5)</option>
+          <option value="." data-i18n="viz.decimalPoint">ponto (1.5)</option>
+          <option value="," data-i18n="viz.decimalComma">vírgula (1,5)</option>
         </select>
       </label>
 
       <details class="advanced span2">
-        <summary>Avançado</summary>
+        <summary data-i18n="common.advanced">Avançado</summary>
         <div class="card-body">
-          <div class="sub-label">Eixos e grade</div>
-          <label class="check-row"><input type="checkbox" data-style="axes.spine_top"> Borda superior</label>
-          <label class="check-row"><input type="checkbox" data-style="axes.spine_right"> Borda direita</label>
-          <label class="field">Espessura dos eixos <input type="number" step="0.1" min="0" data-style="axes.linewidth"></label>
-          <label class="check-row align-end"><input type="checkbox" data-style="axes.grid_minor"> Grade secundária</label>
-          <label class="field">Estilo da grade
+          <div class="sub-label" data-i18n="viz.axesAndGrid">Eixos e grade</div>
+          <label class="check-row" data-i18n="viz.spineTop"><input type="checkbox" data-style="axes.spine_top"> Borda superior</label>
+          <label class="check-row" data-i18n="viz.spineRight"><input type="checkbox" data-style="axes.spine_right"> Borda direita</label>
+          <label class="field" data-i18n="viz.axesWidth">Espessura dos eixos <input type="number" step="0.1" min="0" data-style="axes.linewidth"></label>
+          <label class="check-row align-end" data-i18n="viz.gridMinor"><input type="checkbox" data-style="axes.grid_minor"> Grade secundária</label>
+          <label class="field" data-i18n="viz.gridStyle">Estilo da grade
             <select data-style="axes.grid_linestyle">
-              <option value="-">contínua</option>
-              <option value="--">tracejada</option>
-              <option value="-.">traço-ponto</option>
-              <option value=":">pontilhada</option>
+              <option value="-" data-i18n="linestyle.solid">contínua</option>
+              <option value="--" data-i18n="linestyle.dashed">tracejada</option>
+              <option value="-." data-i18n="linestyle.dashDot">traço-ponto</option>
+              <option value=":" data-i18n="linestyle.dotted">pontilhada</option>
             </select>
           </label>
-          <label class="field">Cor da grade <input type="color" class="color-input" data-style="axes.grid_color"></label>
-          <label class="field">Opacidade da grade <input type="number" step="0.05" min="0" max="1" data-style="axes.grid_alpha"></label>
-          <label class="field">Espessura da grade <input type="number" step="0.1" min="0" data-style="axes.grid_linewidth"></label>
+          <label class="field" data-i18n="viz.gridColor">Cor da grade <input type="color" class="color-input" data-style="axes.grid_color"></label>
+          <label class="field" data-i18n="viz.gridAlpha">Opacidade da grade <input type="number" step="0.05" min="0" max="1" data-style="axes.grid_alpha"></label>
+          <label class="field" data-i18n="viz.gridWidth">Espessura da grade <input type="number" step="0.1" min="0" data-style="axes.grid_linewidth"></label>
 
           <div class="sub-label">Ticks</div>
-          <label class="field">Direção
+          <label class="field" data-i18n="viz.direction">Direção
             <select data-style="ticks.direction">
-              <option value="in">para dentro</option>
-              <option value="out">para fora</option>
-              <option value="inout">cruzando o eixo</option>
+              <option value="in" data-i18n="viz.tickIn">para dentro</option>
+              <option value="out" data-i18n="viz.tickOut">para fora</option>
+              <option value="inout" data-i18n="viz.tickInOut">cruzando o eixo</option>
             </select>
           </label>
-          <label class="field">Comprimento <input type="number" step="0.5" min="0" data-style="ticks.length"></label>
-          <label class="field">Espessura <input type="number" step="0.1" min="0" data-style="ticks.width"></label>
-          <label class="check-row align-end"><input type="checkbox" data-style="ticks.minor"> Secundários</label>
-          <label class="check-row"><input type="checkbox" data-style="ticks.mirror"> Topo e direita</label>
-          <label class="check-row"><input type="checkbox" data-style="ticks.use_offset"> Notação de offset</label>
-          <label class="field">Passo em X <input type="number" step="any" min="0" data-style="ticks.x_step" placeholder="auto"></label>
-          <label class="field">Passo em Y <input type="number" step="any" min="0" data-style="ticks.y_step" placeholder="auto"></label>
-          <label class="field">Divisões em X <input type="number" step="1" min="1" data-style="ticks.x_nbins" placeholder="auto"></label>
-          <label class="field">Divisões em Y <input type="number" step="1" min="1" data-style="ticks.y_nbins" placeholder="auto"></label>
-          <label class="field">Casas decimais X <input type="number" step="1" min="0" data-style="ticks.x_decimals" placeholder="auto"></label>
-          <label class="field">Casas decimais Y <input type="number" step="1" min="0" data-style="ticks.y_decimals" placeholder="auto"></label>
-          <label class="field span2">Rotação dos ticks X (°) <input type="number" step="5" min="-90" max="90" data-style="ticks.x_rotation"></label>
+          <label class="field" data-i18n="viz.length">Comprimento <input type="number" step="0.5" min="0" data-style="ticks.length"></label>
+          <label class="field" data-i18n="common.thickness">Espessura <input type="number" step="0.1" min="0" data-style="ticks.width"></label>
+          <label class="check-row align-end" data-i18n="viz.minorTicks"><input type="checkbox" data-style="ticks.minor"> Secundários</label>
+          <label class="check-row" data-i18n="viz.mirror"><input type="checkbox" data-style="ticks.mirror"> Topo e direita</label>
+          <label class="check-row" data-i18n="viz.offsetNotation"><input type="checkbox" data-style="ticks.use_offset"> Notação de offset</label>
+          <label class="field" data-i18n="viz.xStep">Passo em X <input type="number" step="any" min="0" data-style="ticks.x_step" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.yStep">Passo em Y <input type="number" step="any" min="0" data-style="ticks.y_step" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.xBins">Divisões em X <input type="number" step="1" min="1" data-style="ticks.x_nbins" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.yBins">Divisões em Y <input type="number" step="1" min="1" data-style="ticks.y_nbins" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.xDecimals">Casas decimais X <input type="number" step="1" min="0" data-style="ticks.x_decimals" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.yDecimals">Casas decimais Y <input type="number" step="1" min="0" data-style="ticks.y_decimals" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field span2" data-i18n="viz.xRotation">Rotação dos ticks X (°) <input type="number" step="5" min="-90" max="90" data-style="ticks.x_rotation"></label>
 
-          <div class="sub-label">Marcações</div>
-          <label class="field">Linha
+          <div class="sub-label" data-i18n="viz.markersSection">Marcações</div>
+          <label class="field" data-i18n="viz.line">Linha
             <select data-style="markers.linestyle">
-              <option value="-">contínua</option>
-              <option value="--">tracejada</option>
-              <option value="-.">traço-ponto</option>
-              <option value=":">pontilhada</option>
+              <option value="-" data-i18n="linestyle.solid">contínua</option>
+              <option value="--" data-i18n="linestyle.dashed">tracejada</option>
+              <option value="-." data-i18n="linestyle.dashDot">traço-ponto</option>
+              <option value=":" data-i18n="linestyle.dotted">pontilhada</option>
             </select>
           </label>
-          <label class="field">Espessura <input type="number" step="0.1" min="0.05" data-style="markers.linewidth"></label>
-          <label class="field">Tamanho do rótulo <input type="number" step="0.5" min="4" data-style="markers.label_size" placeholder="auto"></label>
-          <label class="field">Rotação do rótulo
+          <label class="field" data-i18n="common.thickness">Espessura <input type="number" step="0.1" min="0.05" data-style="markers.linewidth"></label>
+          <label class="field" data-i18n="viz.markerLabelSize">Tamanho do rótulo <input type="number" step="0.5" min="4" data-style="markers.label_size" placeholder="auto" data-i18n-placeholder="common.auto"></label>
+          <label class="field" data-i18n="viz.labelRotation">Rotação do rótulo
             <select data-style="markers.label_rotation">
-              <option value="90">vertical</option>
-              <option value="45">inclinado (45°)</option>
-              <option value="0">horizontal</option>
+              <option value="90" data-i18n="viz.rotationVertical">vertical</option>
+              <option value="45" data-i18n="viz.rotationTilted">inclinado (45°)</option>
+              <option value="0" data-i18n="viz.rotationHorizontal">horizontal</option>
             </select>
           </label>
-          <label class="field span2">Posição do rótulo
+          <label class="field span2" data-i18n="viz.labelPosition">Posição do rótulo
             <select data-style="markers.label_position">
-              <option value="above">acima do gráfico</option>
-              <option value="inside">dentro, no topo</option>
+              <option value="above" data-i18n="viz.labelAbove">acima do gráfico</option>
+              <option value="inside" data-i18n="viz.labelInside">dentro, no topo</option>
             </select>
           </label>
-          <label class="field">Cor da faixa 1 <input type="color" class="color-input" data-style="markers.shade_color_1"></label>
-          <label class="field">Cor da faixa 2 <input type="color" class="color-input" data-style="markers.shade_color_2"></label>
-          <label class="field span2">Opacidade das faixas <input type="number" step="0.05" min="0" max="1" data-style="markers.shade_alpha"></label>
+          <label class="field" data-i18n="viz.shadeColor1">Cor da faixa 1 <input type="color" class="color-input" data-style="markers.shade_color_1"></label>
+          <label class="field" data-i18n="viz.shadeColor2">Cor da faixa 2 <input type="color" class="color-input" data-style="markers.shade_color_2"></label>
+          <label class="field span2" data-i18n="viz.shadeAlpha">Opacidade das faixas <input type="number" step="0.05" min="0" max="1" data-style="markers.shade_alpha"></label>
         </div>
       </details>
-      <button type="button" class="btn-link card-reset span2" data-reset="marcacoes">Restaurar este cartão</button>
+      <button type="button" class="btn-link card-reset span2" data-reset="marcacoes" data-i18n="viz.resetCard">Restaurar este cartão</button>
     </div>
   </details>
 
@@ -808,322 +821,322 @@
   <div id="tab-series-main">
     <div id="status">
       <div class="spinner" id="spinner"></div>
-      <span id="status-text">Selecione um arquivo e clique em Processar.</span>
+      <span id="status-text" data-i18n="series.statusStart">Selecione um arquivo e clique em Processar.</span>
       <button type="button" id="btn-status-details" class="status-link hidden"
-              aria-expanded="false" aria-controls="status-details">detalhes</button>
+              aria-expanded="false" aria-controls="status-details" data-i18n="series.details">detalhes</button>
       <button type="button" id="btn-open-viz" class="status-link hidden"
-              title="Abre este CSV processado na aba Figura">Abrir na Figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+              title="Abre este CSV processado na aba Figura" data-i18n="series.openViz" data-i18n-title="series.openVizTitle">Abrir na Figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
     </div>
     <ul id="status-details" class="status-details hidden"></ul>
     <div id="plot-toolbar" class="plot-toolbar">
-      <div class="segmented" role="radiogroup" aria-label="Disposição dos canais">
-        <label title="Um painel por canal, cada um com a sua escala; o tempo é o mesmo em todos (atalho 1)">
+      <div class="segmented" role="radiogroup" aria-label="Disposição dos canais" data-i18n-aria-label="plot.layoutLabel">
+        <label title="Um painel por canal, cada um com a sua escala; o tempo é o mesmo em todos (atalho 1)" data-i18n="plot.separate" data-i18n-title="plot.separateTitle">
           <input type="radio" name="plot-layout" value="separate" checked> Canais separados<kbd>1</kbd></label>
-        <label title="Todos os canais no mesmo eixo (atalho 2)">
+        <label title="Todos os canais no mesmo eixo (atalho 2)" data-i18n="plot.overlay" data-i18n-title="plot.overlayTitle">
           <input type="radio" name="plot-layout" value="overlay"> Mesmo gráfico<kbd>2</kbd></label>
       </div>
-      <label class="check-row plot-toggle" title="Mostra cada canal menos o seu primeiro valor (só a exibição; o processamento não muda). Atalho D">
+      <label class="check-row plot-toggle" title="Mostra cada canal menos o seu primeiro valor (só a exibição; o processamento não muda). Atalho D" data-i18n="plot.relative" data-i18n-title="plot.relativeTitle">
         <input type="checkbox" id="plot-relative"> Relativo ao início</label>
-      <label class="check-row plot-toggle" title="Mostra o sinal antes do processamento, por baixo do processado. Atalho B">
+      <label class="check-row plot-toggle" title="Mostra o sinal antes do processamento, por baixo do processado. Atalho B" data-i18n="plot.raw" data-i18n-title="plot.rawTitle">
         <input type="checkbox" id="show-raw" checked> Sinal bruto</label>
-      <div class="segmented" role="radiogroup" aria-label="O que o arraste do mouse faz">
-        <label title="Arrastar aproxima; duplo clique mostra tudo (atalho Z)">
+      <div class="segmented" role="radiogroup" aria-label="O que o arraste do mouse faz" data-i18n-aria-label="plot.toolLabel">
+        <label title="Arrastar aproxima; duplo clique mostra tudo (atalho Z)" data-i18n-title="plot.zoomTitle">
           <input type="radio" name="plot-tool" value="zoom" checked> Zoom<kbd>Z</kbd></label>
-        <label title="Arrastar mede o trecho: média, desvio, deriva e variação de cada canal (atalho M)">
+        <label title="Arrastar mede o trecho: média, desvio, deriva e variação de cada canal (atalho M)" data-i18n="plot.measure" data-i18n-title="plot.measureTitle">
           <input type="radio" name="plot-tool" value="select"> Medir trecho<kbd>M</kbd></label>
-        <label title="Clicar marca um instante; arrastar uma marcação muda o instante dela (atalho A)">
+        <label title="Clicar marca um instante; arrastar uma marcação muda o instante dela (atalho A)" data-i18n="plot.mark" data-i18n-title="plot.markTitle">
           <input type="radio" name="plot-tool" value="mark"> Marcar<kbd>A</kbd></label>
       </div>
-      <span class="plot-hint" id="plot-hint">arraste = zoom · duplo clique = ver tudo</span>
+      <span class="plot-hint" id="plot-hint" data-i18n="plot.hintZoom">arraste = zoom · duplo clique = ver tudo</span>
     </div>
     <div id="plot"></div>
     <div id="selection-panel" class="selection-panel hidden" aria-live="polite">
       <div class="selection-head">
         <strong id="selection-range"></strong>
         <span class="hint" id="selection-note"></span>
-        <button type="button" id="btn-selection-copy" class="status-link" title="Copia a tabela para colar numa planilha">Copiar</button>
-        <button type="button" id="btn-selection-clear" class="status-link" title="Tira a seleção (Esc)" aria-label="Limpar seleção">×</button>
+        <button type="button" id="btn-selection-copy" class="status-link" title="Copia a tabela para colar numa planilha" data-i18n="common.copy" data-i18n-title="selection.copyTitle">Copiar</button>
+        <button type="button" id="btn-selection-clear" class="status-link" title="Tira a seleção (Esc)" aria-label="Limpar seleção" data-i18n-title="selection.clearTitle" data-i18n-aria-label="selection.clear">×</button>
       </div>
       <div class="table-wrap"><table class="data-table" id="selection-table"></table></div>
     </div>
     <details class="markers-panel" id="card-markers">
-      <summary><span>Marcações</span> <span class="marker-count" id="marker-count"></span>
-        <span class="hint">instantes que dividem o ensaio: valem para a figura e para as estatísticas</span></summary>
-      <span class="hint" id="marker-hint">t (s) · legenda · cor</span>
+      <summary><span data-i18n="markers.title">Marcações</span> <span class="marker-count" id="marker-count"></span>
+        <span class="hint" data-i18n="markers.summaryHint">instantes que dividem o ensaio: valem para a figura e para as estatísticas</span></summary>
+      <span class="hint" id="marker-hint" data-i18n="markers.hintSeries">t (s) · legenda · cor</span>
       <div id="marker-list"></div>
-      <button type="button" id="btn-add-marker" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcação</button>
+      <button type="button" id="btn-add-marker" class="btn-dashed" data-i18n="markers.add"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcação</button>
     </details>
     <details class="card enabled collapsible" id="analysis-panel">
       <summary class="card-header">
-        <span>Estatísticas por intervalo</span>
+        <span data-i18n="stats.title">Estatísticas por intervalo</span>
         <button type="button" class="help-toggle" id="btn-analysis-help"
-                title="O que significa cada campo" aria-label="Ajuda">?</button>
+                title="O que significa cada campo" aria-label="Ajuda" data-i18n-title="common.helpTitle" data-i18n-aria-label="common.help">?</button>
       </summary>
       <div class="card-body">
         <div class="analysis-options">
-          <label class="field">Janela de regime (s)
-            <input type="number" step="any" min="0" id="an-settle" placeholder="intervalo todo">
+          <label class="field" data-i18n="stats.settle">Janela de regime (s)
+            <input type="number" step="any" min="0" id="an-settle" placeholder="intervalo todo" data-i18n-placeholder="stats.wholeInterval">
           </label>
-          <label class="field">Janela do degrau (s)
+          <label class="field" data-i18n="stats.stepWindow">Janela do degrau (s)
             <input type="number" step="any" min="0" id="an-step" value="10">
           </label>
-          <label class="field">Comparar com
+          <label class="field" data-i18n="stats.compare">Comparar com
             <select id="an-reference">
-              <option value="previous">intervalo anterior</option>
-              <option value="first">primeiro intervalo</option>
-              <option value="none">não comparar</option>
+              <option value="previous" data-i18n="stats.previous">intervalo anterior</option>
+              <option value="first" data-i18n="stats.first">primeiro intervalo</option>
+              <option value="none" data-i18n="stats.none">não comparar</option>
             </select>
           </label>
-          <button type="button" id="btn-analyse" class="btn-primary btn-sm">Calcular</button>
-          <button type="button" id="btn-analysis-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+          <button type="button" id="btn-analyse" class="btn-primary btn-sm" data-i18n="stats.calculate">Calcular</button>
+          <button type="button" id="btn-analysis-csv" class="btn-secondary btn-sm" data-i18n="common.downloadCsv">Baixar CSV</button>
         </div>
         <div id="analysis-help" class="help-box hidden">
-          <strong>O que você escolhe</strong>
+          <strong data-i18n="stats.help.choose">O que você escolhe</strong>
           <dl>
-            <dt>Janela de regime (s)</dt>
-            <dd>Quantos segundos do <em>fim</em> de cada intervalo entram na média de regime.
+            <dt data-i18n="stats.settle">Janela de regime (s)</dt>
+            <dd data-i18n-html="stats.help.settle">Quantos segundos do <em>fim</em> de cada intervalo entram na média de regime.
                 Serve para ignorar o transitório logo depois da marcação. Vazio = o intervalo inteiro.</dd>
-            <dt>Janela do degrau (s)</dt>
-            <dd>Quantos segundos antes e depois de cada marcação entram nas duas médias comparadas.
+            <dt data-i18n="stats.stepWindow">Janela do degrau (s)</dt>
+            <dd data-i18n="stats.help.step">Quantos segundos antes e depois de cada marcação entram nas duas médias comparadas.
                 Curta demais fica ruidosa; longa demais invade o patamar vizinho.</dd>
-            <dt>Comparar com</dt>
-            <dd><em>Intervalo anterior</em>: o degrau de um patamar para o seguinte.
+            <dt data-i18n="stats.compare">Comparar com</dt>
+            <dd data-i18n-html="stats.help.compare"><em>Intervalo anterior</em>: o degrau de um patamar para o seguinte.
                 <em>Primeiro intervalo</em>: a variação acumulada desde a linha de base.
                 <em>Não comparar</em>: só as estatísticas de cada intervalo.</dd>
           </dl>
 
-          <strong>Tabela de intervalos</strong>
+          <strong data-i18n="stats.help.intervalTable">Tabela de intervalos</strong>
           <dl>
-            <dt>intervalo</dt>
-            <dd>Vai de uma marcação até a seguinte (a última vai até o fim do sinal).
+            <dt data-i18n="stats.col.interval">intervalo</dt>
+            <dd data-i18n="stats.help.interval">Vai de uma marcação até a seguinte (a última vai até o fim do sinal).
                 O trecho antes da primeira marcação também entra.</dd>
-            <dt>início, fim</dt><dd>Limites do intervalo, em segundos do arquivo.</dd>
-            <dt>n</dt><dd>Amostras válidas no trecho; leituras ausentes não contam.</dd>
-            <dt>média, σ</dt>
-            <dd>Média e desvio-padrão de todas as amostras do intervalo. Com transitório ou
+            <dt data-i18n="stats.help.startEnd">início, fim</dt><dd data-i18n="stats.help.startEndText">Limites do intervalo, em segundos do arquivo.</dd>
+            <dt>n</dt><dd data-i18n="stats.help.n">Amostras válidas no trecho; leituras ausentes não contam.</dd>
+            <dt data-i18n="stats.help.meanStd">média, σ</dt>
+            <dd data-i18n="stats.help.meanStdText">Média e desvio-padrão de todas as amostras do intervalo. Com transitório ou
                 deriva, o σ mistura flutuação e tendência — compare com o ruído.</dd>
-            <dt>mín, máx, pico a pico</dt>
-            <dd>Extremos e a diferença entre eles; sensíveis a um único pico isolado.</dd>
-            <dt>deriva (/s)</dt>
-            <dd>Inclinação de uma reta ajustada ao trecho, na unidade da figura por segundo.
+            <dt data-i18n="stats.help.minMax">mín, máx, pico a pico</dt>
+            <dd data-i18n="stats.help.minMaxText">Extremos e a diferença entre eles; sensíveis a um único pico isolado.</dd>
+            <dt data-i18n="stats.col.drift">deriva (/s)</dt>
+            <dd data-i18n="stats.help.drift">Inclinação de uma reta ajustada ao trecho, na unidade da figura por segundo.
                 Mostra se o sinal ainda está subindo ou caindo.</dd>
-            <dt>ruído</dt>
-            <dd>Dispersão que sobra depois de remover essa reta. É a flutuação do sinal
+            <dt data-i18n="stats.col.noise">ruído</dt>
+            <dd data-i18n="stats.help.noise">Dispersão que sobra depois de remover essa reta. É a flutuação do sinal
                 sem a tendência.</dd>
-            <dt>regime</dt>
-            <dd>Média da janela de regime, no fim do intervalo. É o valor que se costuma
+            <dt data-i18n="stats.col.settle">regime</dt>
+            <dd data-i18n="stats.help.settleMean">Média da janela de regime, no fim do intervalo. É o valor que se costuma
                 reportar como patamar.</dd>
-            <dt>Δ vs ref.</dt>
-            <dd>Diferença de amplitude para o intervalo de referência. Usa a média de regime
+            <dt data-i18n="stats.col.delta">Δ vs ref.</dt>
+            <dd data-i18n="stats.help.delta">Diferença de amplitude para o intervalo de referência. Usa a média de regime
                 quando há janela definida; senão, a média do intervalo.</dd>
-            <dt>referência</dt><dd>Qual intervalo entrou nessa conta.</dd>
+            <dt data-i18n="stats.col.reference">referência</dt><dd data-i18n="stats.help.reference">Qual intervalo entrou nessa conta.</dd>
           </dl>
 
-          <strong>Tabela de degraus</strong>
+          <strong data-i18n="stats.help.stepTable">Tabela de degraus</strong>
           <dl>
-            <dt>antes, depois</dt>
-            <dd>Médias das janelas imediatamente antes e depois da marcação.</dd>
-            <dt>degrau</dt>
-            <dd><em>depois − antes</em>: o quanto o sinal mudou naquela marcação.</dd>
-            <dt>dispersão</dt>
-            <dd>Desvios dos dois lados combinados (√(σ₁² + σ₂²)). Indica se o degrau se
+            <dt data-i18n="stats.help.beforeAfter">antes, depois</dt>
+            <dd data-i18n="stats.help.beforeAfterText">Médias das janelas imediatamente antes e depois da marcação.</dd>
+            <dt data-i18n="stats.col.step">degrau</dt>
+            <dd data-i18n-html="stats.help.stepText"><em>depois − antes</em>: o quanto o sinal mudou naquela marcação.</dd>
+            <dt data-i18n="stats.col.spread">dispersão</dt>
+            <dd data-i18n="stats.help.spread">Desvios dos dois lados combinados (√(σ₁² + σ₂²)). Indica se o degrau se
                 destaca da flutuação — não é a incerteza da média.</dd>
           </dl>
 
-          <span class="hint">Com dados filtrados as amostras vizinhas são parecidas entre si,
+          <span class="hint" data-i18n="stats.help.uncertainty">Com dados filtrados as amostras vizinhas são parecidas entre si,
             então σ/√n subestima a incerteza. Para incerteza de verdade, compare ciclos repetidos
             do mesmo patamar.</span>
         </div>
-        <div id="analysis-result"><span class="hint">As marcações delimitam os intervalos; o cálculo usa as curvas marcadas e a mesma unidade da figura.</span></div>
+        <div id="analysis-result"><span class="hint" data-i18n="stats.intro">As marcações delimitam os intervalos; o cálculo usa as curvas marcadas e a mesma unidade da figura.</span></div>
       </div>
     </details>
     <div id="series-empty" class="empty-state">
-      <h2>Comece pelos arquivos do interrogador</h2>
-      <div class="dropzone" data-kind="series">
-        <strong>Solte aqui os arquivos de série temporal</strong>
+      <h2 data-i18n="seriesEmpty.title">Comece pelos arquivos do interrogador</h2>
+      <div class="dropzone" data-kind="series" data-i18n="seriesEmpty.formats">
+        <strong data-i18n="seriesEmpty.drop">Solte aqui os arquivos de série temporal</strong>
         .asc, .txt, .csv, .dat, .tsv… o formato é detectado sozinho
-        <br><label class="btn-secondary"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
+        <br><label class="btn-secondary" data-i18n="common.chooseFiles"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
           <input type="file" class="dropzone-input" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
       </div>
       <div class="empty-files" id="series-empty-files"></div>
-      <span class="hint">Vários arquivos de um mesmo ensaio podem ser juntados depois, no cartão Concatenação.</span>
+      <span class="hint" data-i18n="seriesEmpty.hint">Vários arquivos de um mesmo ensaio podem ser juntados depois, no cartão Concatenação.</span>
     </div>
   </div>
 
   <div id="tab-spectra-main" class="hidden">
     <div id="status-spectra" class="status-bar">
-      <span id="spectra-status">Selecione um arquivo de espectro.</span>
+      <span id="spectra-status" data-i18n="spectra.statusStart">Selecione um arquivo de espectro.</span>
     </div>
     <div id="spectra-plot"></div>
     <details class="card enabled collapsible" id="spectra-evolution" open>
-      <summary class="card-header"><span>Evolução entre arquivos</span>
+      <summary class="card-header"><span data-i18n="evo.title">Evolução entre arquivos</span>
         <span class="card-state" id="evolution-state"></span></summary>
       <div class="card-body" style="grid-template-columns: minmax(0, 1fr);">
         <div class="analysis-options evolution-options evo-group" role="group" aria-labelledby="evo-g-track">
-          <span class="evo-group-title" id="evo-g-track">Acompanhar</span>
-          <label class="field">Extremo
-            <select id="evo-kind" data-evo="kind"><option value="min">vales</option><option value="max">picos</option></select>
+          <span class="evo-group-title" id="evo-g-track" data-i18n="evo.track">Acompanhar</span>
+          <label class="field" data-i18n="evo.kind">Extremo
+            <select id="evo-kind" data-evo="kind"><option value="min" data-i18n="evo.valleys">vales</option><option value="max" data-i18n="evo.peaks">picos</option></select>
           </label>
-          <label class="field" title="Perto do λ de referência: em cada arquivo, o extremo mais próximo do λ marcado (dentro da janela). Mais proeminente: a ressonância principal de cada arquivo. Todos os do 1º arquivo: cada extremo do 1º arquivo vira uma trilha.">Modo
+          <label class="field" title="Perto do λ de referência: em cada arquivo, o extremo mais próximo do λ marcado (dentro da janela). Mais proeminente: a ressonância principal de cada arquivo. Todos os do 1º arquivo: cada extremo do 1º arquivo vira uma trilha." data-i18n="evo.mode" data-i18n-title="evo.modeTitle">Modo
             <select id="evo-mode" data-evo="mode">
-              <option value="reference">perto do λ de referência</option>
-              <option value="prominent">o mais proeminente</option>
-              <option value="follow">todos os do 1º arquivo</option>
+              <option value="reference" data-i18n="evo.modeReference">perto do λ de referência</option>
+              <option value="prominent" data-i18n="evo.modeProminent">o mais proeminente</option>
+              <option value="follow" data-i18n="evo.modeFollow">todos os do 1º arquivo</option>
             </select>
           </label>
-          <label class="field" title="O vale a acompanhar. Marcar no gráfico ou digitar o valor passa o modo para “perto do λ de referência”.">λ de referência (nm)
-            <input type="number" id="evo-ref" data-evo="reference" step="any" min="0" placeholder="clique no gráfico">
+          <label class="field" title="O vale a acompanhar. Marcar no gráfico ou digitar o valor passa o modo para “perto do λ de referência”." data-i18n="evo.reference" data-i18n-title="evo.referenceTitle">λ de referência (nm)
+            <input type="number" id="evo-ref" data-evo="reference" step="any" min="0" placeholder="clique no gráfico" data-i18n-placeholder="evo.referencePlaceholder">
           </label>
           <button type="button" id="btn-evo-pick" class="btn-secondary btn-sm"
-                  title="Depois, clique no gráfico do espectro, no vale que quer acompanhar (Esc cancela)">Marcar no gráfico</button>
-          <label class="field only-reference" title="Só procura o extremo a até esta distância do centro da busca. Vazio: sem limite, fica o mais próximo.">Janela ± (nm)
-            <input type="number" id="evo-window" data-evo="window" step="any" min="0" placeholder="sem limite">
+                  title="Depois, clique no gráfico do espectro, no vale que quer acompanhar (Esc cancela)" data-i18n="evo.pick" data-i18n-title="evo.pickTitle">Marcar no gráfico</button>
+          <label class="field only-reference" title="Só procura o extremo a até esta distância do centro da busca. Vazio: sem limite, fica o mais próximo." data-i18n="evo.window" data-i18n-title="evo.windowTitle">Janela ± (nm)
+            <input type="number" id="evo-window" data-evo="window" step="any" min="0" placeholder="sem limite" data-i18n-placeholder="common.noLimit">
           </label>
-          <label class="check-row only-reference" title="Ligado: o centro da busca anda com o vale encontrado no arquivo anterior, para acompanhar um deslocamento maior que a janela. Desligado: a busca fica sempre no λ de referência."><input type="checkbox" id="evo-follow" data-evo="follow" checked> seguir a deriva</label>
-          <label class="field only-follow" title="Maior salto (nm) entre arquivos para uma trilha. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo.">Salto máximo (nm)
-            <input type="number" id="evo-tolerance" data-evo="tolerance" step="any" min="0" placeholder="auto">
+          <label class="check-row only-reference" title="Ligado: o centro da busca anda com o vale encontrado no arquivo anterior, para acompanhar um deslocamento maior que a janela. Desligado: a busca fica sempre no λ de referência." data-i18n="evo.follow" data-i18n-title="evo.followTitle"><input type="checkbox" id="evo-follow" data-evo="follow" checked> seguir a deriva</label>
+          <label class="field only-follow" title="Maior salto (nm) entre arquivos para uma trilha. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo." data-i18n="evo.tolerance" data-i18n-title="evo.toleranceTitle">Salto máximo (nm)
+            <input type="number" id="evo-tolerance" data-evo="tolerance" step="any" min="0" placeholder="auto" data-i18n-placeholder="common.auto">
           </label>
-          <label class="field" title="Ajuste no fundo: parábola de mínimos quadrados pelos pontos do fundo do vale (±⅓ da largura), a mais precisa para vales largos e ruidosos. Vértice: parábola pelos 3 pontos do extremo. Centroide: centro de massa da região acima da meia altura.">Posição
+          <label class="field" title="Ajuste no fundo: parábola de mínimos quadrados pelos pontos do fundo do vale (±⅓ da largura), a mais precisa para vales largos e ruidosos. Vértice: parábola pelos 3 pontos do extremo. Centroide: centro de massa da região acima da meia altura." data-i18n="evo.locate" data-i18n-title="evo.locateTitle">Posição
             <select id="evo-locate" data-evo="locate">
-              <option value="fit">ajuste no fundo</option>
-              <option value="vertex">vértice (3 pontos)</option>
-              <option value="centroid">centroide</option>
+              <option value="fit" data-i18n="evo.locateFit">ajuste no fundo</option>
+              <option value="vertex" data-i18n="evo.locateVertex">vértice (3 pontos)</option>
+              <option value="centroid" data-i18n="evo.locateCentroid">centroide</option>
             </select>
           </label>
         </div>
         <div class="analysis-options evolution-options evo-group" role="group" aria-labelledby="evo-g-show">
-          <span class="evo-group-title" id="evo-g-show">Mostrar</span>
-          <label class="field">Eixo y
+          <span class="evo-group-title" id="evo-g-show" data-i18n="evo.show">Mostrar</span>
+          <label class="field" data-i18n="evo.yAxis">Eixo y
             <select id="evo-y" data-evo="y">
               <option value="wavelength">λ (nm)</option>
-              <option value="delta">Δλ em relação ao 1º (nm)</option>
-              <option value="intensity">intensidade no extremo</option>
-              <option value="prominence">profundidade / altura</option>
-              <option value="fwhm">largura (nm)</option>
+              <option value="delta" data-i18n="evo.yDelta">Δλ em relação ao 1º (nm)</option>
+              <option value="intensity" data-i18n="evo.yIntensity">intensidade no extremo</option>
+              <option value="prominence" data-i18n="evo.yProminence">profundidade / altura</option>
+              <option value="fwhm" data-i18n="evo.yWidth">largura (nm)</option>
             </select>
           </label>
-          <label class="field">Eixo x
+          <label class="field" data-i18n="evo.xAxis">Eixo x
             <select id="evo-x" data-evo="x">
-              <option value="time">tempo decorrido (min)</option>
-              <option value="order">ordem dos arquivos</option>
+              <option value="time" data-i18n="evo.xTime">tempo decorrido (min)</option>
+              <option value="order" data-i18n="evo.xOrder">ordem dos arquivos</option>
             </select>
           </label>
           <div class="evo-actions">
-          <button type="button" id="btn-evolution" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Recalcular</button>
-          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
+          <button type="button" id="btn-evolution" class="btn-secondary btn-sm" data-i18n="evo.recalculate"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Recalcular</button>
+          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm" data-i18n="common.downloadCsv"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
           <button type="button" id="btn-evo-event" class="btn-secondary btn-sm"
-                  title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina.">Marcar evento</button>
-          <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
+                  title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina." data-i18n="evo.markEvent" data-i18n-title="evo.markEventTitle">Marcar evento</button>
+          <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm" data-i18n="evo.makeFigure">Fazer figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
           </div>
         </div>
-        <span class="hint" id="evolution-status">Usa os espectros do projeto em ordem de aquisição
+        <span class="hint" id="evolution-status" data-i18n-html="evo.intro">Usa os espectros do projeto em ordem de aquisição
           (cabeçalho <code>Date:</code> ou hora no nome do arquivo, <code>..._09-30-15-250</code>).
           Marque o λ de referência e clique no vale, no gráfico do espectro acima.</span>
         <div id="evolution-plot"></div>
         <div class="evolution-events" id="evolution-events-box">
           <div class="events-head">
-            <strong>Eventos</strong>
-            <span class="hint" id="evolution-events-hint">Trocas de meio, injeções…: “Marcar evento” e um clique no gráfico. Viram as linhas verticais da figura.</span>
-            <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco">+ adicionar</button>
+            <strong data-i18n="evo.events">Eventos</strong>
+            <span class="hint" id="evolution-events-hint" data-i18n="evo.eventsHint">Trocas de meio, injeções…: “Marcar evento” e um clique no gráfico. Viram as linhas verticais da figura.</span>
+            <button type="button" class="btn-link evo-event-add" title="Um evento no instante do espectro em foco" data-i18n="evo.addEvent" data-i18n-title="evo.addEventTitle">+ adicionar</button>
           </div>
           <div class="event-list" id="evolution-events"></div>
         </div>
         <div class="evolution-focus hidden" id="evolution-focus">
-          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior, na ordem da evolução (←)" aria-label="Espectro anterior"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
-          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte, na ordem da evolução (→)" aria-label="Espectro seguinte"><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior, na ordem da evolução (←)" aria-label="Espectro anterior" data-i18n-title="evo.previousTitle" data-i18n-aria-label="evo.previous"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte, na ordem da evolução (→)" aria-label="Espectro seguinte" data-i18n-title="evo.nextTitle" data-i18n-aria-label="evo.next"><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
           <span id="evolution-focus-text"></span>
           <button type="button" id="btn-evo-exclude" class="btn-link"></button>
           <button type="button" id="btn-evo-restore" class="btn-link hidden"></button>
         </div>
         <details class="advanced" id="evolution-table-box">
-          <summary id="evolution-table-summary">Tabela</summary>
+          <summary id="evolution-table-summary" data-i18n="evo.table">Tabela</summary>
           <div class="table-wrap"><table class="data-table" id="evolution-table"></table></div>
         </details>
       </div>
     </details>
     <details class="card enabled collapsible hidden" id="spectra-results" open>
       <summary class="card-header">
-        <span>Picos e vales</span>
+        <span data-i18n="peaks.title">Picos e vales</span>
         <button type="button" class="help-toggle" id="btn-spectra-help"
-                title="O que significa cada campo" aria-label="Ajuda">?</button>
+                title="O que significa cada campo" aria-label="Ajuda" data-i18n-title="common.helpTitle" data-i18n-aria-label="common.help">?</button>
       </summary>
       <div class="card-body">
         <div class="analysis-options">
           <div class="spectra-summary" id="spectra-summary"></div>
-          <button type="button" id="btn-spectra-csv" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
+          <button type="button" id="btn-spectra-csv" class="btn-secondary btn-sm" data-i18n="common.downloadCsv"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
         </div>
         <div id="spectra-help" class="help-box hidden">
-          <strong>O que você escolhe (barra lateral)</strong>
+          <strong data-i18n="peaks.help.choose">O que você escolhe (barra lateral)</strong>
           <dl>
-            <dt>Máximos / Mínimos</dt>
-            <dd>Quais extremos procurar: picos (reflexão de uma FBG, ressonâncias) e vales
+            <dt data-i18n="peaks.help.maxMin">Máximos / Mínimos</dt>
+            <dd data-i18n="peaks.help.maxMinText">Quais extremos procurar: picos (reflexão de uma FBG, ressonâncias) e vales
                 (transmissão, bandas de atenuação de TFBG/LPG, franjas de interferômetro).</dd>
-            <dt>Escala da intensidade</dt>
-            <dd><em>Linear</em>: a largura é medida a meia proeminência (FWHM).
+            <dt data-i18n="peaks.scale">Escala da intensidade</dt>
+            <dd data-i18n-html="peaks.help.scale"><em>Linear</em>: a largura é medida a meia proeminência (FWHM).
                 <em>dB/dBm</em>: banda de 3 dB — 3 dB abaixo do pico ou acima do fundo do vale.
                 Use dB quando o arquivo vem do OSA em dBm; vale com menos de 3 dB de
                 profundidade fica sem largura.</dd>
-            <dt>Proeminência mínima</dt>
-            <dd>Quanto o extremo precisa se destacar da vizinhança, na unidade da intensidade.
+            <dt data-i18n="peaks.prominence">Proeminência mínima</dt>
+            <dd data-i18n="peaks.help.prominence">Quanto o extremo precisa se destacar da vizinhança, na unidade da intensidade.
                 Vazio = 5% da faixa do espectro. Aumente para ignorar ondulações de ruído.</dd>
-            <dt>Distância mínima (nm)</dt>
-            <dd>Extremos mais próximos que isso viram um só; fica o mais proeminente.</dd>
-            <dt>Máximo por tipo</dt>
-            <dd>Mantém só os N extremos mais proeminentes de cada tipo.</dd>
+            <dt data-i18n="peaks.minDistance">Distância mínima (nm)</dt>
+            <dd data-i18n="peaks.help.minDistance">Extremos mais próximos que isso viram um só; fica o mais proeminente.</dd>
+            <dt data-i18n="peaks.maxPerType">Máximo por tipo</dt>
+            <dd data-i18n="peaks.help.maxPerType">Mantém só os N extremos mais proeminentes de cada tipo.</dd>
           </dl>
 
-          <strong>Tabela</strong>
+          <strong data-i18n="peaks.help.table">Tabela</strong>
           <dl>
             <dt>λ (nm)</dt>
-            <dd>Posição do extremo refinada por uma parábola nos 3 pontos em torno dele:
+            <dd data-i18n="peaks.help.lambda">Posição do extremo refinada por uma parábola nos 3 pontos em torno dele:
                 resolução abaixo do passo da grade do espectro.</dd>
-            <dt>λ ajuste (nm)</dt>
-            <dd>Vértice da parábola de mínimos quadrados pelos pontos do fundo do vale (ou do topo
+            <dt data-i18n="peaks.col.fit">λ ajuste (nm)</dt>
+            <dd data-i18n="peaks.help.fit">Vértice da parábola de mínimos quadrados pelos pontos do fundo do vale (ou do topo
                 do pico), a até ⅓ da largura de cada lado. Usa dezenas de pontos, então o ruído
                 pesa bem menos; é a posição padrão da evolução entre arquivos.</dd>
-            <dt>Intensidade</dt>
-            <dd>Valor no extremo (no pico ou no fundo do vale).</dd>
-            <dt>Proeminência</dt>
-            <dd>Altura do pico, ou profundidade do vale, em relação à base mais alta entre os
+            <dt data-i18n="peaks.col.intensity">Intensidade</dt>
+            <dd data-i18n="peaks.help.intensity">Valor no extremo (no pico ou no fundo do vale).</dd>
+            <dt data-i18n="peaks.col.prominence">Proeminência</dt>
+            <dd data-i18n="peaks.help.prominenceCol">Altura do pico, ou profundidade do vale, em relação à base mais alta entre os
                 dois lados. Em dB, num vale, é o contraste (extinção) da banda.</dd>
-            <dt>FWHM / Banda 3 dB</dt>
-            <dd>Largura no nível descrito acima, com interpolação entre amostras. Aparece como
+            <dt data-i18n="peaks.help.width">FWHM / Banda 3 dB</dt>
+            <dd data-i18n="peaks.help.widthText">Largura no nível descrito acima, com interpolação entre amostras. Aparece como
                 linha tracejada no gráfico.</dd>
             <dt>Q</dt>
-            <dd>λ dividido pela largura: seletividade da ressonância (quanto maior, mais estreita).</dd>
-            <dt>Centroide (nm)</dt>
-            <dd>Centro de massa da região acima do nível da largura. Menos sensível a ruído e a
+            <dd data-i18n="peaks.help.q">λ dividido pela largura: seletividade da ressonância (quanto maior, mais estreita).</dd>
+            <dt data-i18n="peaks.col.centroid">Centroide (nm)</dt>
+            <dd data-i18n="peaks.help.centroid">Centro de massa da região acima do nível da largura. Menos sensível a ruído e a
                 assimetrias que o ponto de máximo; é como muitos interrogadores demodulam FBGs.</dd>
-            <dt>Δλ anterior (nm)</dt>
-            <dd>Distância ao extremo anterior do mesmo tipo: FSR local de interferômetros e
+            <dt data-i18n="peaks.col.spacing">Δλ anterior (nm)</dt>
+            <dd data-i18n="peaks.help.spacing">Distância ao extremo anterior do mesmo tipo: FSR local de interferômetros e
                 espaçamento entre modos de casca em TFBG/LPG.</dd>
           </dl>
 
-          <strong>Resumo de cada traço</strong>
+          <strong data-i18n="peaks.help.summary">Resumo de cada traço</strong>
           <dl>
-            <dt>Máximo / mínimo global</dt>
-            <dd>Maior e menor valor do espectro (podem estar nas bordas, onde a busca de
+            <dt data-i18n="peaks.help.global">Máximo / mínimo global</dt>
+            <dd data-i18n="peaks.help.globalText">Maior e menor valor do espectro (podem estar nas bordas, onde a busca de
                 extremos não procura).</dd>
-            <dt>Supressão de lóbulo lateral</dt>
-            <dd>Diferença entre os dois maiores picos encontrados (SLSR de uma FBG; em dB se a
+            <dt data-i18n="peaks.help.sideLobe">Supressão de lóbulo lateral</dt>
+            <dd data-i18n="peaks.help.sideLobeText">Diferença entre os dois maiores picos encontrados (SLSR de uma FBG; em dB se a
                 escala for dB).</dd>
-            <dt>FSR médio</dt>
-            <dd>Média dos Δλ entre extremos vizinhos de cada tipo.</dd>
-            <dt>Resolução</dt>
-            <dd>Passo típico da grade em λ; a proeminência usada também é informada.</dd>
+            <dt data-i18n="peaks.help.fsr">FSR médio</dt>
+            <dd data-i18n="peaks.help.fsrText">Média dos Δλ entre extremos vizinhos de cada tipo.</dd>
+            <dt data-i18n="peaks.help.resolution">Resolução</dt>
+            <dd data-i18n="peaks.help.resolutionText">Passo típico da grade em λ; a proeminência usada também é informada.</dd>
           </dl>
-          <span class="hint">Tudo é medido no espectro inteiro já preparado (recorte, suavização,
+          <span class="hint" data-i18n="peaks.help.measured">Tudo é medido no espectro inteiro já preparado (recorte, suavização,
             normalização), não na versão decimada do gráfico.</span>
         </div>
         <div class="table-wrap"><table class="data-table" id="spectra-table"></table></div>
       </div>
     </details>
     <div id="spectra-empty" class="empty-state">
-      <h2>Adicione os espectros ópticos</h2>
-      <div class="dropzone" data-kind="spectrum">
-        <strong>Solte aqui os arquivos de espectro</strong>
+      <h2 data-i18n="spectraEmpty.title">Adicione os espectros ópticos</h2>
+      <div class="dropzone" data-kind="spectrum" data-i18n="spectraEmpty.formats">
+        <strong data-i18n="spectraEmpty.drop">Solte aqui os arquivos de espectro</strong>
         intensidade × comprimento de onda; vários traços por arquivo são aceitos
-        <br><label class="btn-secondary"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
+        <br><label class="btn-secondary" data-i18n="common.chooseFiles"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
           <input type="file" class="dropzone-input" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
       </div>
       <div class="empty-files" id="spectra-empty-files"></div>
@@ -1132,28 +1145,28 @@
 
   <div id="tab-viz-main" class="hidden">
     <div id="status-viz">
-      <button type="button" id="btn-figure" class="btn-primary btn-sm" title="Atualizar a figura (Ctrl+Enter)"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Atualizar</button>
-      <label class="check-row"><input type="checkbox" id="viz-auto" checked> Atualizar ao editar</label>
-      <select id="viz-zoom" title="Zoom da pré-visualização">
-        <option value="fit">Ajustar à tela</option>
-        <option value="1">Tamanho real</option>
+      <button type="button" id="btn-figure" class="btn-primary btn-sm" title="Atualizar a figura (Ctrl+Enter)" data-i18n="viz.update" data-i18n-title="viz.updateTitle"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Atualizar</button>
+      <label class="check-row" data-i18n="viz.autoUpdate"><input type="checkbox" id="viz-auto" checked> Atualizar ao editar</label>
+      <select id="viz-zoom" title="Zoom da pré-visualização" data-i18n-title="viz.zoomTitle">
+        <option value="fit" data-i18n="viz.zoomFit">Ajustar à tela</option>
+        <option value="1" data-i18n="viz.zoomActual">Tamanho real</option>
         <option value="2">200%</option>
       </select>
-      <span id="viz-status">Selecione um CSV processado.</span>
-      <select data-style="export.format" title="Formato de exportação">
+      <span id="viz-status" data-i18n="viz.statusStart">Selecione um CSV processado.</span>
+      <select data-style="export.format" title="Formato de exportação" data-i18n-title="viz.formatTitle">
         <option value="pdf">PDF</option>
         <option value="png">PNG</option>
         <option value="svg">SVG</option>
         <option value="eps">EPS</option>
         <option value="tiff">TIFF</option>
       </select>
-      <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)" aria-label="Resolução (dpi)">
-      <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>Copiar figura</button>
-      <button type="button" id="btn-fig-download" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar figura</button>
+      <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)" aria-label="Resolução (dpi)" data-i18n-title="viz.dpi" data-i18n-aria-label="viz.dpi">
+      <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento" data-i18n="viz.copyFigure" data-i18n-title="viz.copyFigureTitle"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>Copiar figura</button>
+      <button type="button" id="btn-fig-download" class="btn-secondary btn-sm" data-i18n="viz.downloadFigure"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar figura</button>
     </div>
     <div id="viz-figure">
-      <span class="placeholder">A figura de publicação aparecerá aqui.</span>
-      <img id="viz-img" class="hidden zoom-fit" alt="Figura gerada">
+      <span class="placeholder" data-i18n="viz.placeholder">A figura de publicação aparecerá aqui.</span>
+      <img id="viz-img" class="hidden zoom-fit" alt="Figura gerada" data-i18n-alt="viz.imageAlt">
     </div>
 
   </div>

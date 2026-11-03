@@ -1,7 +1,11 @@
 // Aba Séries temporais: opções de processamento, sensores, setups, lista
 // de arquivos, gráfico, processamento (um, em lote ou juntos) e concatenação.
 
-import { $, appendReadoutNote, checkFields, fieldName, fmtNum, fmtSig, markStale, setBusy, setReadout, showError, syncCardStyles } from "./core.js";
+import {
+  $, appendReadoutNote, checkFields, fmtNum, fmtSig, hintHtml, markStale, plotSeparators, setBusy,
+  setPlain, setReadout, setText, showError, showFixField, syncCardStyles,
+} from "./core.js";
+import { onLanguageChange, t } from "./i18n.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { addSpectraToProject, renderSpectraFiles } from "./spectra.js";
 import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
@@ -28,11 +32,7 @@ const visibleSensorRows = () => [...document.querySelectorAll("#sensor-list > .s
 function setSensorHidden(row, oculto) {
   row.dataset.hidden = oculto ? "1" : "0";
   row.classList.toggle("is-hidden", oculto);
-  const botao = row.querySelector(".sensor-hide");
-  botao.textContent = oculto ? "mostrar" : "ocultar";
-  botao.title = oculto
-    ? "Volta a usar esta coluna no processamento"
-    : "Tira esta coluna de tudo (processamento, gráfico, CSV, figura), como se o arquivo não a tivesse";
+  labelHideButton(row);
   const destino = oculto ? $("hidden-sensor-list") : $("sensor-list");
   if (destino && row.parentElement !== destino) {
     if (oculto) destino.appendChild(row);
@@ -41,12 +41,19 @@ function setSensorHidden(row, oculto) {
   updateHiddenSummary();
 }
 
+function labelHideButton(row) {
+  const oculto = row.dataset.hidden === "1";
+  const botao = row.querySelector(".sensor-hide");
+  botao.textContent = t(oculto ? "sensors.show" : "sensors.hide");
+  botao.title = t(oculto ? "sensors.showTitle" : "sensors.hideTitle");
+}
+
 function updateHiddenSummary() {
   const grupo = $("hidden-sensors");
   if (!grupo) return;
   const n = grupo.querySelectorAll(".sensor-row").length;
   grupo.classList.toggle("hidden", n === 0);
-  grupo.querySelector("summary").textContent = n === 1 ? "1 coluna oculta" : `${n} colunas ocultas`;
+  grupo.querySelector("summary").textContent = t("sensors.hiddenCount", { n });
 }
 
 export function collectProcessing() {
@@ -177,7 +184,7 @@ function renderPlot(data) {
     data.channels.forEach((ch, i) => {
       traces.push({
         x: data.raw.time, y: shift(data.raw.signals[ch], origem[ch]),
-        name: ch + " (bruto)", mode: "lines", legendgroup: ch, showlegend: !separado,
+        name: t("plot.rawTrace", { ch }), mode: "lines", legendgroup: ch, showlegend: !separado,
         line: { color: PALETTE[i % PALETTE.length], width: 1 },
         opacity: 0.3, ...eixos(i),
       });
@@ -196,7 +203,7 @@ function renderPlot(data) {
   const eixo = { gridcolor: "#eceff3", zerolinecolor: "#e2e7ee", exponentformat: "e", automargin: true };
   const layout = {
     ...plotDecorations(),
-    separators: ",.",                   // 1.551,45 como no resto do app
+    separators: plotSeparators(),       // 1.551,45 em português, 1,551.45 em inglês
     margin: { l: 60, r: 20, t: separado ? 14 : 30, b: 45 },
     font: { family: plotFont(), size: 12.5, color: "#16212e" },
     hovermode: "x unified",
@@ -213,7 +220,7 @@ function renderPlot(data) {
       const sufixo = i ? String(i + 1) : "";
       layout[`xaxis${sufixo}`] = {
         ...eixo, matches: i ? "x" : undefined, showticklabels: i === n - 1,
-        title: i === n - 1 ? "Tempo (s)" : undefined,
+        title: i === n - 1 ? t("plot.timeAxis") : undefined,
       };
       layout[`yaxis${sufixo}`] = {
         ...eixo, title: { text: `${ch}<br><span style="font-size:11px">${grandeza} (${unit})</span>`, font: { size: 12 } },
@@ -221,7 +228,7 @@ function renderPlot(data) {
       };
     });
   } else {
-    layout.xaxis = { ...eixo, title: "Tempo (s)" };
+    layout.xaxis = { ...eixo, title: t("plot.timeAxis") };
     layout.yaxis = { ...eixo, title: `${grandeza} (${unit})`,
                      range: yRange(data.channels.map((ch) => shift(data.signals[ch], origem[ch]))) };
   }
@@ -321,27 +328,33 @@ export function clearSelection({ redraw = true } = {}) {
 
 const fmtStat = fmtSig;
 
+// [chave do título, valor]; o título sai no idioma de quando a tabela é desenhada
 const STAT_COLUNAS = [
-  ["Canal", (l) => l.channel],
-  ["Média", (l) => fmtStat(l.mean)],
-  ["σ", (l) => fmtStat(l.std)],
-  ["Mín", (l) => fmtStat(l.min)],
-  ["Máx", (l) => fmtStat(l.max)],
-  ["Pico a pico", (l) => fmtStat(l.peak_to_peak)],
-  ["Deriva (/s)", (l) => fmtStat(l.slope)],
-  ["Início", (l) => fmtStat(l.value_start)],
-  ["Fim", (l) => fmtStat(l.value_end)],
-  ["Δ (fim − início)", (l) => fmtStat(l.delta)],
-  ["n", (l) => numeroOuTraco(l.n, 0)],
+  ["selection.col.channel", (l) => l.channel],
+  ["selection.col.mean", (l) => fmtStat(l.mean)],
+  ["selection.col.std", (l) => fmtStat(l.std)],
+  ["selection.col.min", (l) => fmtStat(l.min)],
+  ["selection.col.max", (l) => fmtStat(l.max)],
+  ["selection.col.peakToPeak", (l) => fmtStat(l.peak_to_peak)],
+  ["selection.col.drift", (l) => fmtStat(l.slope)],
+  ["selection.col.start", (l) => fmtStat(l.value_start)],
+  ["selection.col.end", (l) => fmtStat(l.value_end)],
+  ["selection.col.delta", (l) => fmtStat(l.delta)],
+  ["selection.col.n", (l) => numeroOuTraco(l.n, 0)],
 ];
+
+function renderSelectionRange() {
+  if (!selection) return;
+  setPlain($("selection-range"),
+    `${fmtNum(selection.start, 2)} – ${fmtNum(selection.end, 2)} s · Δt ${fmtNum(selection.end - selection.start, 2)} s`);
+}
 
 async function measureSelection() {
   if (!selection || !lastPlotOptions) return;
   const request = ++statsRequest;
   $("selection-panel").classList.remove("hidden");
-  $("selection-range").textContent =
-    `${fmtNum(selection.start, 2)} – ${fmtNum(selection.end, 2)} s · Δt ${fmtNum(selection.end - selection.start, 2)} s`;
-  $("selection-note").textContent = "Medindo…";
+  renderSelectionRange();
+  setText($("selection-note"), "selection.measuring");
   try {
     const resp = await fetch("/api/series/stats", {
       method: "POST",
@@ -351,16 +364,15 @@ async function measureSelection() {
     });
     const data = await resp.json();
     if (request !== statsRequest) return;
-    if (!resp.ok) throw new Error(data.error || "Erro ao medir o trecho.");
+    if (!resp.ok) throw new Error(data.error || t("selection.error"));
     lastStats = data;
     const unidade = data.channels[0]?.unit || "";
-    $("selection-note").textContent =
-      `Sinal processado inteiro, não o decimado da tela · ${unidade}${plotRelative() ? " · relativo ao início" : ""}`;
+    setText($("selection-note"), plotRelative() ? "selection.noteRelative" : "selection.note", { unit: unidade });
     renderSelectionTable(data);
   } catch (err) {
     if (request !== statsRequest) return;
     lastStats = null;
-    $("selection-note").textContent = `Falha: ${err.message}`;
+    setText($("selection-note"), "common.failed", { msg: err.message });
     $("selection-table").innerHTML = "";
   }
 }
@@ -369,9 +381,9 @@ function renderSelectionTable(data) {
   const tabelaEl = $("selection-table");
   tabelaEl.innerHTML = "";
   const cabeca = tabelaEl.createTHead().insertRow();
-  STAT_COLUNAS.forEach(([nome]) => {
+  STAT_COLUNAS.forEach(([chave]) => {
     const th = document.createElement("th");
-    th.textContent = nome;
+    th.textContent = t(chave);
     cabeca.appendChild(th);
   });
   const corpo = tabelaEl.createTBody();
@@ -383,20 +395,20 @@ function renderSelectionTable(data) {
 
 function selectionText() {
   if (!lastStats) return "";
-  const linhas = [STAT_COLUNAS.map(([nome]) => nome).join("\t"),
+  const linhas = [STAT_COLUNAS.map(([chave]) => t(chave)).join("\t"),
                   ...lastStats.channels.map((l) => STAT_COLUNAS.map(([, v]) => v(l).replace("—", "")).join("\t"))];
-  return `Trecho ${fmtNum(lastStats.start, 2)}–${fmtNum(lastStats.end, 2)} s\n` + linhas.join("\n");
+  return `${t("selection.copyHeader", { start: lastStats.start, end: lastStats.end })}\n` + linhas.join("\n");
 }
 
 const TOOL_HINTS = {
-  zoom: "arraste = zoom · duplo clique = ver tudo",
-  select: "arraste = medir trecho · Esc limpa",
-  mark: "clique = nova marcação · arraste uma marcação para mudar o instante",
+  zoom: "plot.hintZoom",
+  select: "plot.hintSelect",
+  mark: "plot.hintMark",
 };
 
 function setPlotTool(tool) {
   document.querySelector(`input[name="plot-tool"][value="${tool}"]`).checked = true;
-  $("plot-hint").textContent = TOOL_HINTS[tool];
+  setText($("plot-hint"), TOOL_HINTS[tool]);
   if ($("plot").data) {
     Plotly.relayout($("plot"), { dragmode: { select: "select", mark: false }[tool] ?? "zoom" });
   }
@@ -421,9 +433,9 @@ $("btn-selection-copy").addEventListener("click", async () => {
   if (!texto) return;
   try {
     await navigator.clipboard.writeText(texto);
-    $("selection-note").textContent = "Tabela copiada: cole numa planilha.";
+    setText($("selection-note"), "selection.copied");
   } catch {
-    showError("O navegador não deixou copiar; selecione a tabela e use Ctrl+C.");
+    showError(t("selection.copyBlocked"));
   }
 });
 
@@ -467,22 +479,25 @@ function updateChannelDropdown(channels) {
 }
 
 // ── Ações ────────────────────────────────────────────────────────────────────
+// O último processamento mostrado: a leitura e os detalhes são montados de
+// novo dele quando o idioma muda
+let lastProcess = null;   // {data, opts}
+
 export async function processData({ save = true, files = null } = {}) {
   const opts = { ...collectOptions(), save };
   if (files) opts.files = files;        // vários arquivos viram um sinal contínuo
-  if (!opts.file) { showError("Selecione um arquivo primeiro."); return; }
+  if (!opts.file) { showError(t("series.pickFileFirst")); return; }
   const invalido = checkFields($("tab-series-sidebar"));
   if (invalido) {        // nem vai ao servidor: o campo diz o que corrigir
-    $("status-text").textContent = `Corrija o campo destacado: ${fieldName(invalido)}.`;
-    $("status-text").classList.add("status-error");
-    markStale("plot", "Desatualizado: corrija o campo destacado na barra lateral");
+    showFixField($("status-text"), invalido);
+    markStale("plot", "stale.fixFieldSidebar");
     return;
   }
 
   setBusy(true);
   showError("");
   $("status-text").classList.remove("status-error");
-  $("status-text").textContent = "Processando…";
+  setText($("status-text"), "series.processing");
   try {
     const resp = await fetch("/api/process", {
       method: "POST",
@@ -490,7 +505,7 @@ export async function processData({ save = true, files = null } = {}) {
       body: JSON.stringify(opts),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro no processamento.");
+    if (!resp.ok) throw new Error(data.error || t("series.processError"));
 
     updateChannelDropdown(data.channels);
     markStale("plot");
@@ -505,33 +520,29 @@ export async function processData({ save = true, files = null } = {}) {
       });
       renderSeriesFiles();
     }
+    lastProcess = { data, opts };
     const csv = data.processed_file || data.existing_file;
-    const estado = data.processed_file ? { texto: "CSV salvo", tipo: "ok", title: shortName(data.processed_file) }
-      : csv ? { texto: "pré-visualização · há um CSV gravado antes", tipo: "info", title: "Processar grava de novo" }
-      : { texto: "pré-visualização · CSV ainda não gravado", tipo: "warn", title: "Processar (Ctrl+Enter) grava o CSV" };
     const tempos = data.time.filter((v) => v !== null);
     const duracao = tempos.length > 1 ? tempos[tempos.length - 1] - tempos[0] : 0;
-    setReadout($("status-text"), [
-      [data.n_samples.toLocaleString("pt-BR"), "amostras"],
-      [fmtNum(duracao, 0), "s"],
-      [data.channels.join(", "), ""],
-    ], estado);
-
-    const detalhes = [];
-    if (csv) detalhes.push({ texto: `CSV: ${shortName(csv)}` });
-    if (data.plot_stride > 1) {
-      detalhes.push({ texto: `Gráfico decimado 1:${data.plot_stride} só na tela; o CSV tem todas as amostras.` });
-    }
-    (data.report || []).forEach((texto) => detalhes.push({ texto }));
-    (data.warnings || []).forEach((texto) => detalhes.push({ texto: `⚠ ${texto}`, aviso: true }));
-    setStatusDetails(detalhes);
+    setReadout($("status-text"), () => ({
+      partes: [
+        [fmtNum(data.n_samples, 0), t("series.samples", { n: data.n_samples })],
+        [fmtNum(duracao, 0), "s"],
+        [data.channels.join(", "), ""],
+      ],
+      estado: data.processed_file ? { texto: t("series.csvSaved"), tipo: "ok", title: shortName(data.processed_file) }
+        : csv ? { texto: t("series.previewOldCsv"), tipo: "info", title: t("series.previewOldCsvTitle") }
+        : { texto: t("series.previewNoCsv"), tipo: "warn", title: t("series.previewNoCsvTitle") },
+    }));
+    renderStatusDetails();
     statusCsv = csv;
     $("btn-open-viz").classList.toggle("hidden", !csv);
   } catch (err) {
+    lastProcess = null;
     showError(err.message);
-    $("status-text").textContent = `Falha no processamento: ${err.message}`;
+    setText($("status-text"), "series.processFailed", { msg: err.message });
     $("status-text").classList.add("status-error");
-    markStale("plot", "Desatualizado: o último processamento falhou");
+    markStale("plot", "stale.processFailed");
     setStatusDetails([]);
     $("btn-open-viz").classList.add("hidden");
   } finally {
@@ -541,6 +552,19 @@ export async function processData({ save = true, files = null } = {}) {
 
 // ── Detalhes do processamento (relatório e avisos) ──────────────────────────
 let statusCsv = null;
+
+// O relatório e os avisos vêm do servidor, já no idioma do pedido
+function renderStatusDetails() {
+  if (!lastProcess) return;
+  const { data } = lastProcess;
+  const csv = data.processed_file || data.existing_file;
+  const detalhes = [];
+  if (csv) detalhes.push({ texto: `CSV: ${shortName(csv)}` });
+  if (data.plot_stride > 1) detalhes.push({ texto: t("series.decimated", { stride: data.plot_stride }) });
+  (data.report || []).forEach((texto) => detalhes.push({ texto }));
+  (data.warnings || []).forEach((texto) => detalhes.push({ texto: `⚠ ${texto}`, aviso: true }));
+  setStatusDetails(detalhes);
+}
 
 function setStatusDetails(linhas) {
   const lista = $("status-details");
@@ -555,8 +579,28 @@ function setStatusDetails(linhas) {
   const botao = $("btn-status-details");
   botao.classList.toggle("hidden", !linhas.length);
   botao.classList.toggle("warn", avisos > 0);
-  botao.textContent = avisos ? `⚠ ${avisos} aviso(s)` : "detalhes";
+  if (avisos) setText(botao, "series.warningCount", { n: avisos });
+  else setText(botao, "series.details");
   showStatusDetails(avisos > 0);        // avisos aparecem sem precisar pedir
+}
+
+// Idioma trocado: o relatório e os avisos do servidor são pedidos de novo
+// (só a prévia, sem gravar o CSV); o resto da leitura não muda
+async function refreshProcessMessages() {
+  const pedido = lastProcess;
+  if (!pedido || !((pedido.data.report || []).length || (pedido.data.warnings || []).length)) return;
+  try {
+    const resp = await fetch("/api/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...pedido.opts, save: false }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || lastProcess !== pedido) return;      // falhou, ou já houve outro processamento
+    pedido.data.report = data.report;
+    pedido.data.warnings = data.warnings;
+    renderStatusDetails();
+  } catch { /* fica o texto anterior */ }
 }
 
 function showStatusDetails(mostrar) {
@@ -574,7 +618,7 @@ $("btn-open-viz").addEventListener("click", () => {
 
 async function downloadCsv() {
   const opts = collectOptions();
-  if (!opts.file) { showError("Selecione um arquivo primeiro."); return; }
+  if (!opts.file) { showError(t("series.pickFileFirst")); return; }
   showError("");
   try {
     const resp = await fetch("/api/download", {
@@ -584,7 +628,7 @@ async function downloadCsv() {
     });
     if (!resp.ok) {
       const data = await resp.json();
-      throw new Error(data.error || "Erro ao gerar CSV.");
+      throw new Error(data.error || t("series.csvError"));
     }
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -615,14 +659,13 @@ function sensorRow(ch, data, previous) {
   const row = document.createElement("div");
   row.className = "sensor-row";
   row.dataset.channel = ch;
+  row.dataset.unit = data.units[ch] || "nm";
   if (nominal != null) row.dataset.nominal = nominal;
 
   const caption = document.createElement("span");
   caption.className = "sensor-caption";
   const texto = document.createElement("span");
-  texto.textContent = nominal != null
-    ? `${ch} · λ₀ ≈ ${fmtNum(nominal)} ${data.units[ch] || "nm"}`
-    : `${ch} · sem leituras válidas`;
+  texto.className = "sensor-caption-text";
   const ocultar = document.createElement("button");
   ocultar.type = "button";
   ocultar.className = "btn-link sensor-hide";
@@ -639,32 +682,56 @@ function sensorRow(ch, data, previous) {
     makeInput("text", "sensor-name",
       previous?.name ?? fromSetup?.name ?? data.defaults[ch] ?? ch, ch),
     makeInput("number", "sensor-band-min",
-      previous?.min ?? (band ? band[0] : ""), "mín"),
+      previous?.min ?? (band ? band[0] : ""), ""),
     makeInput("number", "sensor-band-max",
-      previous?.max ?? (band ? band[1] : ""), "máx"),
+      previous?.max ?? (band ? band[1] : ""), ""),
     makeInput("number", "sensor-kt",
       previous?.kt ?? fromSetup?.temp_sensitivity ?? "", "K_T"),
   );
-  [["sensor-name", "Nome"], ["sensor-band-min", "Banda mínima (nm)"], ["sensor-band-max", "Banda máxima (nm)"],
-   ["sensor-kt", "K_T (pm/°C)"]].forEach(([classe, rotulo]) =>
-    row.querySelector(`.${classe}`).setAttribute("aria-label", `${rotulo} de ${ch}`));
   const kt = row.querySelector(".sensor-kt");
-  kt.title = "Sensibilidade térmica K_T (pm/°C), da calibração em temperatura. " +
-    "Usada pela compensação de temperatura: k = K_T do sensor / K_T da referência.";
   kt.min = "0";
   kt.step = "any";
   row.dataset.hidden = (previous?.hidden ?? fromSetup?.hidden) ? "1" : "0";
+  labelSensorRow(row);
   return row;
+}
+
+// Textos de uma linha de sensor (de novo quando o idioma muda; os valores ficam)
+function labelSensorRow(row) {
+  const ch = row.dataset.channel;
+  const nominal = row.dataset.nominal;
+  row.querySelector(".sensor-caption-text").textContent = nominal !== undefined
+    ? `${ch} · λ₀ ≈ ${fmtNum(Number(nominal))} ${row.dataset.unit}`
+    : t("sensors.noReadings", { ch });
+  row.querySelector(".sensor-band-min").placeholder = t("sensors.minPlaceholder");
+  row.querySelector(".sensor-band-max").placeholder = t("sensors.maxPlaceholder");
+  [["sensor-name", "sensors.nameOf"], ["sensor-band-min", "sensors.bandMinOf"], ["sensor-band-max", "sensors.bandMaxOf"],
+   ["sensor-kt", "sensors.ktOf"]].forEach(([classe, chave]) =>
+    row.querySelector(`.${classe}`).setAttribute("aria-label", t(chave, { ch })));
+  row.querySelector(".sensor-kt").title = t("sensors.ktTitle");
+  labelHideButton(row);
+}
+
+// Resumo do arquivo aberto (amostras, fs, duração, início), no idioma atual
+let fileInfo = null;
+
+function renderFileInfo() {
+  if (!fileInfo) { setPlain($("file-info"), ""); return; }
+  const info = [`${fmtNum(fileInfo.n_samples, 0)} ${t("series.samples", { n: fileInfo.n_samples })}`];
+  if (fileInfo.fs) info.push(`≈ ${fmtNum(fileInfo.fs, 4)} Hz`);
+  info.push(`${fmtNum(fileInfo.duration_s, 1)} s`);
+  if (fileInfo.time_origin) info.push(t("sensors.fileStart", { time: fileInfo.time_origin.replace("T", " ") }));
+  setPlain($("file-info"), info.join(" · "));
 }
 
 export async function loadChannels() {
   const file = $("file-select").value;
   const list = $("sensor-list");
-  if (!file) { list.innerHTML = '<span class="hint">Selecione um arquivo…</span>'; return; }
+  if (!file) { list.innerHTML = hintHtml("sensors.pickFile"); return; }
   try {
     const resp = await fetch("/api/channels?file=" + encodeURIComponent(file));
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro ao ler canais.");
+    if (!resp.ok) throw new Error(data.error || t("sensors.channelsError"));
 
     // Preserva o que já foi editado para canais de mesmo nome
     const previous = {};
@@ -681,12 +748,14 @@ export async function loadChannels() {
     list.innerHTML = "";
     const cabecalho = document.createElement("div");
     cabecalho.className = "sensor-head";
-    ["nome", "banda mín", "banda máx", "K_T pm/°C"].forEach((texto) => {
+    ["sensors.headName", "sensors.headBandMin", "sensors.headBandMax", null].forEach((chave) => {
       const span = document.createElement("span");
-      span.textContent = texto;
+      if (chave) setText(span, chave);
+      else span.textContent = "K_T pm/°C";
       cabecalho.appendChild(span);
     });
-    cabecalho.lastChild.title = "Sensibilidade térmica de cada rede (calibração em temperatura)";
+    cabecalho.lastChild.dataset.i18nTitle = "sensors.headKtTitle";
+    cabecalho.lastChild.title = t("sensors.headKtTitle");
     list.appendChild(cabecalho);
     const grupo = document.createElement("details");
     grupo.className = "hidden-sensors hidden";
@@ -699,15 +768,13 @@ export async function loadChannels() {
       setSensorHidden(row, row.dataset.hidden === "1");
     });
 
-    const info = [`${data.n_samples.toLocaleString("pt-BR")} amostras`];
-    if (data.fs) info.push(`≈ ${fmtNum(data.fs, 4)} Hz`);
-    info.push(`${fmtNum(data.duration_s, 1)} s`);
-    if (data.time_origin) info.push(`início ${data.time_origin.replace("T", " ")}`);
-    $("file-info").textContent = info.join(" · ");
+    fileInfo = data;
+    renderFileInfo();
     syncTempChannels();
   } catch (err) {
     list.innerHTML = "";
-    $("file-info").textContent = "";
+    fileInfo = null;
+    renderFileInfo();
     showError(err.message);
   }
 }
@@ -723,7 +790,7 @@ export async function loadSetupList(selectValue) {
   const data = await resp.json();
   const sel = $("setup-select");
   const current = selectValue ?? sel.value;
-  sel.innerHTML = '<option value="">— nenhum —</option>';
+  sel.innerHTML = `<option value="" data-i18n="common.none">${t("common.none")}</option>`;
   data.setups.forEach((name) => {
     const opt = document.createElement("option");
     opt.value = name; opt.textContent = name;
@@ -737,7 +804,7 @@ export async function applySetup(name) {
   if (!name) { shared.currentSetup = null; return; }
   const resp = await fetch("/api/setups/" + encodeURIComponent(name));
   const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || "Erro ao carregar setup.");
+  if (!resp.ok) throw new Error(data.error || t("sensors.setupLoadError"));
   shared.currentSetup = data;
   $("setup-name").value = data.name || name;
   document.querySelectorAll(".sensor-row").forEach((row) => {
@@ -754,7 +821,7 @@ export async function applySetup(name) {
 
 async function saveSetup() {
   const name = $("setup-name").value.trim();
-  if (!name) { showError("Informe um nome para o setup."); return; }
+  if (!name) { showError(t("sensors.setupNameRequired")); return; }
   showError("");
   try {
     const resp = await fetch("/api/setups", {
@@ -763,10 +830,10 @@ async function saveSetup() {
       body: JSON.stringify({ setup_name: name, sensors: collectSensors() }),
     });
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Erro ao salvar setup.");
+    if (!resp.ok) throw new Error(data.error || t("sensors.setupSaveError"));
     await loadSetupList(data.name);
     await applySetup(data.name);
-    $("status-text").textContent = `Setup "${data.name}" salvo em data/setups.`;
+    setText($("status-text"), "sensors.setupSaved", { name: data.name });
   } catch (err) {
     showError(err.message);
   }
@@ -823,7 +890,7 @@ export async function uploadFiles(fileList) {
     || (!a.file.name.startsWith(".") && DATA_EXTENSIONS.includes(extensao(a.file.name))));
   const ignorados = todos.length - arquivos.length;
   if (!arquivos.length) {
-    if (todos.length) showError("Nenhum arquivo de dados na pasta (aceito: " + DATA_EXTENSIONS.join(", ") + ").");
+    if (todos.length) showError(t("upload.noDataFiles", { extensions: DATA_EXTENSIONS.join(", ") }));
     return;
   }
   showError("");
@@ -831,15 +898,16 @@ export async function uploadFiles(fileList) {
   const erros = [];
   for (let i = 0; i < arquivos.length; i += UPLOAD_BATCH) {
     const lote = arquivos.slice(i, i + UPLOAD_BATCH);
-    $("status-text").textContent = $("spectra-status").textContent = arquivos.length > 1
-      ? `Enviando ${Math.min(i + lote.length, arquivos.length)} de ${arquivos.length}…`
-      : `Enviando ${lote[0].file.name}…`;
+    [$("status-text"), $("spectra-status")].forEach((el) => {
+      if (arquivos.length > 1) setText(el, "upload.sendingMany", { done: Math.min(i + lote.length, arquivos.length), total: arquivos.length });
+      else setText(el, "upload.sendingOne", { name: lote[0].file.name });
+    });
     const form = new FormData();
     lote.forEach(({ file, path }) => form.append("file", file, path));
     try {
       const resp = await fetch("/api/upload", { method: "POST", body: form });
       const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Erro no envio.");
+      if (!resp.ok) throw new Error(data.error || t("upload.error"));
       enviados.push(...(data.files || [data.file]));
       erros.push(...(data.errors || []));
     } catch (err) {
@@ -849,8 +917,8 @@ export async function uploadFiles(fileList) {
 
   await loadFileList();
   await addFilesAndShow(enviados);
-  if (ignorados) appendReadoutNote($("spectra-status"), `${ignorados} arquivo(s) da pasta não são de dados e ficaram de fora`);
-  if (erros.length) showError(erros.slice(0, 5).join(" · ") + (erros.length > 5 ? ` · e mais ${erros.length - 5}` : ""));
+  if (ignorados) appendReadoutNote($("spectra-status"), "upload.skipped", { n: ignorados });
+  if (erros.length) showError(erros.slice(0, 5).join(" · ") + (erros.length > 5 ? t("upload.andMore", { n: erros.length - 5 }) : ""));
 }
 
 // Põe os arquivos no projeto e já mostra um de cada tipo; os espectros
@@ -868,9 +936,7 @@ export async function addFilesAndShow(paths) {
   if (espectros && !series.length && naAbaSeries) switchTab("spectra");
   if (series.length) {
     await processData({ save: false });
-    if (espectros) {
-      appendReadoutNote($("status-text"), `${espectros} espectro(s) foram para a aba Espectros`);
-    }
+    if (espectros) appendReadoutNote($("status-text"), "upload.spectraMoved", { n: espectros });
   }
 }
 
@@ -933,7 +999,7 @@ export function renderSeriesFiles() {
     include.type = "checkbox";
     include.className = "series-include";
     include.checked = state.include;
-    include.title = "Incluir no processamento em lote";
+    include.title = t("series.includeTitle");
     include.addEventListener("change", () => {
       state.include = include.checked;
       scheduleConcatPlan();
@@ -941,12 +1007,10 @@ export function renderSeriesFiles() {
     });
     box.appendChild(fileRow(path, {
       selected: path === current, onSelect: showSeriesFile, checkbox: include,
-      note: state.processed ? "processado" : "",
+      note: state.processed ? t("series.processedNote") : "",
     }));
   });
-  if (!box.children.length) {
-    box.innerHTML = '<span class="hint">Nenhum arquivo neste projeto ainda.</span>';
-  }
+  if (!box.children.length) box.innerHTML = hintHtml("series.noFiles");
   document.body.classList.toggle("no-series", !projectSeriesPaths().length);
   $("card-concat").classList.toggle("hidden", projectSeriesPaths().length < 2);
   renderEmptyFiles("series");
@@ -989,20 +1053,20 @@ function copySeriesOptions() {
     state.sensors = structuredClone(source.sensors);
   });
   markProjectDirty();
-  $("status-text").textContent = "Opções e sensores copiados para os outros arquivos.";
+  setText($("status-text"), "series.optionsCopied");
 }
 
 async function processAll() {
   const files = concatFiles();
-  if (!files.length) { showError("Marque pelo menos um arquivo para processar."); return; }
+  if (!files.length) { showError(t("series.checkOneFile")); return; }
   showError("");
 
   for (const [i, path] of files.entries()) {
-    $("status-text").textContent = `Processando ${i + 1} de ${files.length}: ${shortName(path)}…`;
+    setText($("status-text"), "series.processingBatch", { i: i + 1, total: files.length, name: shortName(path) });
     await selectSeriesFile(path);
     await processData();
   }
-  $("status-text").textContent = `${files.length} arquivo(s) processados.`;
+  setText($("status-text"), "series.batchDone", { n: files.length });
 }
 
 
@@ -1048,17 +1112,16 @@ function concatRow(path, posicao, total, parte) {
   const faixa = document.createElement("span");
   faixa.className = "concat-range";
   if (parte) {
-    const pausa = parte.source === "relógio"
-      ? ` · pausa de ${fmtNum(parte.gap, 3)} s pelo relógio` : "";
+    const pausa = parte.source === "relógio" ? t("concat.clockPause", { gap: fmtNum(parte.gap, 3) }) : "";
     faixa.textContent = `${fmtNum(parte.start, 4)} s → ${fmtNum(parte.end, 4)} s · ` +
-      `${parte.n_samples.toLocaleString("pt-BR")} amostras${pausa}`;
+      `${fmtNum(parte.n_samples, 0)} ${t("series.samples", { n: parte.n_samples })}${pausa}`;
   } else {
     faixa.textContent = "—";
   }
 
   row.append(numero, nome,
-             botao("↑", "Subir na ordem", -1, posicao === 0),
-             botao("↓", "Descer na ordem", +1, posicao === total - 1),
+             botao("↑", t("concat.moveUp"), -1, posicao === 0),
+             botao("↓", t("concat.moveDown"), +1, posicao === total - 1),
              faixa);
   return row;
 }
@@ -1068,9 +1131,7 @@ function renderConcatRows(arquivos, plano) {
   lista.innerHTML = "";
   arquivos.forEach((path, i) => lista.appendChild(
     concatRow(path, i, arquivos.length, plano?.parts?.[i])));
-  if (!arquivos.length) {
-    lista.innerHTML = '<span class="hint">Nenhum arquivo marcado.</span>';
-  }
+  if (!arquivos.length) lista.innerHTML = hintHtml("concat.noneChecked");
 }
 
 async function refreshConcatPlan() {
@@ -1080,10 +1141,10 @@ async function refreshConcatPlan() {
 
   if (arquivos.length < 2) {
     concatPlan = null;
-    $("concat-summary").textContent = "Marque dois ou mais arquivos para juntar.";
+    setText($("concat-summary"), "concat.checkTwo");
     return;
   }
-  $("concat-summary").textContent = "Lendo os arquivos…";
+  setText($("concat-summary"), "concat.reading");
   try {
     const resp = await fetch("/api/concat/preview", {
       method: "POST",
@@ -1091,17 +1152,16 @@ async function refreshConcatPlan() {
       body: JSON.stringify({ files: arquivos }),
     });
     const dados = await resp.json();
-    if (!resp.ok) throw new Error(dados.error || "Erro na prévia da concatenação.");
+    if (!resp.ok) throw new Error(dados.error || t("concat.previewError"));
     if (arquivos.join("|") !== concatFiles().join("|")) return;   // já mudou de novo
     concatPlan = dados;
     renderConcatRows(arquivos, dados);
-    $("concat-summary").textContent =
-      `${dados.parts.length} arquivos · ${dados.n_samples.toLocaleString("pt-BR")} amostras · ` +
-      `0 s a ${fmtNum(dados.total_duration, 4)} s no total`;
+    setText($("concat-summary"), "concat.summary",
+            { files: dados.parts.length, samples: dados.n_samples, total: dados.total_duration });
     if (dados.warnings.length) showError(dados.warnings.join(" "));
   } catch (err) {
     concatPlan = null;
-    $("concat-summary").textContent = `Sem prévia: ${err.message}`;
+    setText($("concat-summary"), "concat.noPreview", { msg: err.message });
   }
 }
 
@@ -1113,10 +1173,10 @@ function scheduleConcatPlan() {
 
 async function processJoined() {
   const arquivos = concatFiles();
-  if (arquivos.length < 2) { showError("Marque dois ou mais arquivos para juntar."); return; }
+  if (arquivos.length < 2) { showError(t("concat.checkTwo")); return; }
   showError("");
   await selectSeriesFile(arquivos[0]);      // valem os sensores e as etapas do primeiro
-  $("status-text").textContent = `Juntando ${arquivos.length} arquivos…`;
+  setText($("status-text"), "concat.joining", { n: arquivos.length });
   await processData({ files: arquivos });
 }
 
@@ -1134,3 +1194,18 @@ $("show-raw").addEventListener("change", () => {
   processData({ save: false });
 });
 $("btn-process-all").addEventListener("click", () => processAll().catch((err) => showError(err.message)));
+
+// ── Idioma trocado: o que esta aba desenha fora do HTML ─────────────────────
+onLanguageChange(() => {
+  renderSeriesFiles();                    // notas da lista e a concatenação
+  document.querySelectorAll(".sensor-row").forEach(labelSensorRow);
+  updateHiddenSummary();
+  renderFileInfo();
+  if (lastPlotData) renderPlot(lastPlotData);
+  if (lastStats) {
+    renderSelectionRange();
+    renderSelectionTable(lastStats);
+  }
+  renderStatusDetails();
+  refreshProcessMessages();
+});

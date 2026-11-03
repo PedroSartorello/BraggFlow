@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from braggflow.i18n import tr
 from braggflow.io.processed import channel_quantities, read_processed_csv
 from braggflow.io.reader import classify_file, load_spectra
 from braggflow.paths import resolve_data_dir
@@ -55,7 +56,7 @@ class DataFolder:
             full = None
         root = self.root.resolve()
         if full is None or not full.is_file() or root not in full.parents:
-            raise ValueError(f"Arquivo inválido ou fora de data/: {rel_path}")
+            raise ValueError(tr("data.invalidPath", path=rel_path))
         return full
 
 

@@ -55,6 +55,37 @@ changes to the project — files, steps, sensors, markers, figure style — up t
 second apart (typing a value) count as one step, and the project name is not
 part of it. Inside a text field, Ctrl+Z is the field's own undo.
 
+## Language
+
+The interface speaks Brazilian Portuguese (the default) and English. Switch
+with **PT · EN** at the end of the header, or in the project dialog that opens
+with the page. The choice is kept in this browser (`localStorage`, key
+`braggflow.language`) and `<html lang>` follows it. Switching does not reload
+the page or touch the project: status lines, tables, plots and card summaries
+are redrawn in the new language.
+
+- **Numbers** follow the interface language: `1.550,25` in Portuguese,
+  `1,550.25` in English, in status lines, tables, plots and the CSVs the page
+  builds (interval statistics, peaks and valleys, evolution). Those CSVs use
+  `;` and a decimal comma in Portuguese, as Excel in Portuguese opens them,
+  and `,` with a decimal point in English. Number fields are drawn by the
+  browser in its own locale. The processed CSVs the server writes keep one
+  format in both languages (decimal point, comma separator).
+- **Figures** have their own language: "Idioma dos rótulos automáticos"
+  ("Language of automatic labels") in the Figura tab sets the automatic axis
+  labels and legends. A figure goes into a paper, so it does not change when
+  the interface does.
+- **Server messages** (errors, warnings, the processing report) come back in
+  the interface language: the page sends `Accept-Language` with every
+  request. Without that header (a script, `curl`) they are in Portuguese.
+- **Names that are data** stay as they are in both languages: file names
+  (`_processado.csv`, `estatisticas.csv`), the keys a project saves, and the
+  names the reader gives to unlabelled traces ("Traço 1", shown as "Trace 1"
+  in English).
+
+This guide names controls by their Portuguese labels, as the interface shows
+them by default.
+
 ## Tabs
 
 **Séries temporais** — interrogator files. The sidebar follows the order of
@@ -259,7 +290,9 @@ build step. `main.js` is the entry point; the modules are:
 
 | Module | What |
 |---|---|
-| `core.js` | `$`, error bar, number formatting, the `fetch` wrapper and the server version check; imports nothing |
+| `i18n.js` | the interface language: `t()`, number formatting, the `data-i18n*` attributes and the PT · EN switch; imports only `strings.js` |
+| `strings.js` | every text of the page, in Portuguese and English (JSON after `export default`) |
+| `core.js` | `$`, error bar, `setText` and `setReadout`, the `fetch` wrapper (it adds `Accept-Language`) and the server version check; imports only `i18n.js` |
 | `state.js` | files of the project and what each one keeps; `shared`, the variables read and changed by more than one module |
 | `series.js` | Séries temporais tab: processing options, sensors, setups, file list, plot, processing (one, batch, joined), concatenation |
 | `spectra.js` | Espectros tab: preparation (common or per file), plot, peaks and valleys, evolution of a valley and λ ref |
@@ -270,6 +303,29 @@ build step. `main.js` is the entry point; the modules are:
 | `main.js` | events that cross tabs (sidebar, keyboard shortcuts) and startup |
 
 A variable that another module must **reassign** goes in `shared` (an
-imported `let` is read-only for the importer). Keep `core.js` free of
-imports: the other modules use `$` while loading. `API_BUILD` in `core.js`
-must match the one in `app.py`.
+imported `let` is read-only for the importer). Keep `core.js` importing only
+`i18n.js`, and `i18n.js` only `strings.js`: the other modules use `$` and `t`
+while loading. `API_BUILD` in `core.js` must match the one in `app.py`.
+
+*Texts.* Every visible string lives in `static/js/strings.js` under a key,
+with `pt` and `en` (a `[one, many]` pair where the English plural differs).
+The HTML keeps its Portuguese, which is the first paint, and marks each text
+with `data-i18n="key"` (the element's text; icons, fields and key caps inside
+it stay), `data-i18n-html` (text with `<em>`, `<sub>` or `<kbd>`), or
+`data-i18n-title`, `-placeholder`, `-aria-label` and `-alt`. Modules call
+`t("key", { name })`; a number in `{name}` comes out in the interface
+language, and `{name:2}` limits it to 2 decimals. Text written into the page
+goes through `setText(el, key, vars)` or `setReadout`, so it is translated
+again when the language changes; a module that draws tables or plots
+registers its redraw with `onLanguageChange`. `tests/test_i18n.py` checks
+that every key the page uses exists in both languages with the same
+placeholders, and that no text is left unused. English copy follows the
+design rules: sentence case, plain verbs, and units and symbols as they are
+(λ, nm, Δλ, FWHM, K_T, pm/°C).
+
+Server messages live in `braggflow/i18n.py`: `tr(key, **values)`, with
+`num()` and `count()` for numbers in the message's language and `field()` for
+the names of option fields. The language is a context variable; the web app
+sets it for each request from `Accept-Language`, and everywhere else
+(`braggflow process`, scripts) it is Portuguese. `with use_language("en"):`
+sets it for a block.
