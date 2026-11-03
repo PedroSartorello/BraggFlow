@@ -149,6 +149,18 @@ itself did not change: the same input gives the same output as before.
   - Automatic legends of the evolution figure follow the figure's language.
   - Narrow windows and 200% zoom stack the sidebar above the work area, and
     reduced motion is respected.
+- Visual pass on the same system:
+  - The sidebar is one surface divided by hairlines instead of a stack of
+    boxed cards, and its section labels are larger (15px).
+  - The header reads "BraggFlow / project name · Projetos", with the tabs in
+    the centre and undo, redo and save as icon buttons.
+  - Text glyphs (▶ ↶ ⭳ ×) gave way to a drawn icon set, one stroke weight.
+  - The status bar reads like an instrument: values with their unit, and the
+    CSV's state ("CSV salvo", "CSV ainda não gravado") in a pill.
+  - Long hints fold into "Como funciona" disclosures, and the Plotly toolbar
+    is hidden, since the plot tools already sit above each plot.
+- The README presents BraggFlow as a product, with screenshots made from
+  synthetic data (`docs/images/`).
 
 - `main.py` became `examples/01_process_file.py`; without arguments it
   processes the synthetic example.

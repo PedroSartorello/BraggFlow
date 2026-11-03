@@ -1,7 +1,7 @@
 // Aba Séries temporais: opções de processamento, sensores, setups, lista
 // de arquivos, gráfico, processamento (um, em lote ou juntos) e concatenação.
 
-import { $, checkFields, fieldName, fmtNum, fmtSig, markStale, setBusy, showError, syncCardStyles } from "./core.js";
+import { $, appendReadoutNote, checkFields, fieldName, fmtNum, fmtSig, markStale, setBusy, setReadout, showError, syncCardStyles } from "./core.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
 import { addSpectraToProject, renderSpectraFiles } from "./spectra.js";
 import { collectMarkerTimes, markerLayout, moveMarker, onPlotClick } from "./viz.js";
@@ -226,7 +226,7 @@ function renderPlot(data) {
                      range: yRange(data.channels.map((ch) => shift(data.signals[ch], origem[ch]))) };
   }
 
-  Plotly.react($("plot"), traces, layout, { responsive: true });
+  Plotly.react($("plot"), traces, layout, { responsive: true, displayModeBar: false });
 
   const gd = $("plot");             // o purge de um projeto anterior tira os eventos
   ["plotly_click", "plotly_doubleclick", "plotly_selected"].forEach((ev) => gd.removeAllListeners?.(ev));
@@ -506,11 +506,16 @@ export async function processData({ save = true, files = null } = {}) {
       renderSeriesFiles();
     }
     const csv = data.processed_file || data.existing_file;
-    const estado = data.processed_file ? "CSV salvo ✓"
-      : csv ? "pré-visualização · há um CSV gravado antes"
-      : "pré-visualização · CSV ainda não gravado (Processar ▶ grava)";
-    $("status-text").textContent =
-      `${data.n_samples.toLocaleString("pt-BR")} amostras · ${data.channels.join(", ")} · ${estado}`;
+    const estado = data.processed_file ? { texto: "CSV salvo", tipo: "ok", title: shortName(data.processed_file) }
+      : csv ? { texto: "pré-visualização · há um CSV gravado antes", tipo: "info", title: "Processar grava de novo" }
+      : { texto: "pré-visualização · CSV ainda não gravado", tipo: "warn", title: "Processar (Ctrl+Enter) grava o CSV" };
+    const tempos = data.time.filter((v) => v !== null);
+    const duracao = tempos.length > 1 ? tempos[tempos.length - 1] - tempos[0] : 0;
+    setReadout($("status-text"), [
+      [data.n_samples.toLocaleString("pt-BR"), "amostras"],
+      [fmtNum(duracao, 0), "s"],
+      [data.channels.join(", "), ""],
+    ], estado);
 
     const detalhes = [];
     if (csv) detalhes.push({ texto: `CSV: ${shortName(csv)}` });
@@ -844,7 +849,7 @@ export async function uploadFiles(fileList) {
 
   await loadFileList();
   await addFilesAndShow(enviados);
-  if (ignorados) $("spectra-status").textContent += ` · ${ignorados} arquivo(s) da pasta não são de dados e ficaram de fora`;
+  if (ignorados) appendReadoutNote($("spectra-status"), `${ignorados} arquivo(s) da pasta não são de dados e ficaram de fora`);
   if (erros.length) showError(erros.slice(0, 5).join(" · ") + (erros.length > 5 ? ` · e mais ${erros.length - 5}` : ""));
 }
 
@@ -864,7 +869,7 @@ export async function addFilesAndShow(paths) {
   if (series.length) {
     await processData({ save: false });
     if (espectros) {
-      $("status-text").textContent += ` · ${espectros} espectro(s) foram para a aba Espectros`;
+      appendReadoutNote($("status-text"), `${espectros} espectro(s) foram para a aba Espectros`);
     }
   }
 }

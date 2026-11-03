@@ -8,6 +8,25 @@
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
+<!-- Ícones: um traço só (24 × 24, 2 px, pontas redondas), usados com <use href="#i-nome"> -->
+<svg class="icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 21V9"/><path d="m7 14 5-5 5 5"/><path d="M5 3h14"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
 
 <div id="project-gate" class="gate hidden" role="dialog" aria-modal="true" aria-labelledby="gate-title">
   <div class="gate-card">
@@ -51,7 +70,8 @@
 </div>
 
 <header>
-  <div class="brand">
+  <div class="header-left">
+    <div class="brand">
     <svg class="logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
@@ -62,9 +82,14 @@
       <rect width="32" height="32" rx="8" fill="url(#lg)"/>
       <path d="M5 21 Q8.5 9 11.5 16 T18 18 T27 11" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
     </svg>
-    <div>
       <strong>BraggFlow</strong>
-      <small>Sensores ópticos · séries, espectros e figuras</small>
+    </div>
+    <div class="project-crumb">
+      <span class="crumb-sep" aria-hidden="true">/</span>
+      <input type="text" id="project-name" class="project-title" placeholder="nome do projeto" aria-label="Nome do projeto"
+             title="Nome do projeto. Salvar com outro nome cria uma cópia.">
+      <button type="button" id="btn-projects" class="btn-ghost"
+              title="Abrir, criar ou excluir projetos"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>Projetos</button>
     </div>
   </div>
 
@@ -75,27 +100,21 @@
   </div>
 
   <div id="project-bar">
-    <span class="project-label">Projeto</span>
-    <input type="text" id="project-name" class="project-title" placeholder="nome do projeto" aria-label="Nome do projeto"
-           title="Nome do projeto. Salvar com outro nome cria uma cópia.">
     <span id="project-dirty" class="hidden" title="Há alterações que ainda não foram salvas">não salvo</span>
     <span id="save-state" class="save-state" aria-live="polite"></span>
-    <button type="button" id="btn-undo" class="btn-secondary btn-sm btn-icon" title="Desfazer (Ctrl+Z)"
-            aria-label="Desfazer" disabled>↶</button>
-    <button type="button" id="btn-redo" class="btn-secondary btn-sm btn-icon" title="Refazer (Ctrl+Shift+Z)"
-            aria-label="Refazer" disabled>↷</button>
     <label class="autosave-toggle" title="Salva o projeto sozinho, alguns segundos depois de cada mudança">
       <input type="checkbox" id="autosave" checked> Salvar sozinho</label>
-    <button type="button" id="btn-project-save" class="btn-primary btn-sm" title="Salvar agora (Ctrl+S)">Salvar</button>
-    <button type="button" id="btn-projects" class="btn-secondary btn-sm"
-            title="Abrir, criar ou excluir projetos">Projetos…</button>
+    <span class="bar-sep" aria-hidden="true"></span>
+    <button type="button" id="btn-undo" class="btn-icon-only" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg></button>
+    <button type="button" id="btn-redo" class="btn-icon-only" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer" disabled><svg class="icon" aria-hidden="true"><use href="#i-redo"/></svg></button>
+    <button type="button" id="btn-project-save" class="btn-icon-only" title="Salvar agora (Ctrl+S)" aria-label="Salvar agora"><svg class="icon" aria-hidden="true"><use href="#i-save"/></svg></button>
   </div>
 </header>
 
 <div id="content">
 <div id="error-bar" role="alert" aria-live="assertive">
   <span id="error-text"></span>
-  <button type="button" id="error-close" aria-label="Fechar aviso" title="Fechar (Esc)">×</button>
+  <button type="button" id="error-close" aria-label="Fechar aviso" title="Fechar (Esc)"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
 </div>
 
 <div id="sidebar">
@@ -113,9 +132,9 @@
         <summary>Adicionar arquivos ao projeto</summary>
         <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 8px;">
           <div id="series-picker" class="file-list"></div>
-          <button type="button" id="btn-add-series" class="btn-dashed">Adicionar marcados</button>
+          <button type="button" id="btn-add-series" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
-            <label class="btn-secondary btn-sm">Importar arquivos
+            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
               <input type="file" id="file-upload" class="file-hidden" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
           </div>
         </div>
@@ -136,7 +155,7 @@
         viram um sinal contínuo, nesta ordem, com os sensores e as etapas do primeiro.</span>
       <div id="concat-list" class="concat-list"></div>
       <span class="hint" id="concat-summary"></span>
-      <button type="button" id="btn-process-join" class="btn-primary">Processar juntos ▶</button>
+      <button type="button" id="btn-process-join" class="btn-primary"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar juntos</button>
     </div>
   </details>
 
@@ -153,7 +172,7 @@
         <input type="text" id="setup-name" placeholder="nome do setup">
         <button type="button" id="btn-setup-save" class="btn-dashed">Salvar setup</button>
       </div>
-      <span class="hint" title="O setup fica em data/setups e serve para outras aquisições da mesma montagem.">Nome, banda permitida (nm) e sensibilidade térmica K<sub>T</sub> (pm/°C) de cada grade. O K<sub>T</sub> vem da calibração em temperatura e é usado pela compensação de temperatura.</span>
+      <details class="more"><summary>Como preencher</summary><p class="hint">Nome, banda permitida (nm) e sensibilidade térmica K<sub>T</sub> (pm/°C) de cada grade. O K<sub>T</sub> vem da calibração em temperatura e é usado pela compensação de temperatura. O setup salvo fica em data/setups e serve para outras aquisições da mesma montagem.</p></details>
     </div>
   </div>
 
@@ -333,14 +352,14 @@
   <div class="sidebar-actions">
     <div class="row">
       <button id="btn-process" class="btn-primary"
-              title="Processa e grava o CSV usado na aba Figura (Ctrl+Enter)">Processar ▶</button>
-      <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo">Baixar CSV</button>
+              title="Processa e grava o CSV usado na aba Figura (Ctrl+Enter)"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>Processar</button>
+      <button id="btn-download" class="btn-secondary" title="Baixa o CSV processado deste arquivo"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
     </div>
     <div class="row actions-sub">
       <label class="check-row" title="A cada mudança nas opções, processa e grava o CSV de novo. Abrir ou adicionar um arquivo só mostra a prévia.">
         <input type="checkbox" id="auto-process" checked> Gravar o CSV a cada mudança</label>
       <button type="button" id="btn-process-all" class="btn-link"
-              title="Processa, um por um, os arquivos marcados na lista">Processar marcados ▶▶</button>
+              title="Processa, um por um, os arquivos marcados na lista"><svg class="icon" aria-hidden="true"><use href="#i-layers"/></svg>Processar marcados</button>
     </div>
   </div>
 
@@ -366,11 +385,11 @@
           <input type="search" id="spectrum-picker-filter" class="list-filter" placeholder="Filtrar pelo nome…"
                  aria-label="Filtrar os arquivos disponíveis">
           <div id="spectra-picker" class="file-list scroll-list"></div>
-          <button type="button" id="btn-add-spectra" class="btn-dashed">Adicionar marcados</button>
+          <button type="button" id="btn-add-spectra" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
-            <label class="btn-secondary btn-sm">Importar arquivos
+            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
               <input type="file" id="spectra-upload" class="file-hidden" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
-            <label class="btn-secondary btn-sm">Importar pasta
+            <label class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar pasta
               <input type="file" id="spectra-upload-dir" class="file-hidden" webkitdirectory multiple></label>
           </div>
           <span class="hint">Uma pasta enviada fica em data/uploads/&lt;pasta&gt;. Arquivos em subpastas
@@ -410,11 +429,11 @@
           <option value="absorbance">Absorbância (−log₁₀ T)</option>
         </select>
       </label>
-      <span class="hint span2">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
+      <details class="more span2"><summary>Como funciona</summary><p class="hint">Para o espectro bruto da amostra (S): com a fonte (R) e o fundo (D),
         T = (S − D)/(R − D); só a fonte, T = S/R; só o fundo, S − D. Deixe os dois vazios para
         analisar o espectro como está — bruto ou já em transmissão, como as exportações do OceanView
         em modo Transmission. Fonte e fundo são espectros do projeto (adicione-os acima), aparecem
-        sem conversão e ficam fora da evolução entre arquivos.</span>
+        sem conversão e ficam fora da evolução entre arquivos.</p></details>
     </div>
   </details>
 
@@ -451,9 +470,9 @@
       </label>
       <label class="field">Deslocamento vertical <input type="number" step="any" data-spec="offset"></label>
       <button type="button" id="btn-copy-spectrum" class="btn-dashed span2 hidden">Aplicar este preparo a todos</button>
-      <span class="hint span2">Savitzky-Golay preserva melhor a altura e a largura de picos estreitos;
+      <details class="more span2"><summary>Qual suavização usar</summary><p class="hint">Savitzky-Golay preserva melhor a altura e a largura de picos estreitos;
         a média móvel suaviza mais, mas alarga e achata os picos. Use janelas bem menores que a FWHM.
-        O deslocamento ajuda a empilhar espectros na mesma figura.</span>
+        O deslocamento ajuda a empilhar espectros na mesma figura.</p></details>
     </div>
   </div>
 
@@ -793,7 +812,7 @@
       <button type="button" id="btn-status-details" class="status-link hidden"
               aria-expanded="false" aria-controls="status-details">detalhes</button>
       <button type="button" id="btn-open-viz" class="status-link hidden"
-              title="Abre este CSV processado na aba Figura">Abrir na Figura →</button>
+              title="Abre este CSV processado na aba Figura">Abrir na Figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
     </div>
     <ul id="status-details" class="status-details hidden"></ul>
     <div id="plot-toolbar" class="plot-toolbar">
@@ -832,7 +851,7 @@
         <span class="hint">instantes que dividem o ensaio: valem para a figura e para as estatísticas</span></summary>
       <span class="hint" id="marker-hint">t (s) · legenda · cor</span>
       <div id="marker-list"></div>
-      <button type="button" id="btn-add-marker" class="btn-dashed">+ Adicionar marcação</button>
+      <button type="button" id="btn-add-marker" class="btn-dashed"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcação</button>
     </details>
     <details class="card enabled collapsible" id="analysis-panel">
       <summary class="card-header">
@@ -923,7 +942,7 @@
       <div class="dropzone" data-kind="series">
         <strong>Solte aqui os arquivos de série temporal</strong>
         .asc, .txt, .csv, .dat, .tsv… o formato é detectado sozinho
-        <br><label class="btn-secondary">Escolher no computador
+        <br><label class="btn-secondary"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
           <input type="file" class="dropzone-input" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
       </div>
       <div class="empty-files" id="series-empty-files"></div>
@@ -990,11 +1009,11 @@
             </select>
           </label>
           <div class="evo-actions">
-          <button type="button" id="btn-evolution" class="btn-secondary btn-sm">Recalcular</button>
-          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+          <button type="button" id="btn-evolution" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Recalcular</button>
+          <button type="button" id="btn-evolution-csv" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
           <button type="button" id="btn-evo-event" class="btn-secondary btn-sm"
                   title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina.">Marcar evento</button>
-          <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura</button>
+          <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm">Fazer figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
           </div>
         </div>
         <span class="hint" id="evolution-status">Usa os espectros do projeto em ordem de aquisição
@@ -1010,8 +1029,8 @@
           <div class="event-list" id="evolution-events"></div>
         </div>
         <div class="evolution-focus hidden" id="evolution-focus">
-          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior, na ordem da evolução (←)" aria-label="Espectro anterior">◀</button>
-          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte, na ordem da evolução (→)" aria-label="Espectro seguinte">▶</button>
+          <button type="button" id="btn-evo-prev" class="focus-step" title="Espectro anterior, na ordem da evolução (←)" aria-label="Espectro anterior"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+          <button type="button" id="btn-evo-next" class="focus-step" title="Espectro seguinte, na ordem da evolução (→)" aria-label="Espectro seguinte"><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
           <span id="evolution-focus-text"></span>
           <button type="button" id="btn-evo-exclude" class="btn-link"></button>
           <button type="button" id="btn-evo-restore" class="btn-link hidden"></button>
@@ -1031,7 +1050,7 @@
       <div class="card-body">
         <div class="analysis-options">
           <div class="spectra-summary" id="spectra-summary"></div>
-          <button type="button" id="btn-spectra-csv" class="btn-secondary btn-sm">Baixar CSV</button>
+          <button type="button" id="btn-spectra-csv" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar CSV</button>
         </div>
         <div id="spectra-help" class="help-box hidden">
           <strong>O que você escolhe (barra lateral)</strong>
@@ -1104,7 +1123,7 @@
       <div class="dropzone" data-kind="spectrum">
         <strong>Solte aqui os arquivos de espectro</strong>
         intensidade × comprimento de onda; vários traços por arquivo são aceitos
-        <br><label class="btn-secondary">Escolher no computador
+        <br><label class="btn-secondary"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
           <input type="file" class="dropzone-input" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
       </div>
       <div class="empty-files" id="spectra-empty-files"></div>
@@ -1113,7 +1132,7 @@
 
   <div id="tab-viz-main" class="hidden">
     <div id="status-viz">
-      <button type="button" id="btn-figure" class="btn-primary btn-sm" title="Atualizar a figura (Ctrl+Enter)">Atualizar ▶</button>
+      <button type="button" id="btn-figure" class="btn-primary btn-sm" title="Atualizar a figura (Ctrl+Enter)"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>Atualizar</button>
       <label class="check-row"><input type="checkbox" id="viz-auto" checked> Atualizar ao editar</label>
       <select id="viz-zoom" title="Zoom da pré-visualização">
         <option value="fit">Ajustar à tela</option>
@@ -1129,8 +1148,8 @@
         <option value="tiff">TIFF</option>
       </select>
       <input type="number" step="50" min="50" max="2400" data-style="export.dpi" title="Resolução (dpi)" aria-label="Resolução (dpi)">
-      <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento">Copiar figura</button>
-      <button type="button" id="btn-fig-download" class="btn-secondary btn-sm">Baixar figura ⭳</button>
+      <button type="button" id="btn-fig-copy" class="btn-secondary btn-sm" title="Copia a figura como imagem (PNG) para colar em slides ou num documento"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>Copiar figura</button>
+      <button type="button" id="btn-fig-download" class="btn-secondary btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Baixar figura</button>
     </div>
     <div id="viz-figure">
       <span class="placeholder">A figura de publicação aparecerá aqui.</span>

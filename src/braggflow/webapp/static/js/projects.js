@@ -1,7 +1,7 @@
 // Projetos: tela inicial, adicionar e tirar arquivos, salvar, abrir,
 // excluir e o aviso de alterações não salvas.
 
-import { $, fmtBytes, fmtWhen, showError } from "./core.js";
+import { $, fmtBytes, fmtWhen, icon, showError } from "./core.js";
 import { baseName, commonSpectrumSettings, fileKind, folderOf, porNome, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName, spectraCommon, spectraState } from "./state.js";
 import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
 import { addSpectraToProject, applySpectraProject, evolutionEventsList, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
@@ -24,7 +24,8 @@ export function fileRow(path, { selected, onSelect, checkbox, note }) {
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "file-remove";
-  remove.textContent = "×";
+  remove.append(icon("x"));
+  remove.setAttribute("aria-label", `Tirar ${baseName(path)} do projeto`);
   remove.title = "Tirar do projeto (não apaga o arquivo)";
   remove.addEventListener("click", (e) => { e.stopPropagation(); removeFileFromProject(path); });
   row.append(checkbox || document.createElement("span"), name, state, remove);

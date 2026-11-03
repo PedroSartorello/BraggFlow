@@ -44,7 +44,7 @@ header {
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand .logo { width: 32px; height: 32px; flex: 0 0 32px; }
-.brand strong { font-size: 15px; letter-spacing: -0.01em; display: block; line-height: 1.15; white-space: nowrap; }
+.brand strong { font-size: 16px; letter-spacing: -0.01em; display: block; line-height: 1.15; white-space: nowrap; }
 .brand small { font-size: 12px; color: var(--muted); display: block; line-height: 1.15; white-space: nowrap; }
 
 #tabs {
@@ -96,7 +96,7 @@ header {
 #sidebar::-webkit-scrollbar-track, #viz-figure::-webkit-scrollbar-track { background: transparent; }
 
 .section-label {
-  font-size: 13px; font-weight: 700; color: var(--text); margin: 6px 2px 0;
+  font-size: 15px; font-weight: 700; color: var(--text); margin: 6px 2px 0;
 }
 
 /* ── Cartões ─────────────────────────────────────────────────────────── */
@@ -107,7 +107,8 @@ header {
 }
 .card.enabled { border-color: rgba(26, 78, 138, .35); }
 .card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-.card-header span { font-weight: 600; font-size: 12.5px; order: 1; }
+.card-header span { font-weight: 600; font-size: 13px; order: 1; }
+#main .card-header > span:first-child { font-size: 14px; }
 .card:not(.enabled) .card-header span { color: var(--muted); }
 .card-body { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
 .card > .card-body:first-child { margin-top: 0; }   /* cartão sem cabeçalho (o rótulo numerado faz esse papel) */
@@ -120,8 +121,15 @@ header {
   flex: 1; text-align: left; font-size: 12.5px; font-weight: 600; font-family: var(--font);
   color: var(--text); background: none; border: none; padding: 0; cursor: pointer;
 }
-.step-name::after { content: " ›"; color: var(--muted); }
-.step.open .step-name::after { content: " ⌄"; }
+.step-name { display: inline-flex; align-items: center; gap: 4px; }
+.step-name::after, details.advanced > summary::after, details.more > summary::after,
+#sidebar details.card > summary.card-header::after {
+  content: ""; width: 12px; height: 12px; flex: 0 0 12px; background: currentColor; opacity: .7;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transform: rotate(-90deg); transition: transform .15s;
+}
+.step.open .step-name::after, details.advanced[open] > summary::after, details.more[open] > summary::after,
+#sidebar details.card[open] > summary.card-header::after { transform: none; }
 .step:not(.on) .step-name { color: var(--muted); }
 .step-switch-placeholder { width: 34px; flex: 0 0 34px; }
 .step-body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; padding: 2px 0 10px; }
@@ -330,7 +338,7 @@ body:not(.no-series) #series-empty, body:not(.no-spectra) #spectra-empty { displ
 .selection-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 12px; }
 .step-label { display: flex; align-items: center; gap: 7px; }
 .step-num {
-  display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px;
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
   border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11.5px;
 }
 .viz-search { position: sticky; top: -16px; z-index: 2; background: var(--surface); padding: 2px 0 10px; }
@@ -494,7 +502,7 @@ body.no-series #status-details { display: none !important; }
 #viz-figure:has(img:not(.zoom-fit)) { justify-content: flex-start; }
 
 #status-viz { flex-wrap: wrap; gap: 10px; }
-#status-viz #viz-status { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#status-viz #viz-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #status-viz select { width: auto; height: 28px; font-size: 12px; }
 .btn-sm { padding: 6px 12px !important; font-size: 12px !important; }
 
@@ -507,12 +515,14 @@ details.viz-card > summary::after {
 details.viz-card[open] > summary::after { transform: rotate(90deg); }
 .span2 { grid-column: span 2; }
 details.advanced { border-top: 1px solid var(--border); padding-top: 9px; }
-details.advanced > summary {
-  list-style: none; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--accent);
+details.advanced > summary, details.more > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; color: var(--accent);
 }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > .hint { margin: 6px 0 0; }
 details.advanced > summary::-webkit-details-marker { display: none; }
-details.advanced > summary::after { content: " ›"; }
-details.advanced[open] > summary::after { content: " ⌄"; }
+
 details.advanced > .card-body { margin-top: 8px; }
 details.advanced .sub-label:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 #status-viz input[type=number] { width: 74px; height: 28px; font-size: 12px; }
@@ -695,10 +705,85 @@ body.no-spectra #spectra-evolution { display: none !important; }
   #sidebar { width: 100%; min-width: 0; overflow: visible; border-right: none; border-bottom: 1px solid var(--border); }
   #main { min-height: 80vh; }
   #plot, #spectra-plot { min-height: 340px; }
-  #project-bar { margin-left: 0; width: 100%; }
-  #project-bar .project-title { min-width: 0; flex: 1; }
+  #tabs { order: 3; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; scroll-behavior: auto !important; }
+}
+
+/* ── Ícones ──────────────────────────────────────────────────────────── */
+.icon-sprite { display: none; }
+.icon {
+  width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+:is(button, label, .status-link):has(> .icon) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-sm .icon, .status-link .icon { width: 14px; height: 14px; }
+.file-remove .icon, .marker-del .icon { width: 13px; height: 13px; }
+#error-close { display: inline-flex; align-items: center; justify-content: center; }
+
+/* ── Cabeçalho: marca e projeto · abas · salvar ──────────────────────── */
+header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.header-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.project-crumb { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.crumb-sep { color: var(--border-strong); font-size: 22px; font-weight: 300; margin: 0 4px 0 6px; }
+.project-crumb .project-title {
+  field-sizing: content; width: auto; min-width: 120px; max-width: 280px;   /* o botão Projetos fica junto do nome */
+  height: 32px; padding: 4px 8px; font-size: 15px; font-weight: 600;
+  color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 7px;
+}
+.project-crumb .project-title:hover { border-color: var(--border); background: #fff; }
+.project-crumb .project-title:focus { border-color: var(--accent); background: #fff; }
+#project-bar { justify-self: end; margin-left: 0; gap: 6px; }
+.btn-ghost {
+  padding: 6px 10px; font: 600 12.5px var(--font); color: var(--muted); white-space: nowrap;
+  background: transparent; border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.btn-ghost:hover { color: var(--accent); background: var(--accent-soft); }
+.btn-icon-only {
+  width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 8px;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.btn-icon-only .icon { width: 18px; height: 18px; }
+.btn-icon-only:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.btn-icon-only:disabled { opacity: .35; cursor: default; }
+.bar-sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+/* ── Barra lateral: seções numeradas separadas por réguas, sem caixas ── */
+#tab-series-sidebar, #tab-spectra-sidebar, #tab-viz-sidebar { gap: 0; }
+#sidebar .section-label { margin: 22px 2px 4px; }
+#sidebar :is(#tab-series-sidebar, #tab-spectra-sidebar) > .section-label:first-child { margin-top: 2px; }
+#sidebar .card {
+  border: none; border-top: 1px solid var(--border); border-radius: 0;
+  box-shadow: none; background: transparent; padding: 12px 2px 14px;
+}
+#sidebar .section-label + .card, #sidebar .viz-search + .card { border-top: none; padding-top: 6px; }
+#sidebar .card .card-body { margin-top: 8px; }
+#sidebar .card > .card-body:first-child { margin-top: 0; }
+#sidebar .card-header { min-height: 24px; }
+
+/* ── Status como leitura de instrumento ──────────────────────────────── */
+#status-text, #spectra-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.ro { color: var(--muted); white-space: nowrap; }
+.ro b { color: var(--text); font-weight: 600; }
+.ro-note { color: var(--muted); }
+.ro-state {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 8px;
+  font-size: 12px; font-weight: 600; border: 1px solid; border-radius: 99px; white-space: nowrap;
+}
+.ro-state .icon { width: 13px; height: 13px; stroke-width: 2.5; }
+.ro-ok { color: var(--accent); background: var(--accent-soft); border-color: rgba(26, 78, 138, .25); }
+.ro-warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-border); }
+.ro-info { color: var(--muted); background: var(--bg); border-color: var(--border-strong); }
+
+@media (max-width: 1100px) {
+  .project-crumb .project-title { max-width: 160px; }
+  .autosave-toggle { display: none; }
+}
+@media (max-width: 900px) {
+  header { display: flex; flex-wrap: wrap; }
+  #project-bar { width: auto; margin-left: auto; }
 }
 

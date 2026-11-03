@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-03T14:56:10+00:00",
+  "generatedAt": "2026-11-03T18:16:40+00:00",
   "title": "Design System: BraggFlow",
   "extensions": {
     "colorMeta": {
@@ -270,6 +270,10 @@
         "displayName": "Hint",
         "purpose": "Explanations under groups of fields."
       },
+      "panel-title": {
+        "displayName": "Panel title",
+        "purpose": "Headers of the panels in the main area."
+      },
       "section-label": {
         "displayName": "Section label",
         "purpose": "Numbered step labels and the evolution group titles; sentence case, never uppercase."
@@ -395,14 +399,15 @@
   ],
   "narrative": {
     "northStar": "A Bancada Organizada",
-    "overview": "**Creative North Star: \"A Bancada Organizada\"** (the tidy bench)\n\nBraggFlow is a working bench for one test at a time. Everything sits where the work needs it:\n\n- a white sidebar of numbered sections follows the order of the job (files,   sensors, processing steps); - the plot takes the rest of the screen; - the results sit in panels stacked under the plot.\n\nNothing floats free. Each card has a header that says its state even when it is closed, and a small blue dot marks every option that differs from the default.\n\nThe mood is soft and orderly. Cool neutrals form the room: a pale blue-grey ground behind white surfaces, with dark blue-black ink. One pen-ink blue does every job that needs attention:\n\n- the active tab; - the primary button; - a switch that is on; - the focus ring.\n\nDensity is high but calm:\n\n- body text is 13px; - labels and hints are 12px; - the sidebar is 350px wide; - figures are tabular everywhere, so numbers line up.\n\nLong explanations live in help boxes and hints rather than in the controls. Shortcuts sit where they act, as small key caps.\n\nThe character comes from the plots, not the chrome. The plots carry the domain's own marks:\n\n- the reference wavelength as a dashed orange line; - the search window as a pale orange band; - the tracked valley as an orange ring; - the FWHM as dashed level lines; - events as dashed vertical lines.\n\nTrouble is never hidden. A refused value is marked at its field, with the reason under it. A plot that no longer matches the options carries a \"Desatualizado\" badge instead of disappearing.",
+    "overview": "**Creative North Star: \"A Bancada Organizada\"** (the tidy bench)\n\nBraggFlow is a working bench for one test at a time. Everything sits where the work needs it:\n\n- a white sidebar of numbered sections follows the order of the job (files,   sensors, processing steps). It is one surface divided by hairlines, not a   stack of boxes; - the plot takes the rest of the screen; - the results sit in panels stacked under the plot.\n\nNothing floats free. Each card has a header that says its state even when it is closed, and a small blue dot marks every option that differs from the default.\n\nThe mood is soft and orderly. Cool neutrals form the room: a pale blue-grey ground behind white surfaces, with dark blue-black ink. One pen-ink blue does every job that needs attention:\n\n- the active tab; - the primary button; - a switch that is on; - the focus ring.\n\nDensity is high but calm:\n\n- body text is 13px; - labels and hints are 12px; - the sidebar is 350px wide; - figures are tabular everywhere, so numbers line up.\n\nLong explanations fold into a \"Como funciona ›\" disclosure, so the hint you see is one line long. Shortcuts sit where they act, as small key caps.\n\nIcons are drawn in one stroke (24 × 24, 2px, round caps) from a sprite in the page, never text glyphs. The header reads like a path, **BraggFlow / LMR demo**, with the project switcher beside the name. The status bar reads like an instrument: values in ink with their unit in faded ink, and the CSV's state in a pill at the end.\n\nThe character comes from the plots, not the chrome. The plots carry the domain's own marks:\n\n- the reference wavelength as a dashed orange line; - the search window as a pale orange band; - the tracked valley as an orange ring; - the FWHM as dashed level lines; - events as dashed vertical lines.\n\nTrouble is never hidden. A refused value is marked at its field, with the reason under it. A plot that no longer matches the options carries a \"Desatualizado\" badge instead of disappearing.",
     "keyCharacteristics": [
       "Cool neutral room (Névoa de Laboratório ground, white surfaces) with one blue",
-      "Numbered sidebar sections in the order of the work, each card reporting its",
+      "Numbered sidebar sections in the order of the work, separated by hairlines,",
       "Soft cards that rest on the ground with a hairline shadow and gently rounded",
       "Plots fill the main area; results stack under the plot.",
       "Text keeps its case: λ, nm and σ stay λ, nm and σ.",
-      "Errors at the field, stale plots marked, shortcuts visible."
+      "Errors at the field, stale plots marked, shortcuts visible.",
+      "Drawn icons in one stroke; the status bar as an instrument readout."
     ],
     "rules": [
       {
@@ -426,6 +431,11 @@
         "section": "typography"
       },
       {
+        "name": "The Ruled Sidebar Rule",
+        "body": "The sidebar is one surface divided by hairlines. Boxes, with border, radius and shadow, belong to the panels of the main area. A box inside the sidebar is a box inside a box.",
+        "section": "layout"
+      },
+      {
         "name": "The Rest, Don't Float Rule",
         "body": "A surface in the flow of the page gets the Pousada shadow at most. Lift is reserved for things that sit above the page: dialogs, the error notice and floating panels.",
         "section": "elevation"
@@ -444,7 +454,9 @@
       "**Don't** put essential information only in a `title` tooltip. Shortcuts, what a mode does, and what a delete keeps must be visible or reachable by keyboard.",
       "**Don't** add a second accent colour to the chrome. New emphasis is blue, bold, or a state colour.",
       "**Don't** set functional text below 11.5px, or labels and hints below 12px.",
-      "**Don't** leave a control without an accessible name. Fields in tables and repeated rows get one through `aria-label`."
+      "**Don't** leave a control without an accessible name. Fields in tables and repeated rows get one through `aria-label`.",
+      "**Don't** use text glyphs (▶ × ↶ ⭳ ›) as icons. Draw them from the sprite.",
+      "**Don't** box a block inside the sidebar (The Ruled Sidebar Rule)."
     ]
   }
 }

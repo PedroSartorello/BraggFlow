@@ -39,6 +39,51 @@ export async function checkServerBuild() {
 }
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
+// Ícone do conjunto da página (o <svg> com os <symbol> no começo do <body>)
+export function icon(nome) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(ns, "use");
+  use.setAttribute("href", `#i-${nome}`);
+  svg.appendChild(use);
+  return svg;
+}
+
+// Barra de status como leitura de instrumento: valores em destaque com o
+// rótulo ao lado, observações em texto apagado e o estado no fim, num selo.
+// `partes`: [valor, rótulo] ou um texto; `estado`: {texto, tipo: ok|warn|info, title?}
+export function setReadout(el, partes, estado = null) {
+  el.classList.remove("status-error");
+  el.replaceChildren();
+  partes.filter((parte) => parte !== null && parte !== "").forEach((parte, i) => {
+    if (i) el.append(Object.assign(document.createElement("span"), { className: "visually-hidden", textContent: " · " }));
+    const item = document.createElement("span");
+    if (typeof parte === "string") {
+      item.className = "ro-note";
+      item.textContent = parte;
+    } else {
+      item.className = "ro";
+      item.append(Object.assign(document.createElement("b"), { textContent: parte[0] }));
+      if (parte[1]) item.append(` ${parte[1]}`);
+    }
+    el.append(item);
+  });
+  if (estado) {
+    const selo = document.createElement("span");
+    selo.className = `ro-state ro-${estado.tipo}`;
+    if (estado.title) selo.title = estado.title;
+    if (estado.tipo === "ok") selo.append(icon("check"));
+    selo.append(estado.texto);
+    el.append(" ", selo);
+  }
+}
+
+// Uma observação a mais no fim da barra de status, sem desmontar a leitura
+export function appendReadoutNote(el, texto) {
+  el.append(Object.assign(document.createElement("span"), { className: "ro-note", textContent: texto }));
+}
 // Aviso de erro: fixo no topo da área de trabalho, anunciado ao leitor de tela
 export function showError(msg) {
   $("error-text").textContent = msg;

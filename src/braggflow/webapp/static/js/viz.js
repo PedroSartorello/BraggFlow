@@ -1,7 +1,7 @@
 // Aba Figura: fontes de dados, estilo por canal, estilos salvos,
 // marcações, geração e download da figura.
 
-import { $, fmtNum, showError } from "./core.js";
+import { $, fmtNum, icon, showError } from "./core.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectrumSettingsFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
 import { ensureEvolution, evolutionEventsList, evolutionPayload, saveCurrentSpectrumState, setEvolutionY } from "./spectra.js";
@@ -634,7 +634,8 @@ export function addMarkerRow(time = "", label = "", color = null) {
   cIn.setAttribute("aria-label", `Cor da marcação ${n + 1}`);
 
   const del = document.createElement("button");
-  del.type = "button"; del.className = "marker-del"; del.textContent = "×";
+  del.type = "button"; del.className = "marker-del"; del.append(icon("x"));
+  del.setAttribute("aria-label", `Remover a marcação ${n + 1}`);
   del.title = "Remover marcação";
   del.addEventListener("click", () => {
     row.remove();

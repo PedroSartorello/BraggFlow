@@ -21,7 +21,7 @@ colors:
 typography:
   brand:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
-    fontSize: "15px"
+    fontSize: "16px"
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: "-0.01em"
@@ -31,15 +31,19 @@ typography:
     fontWeight: 600
   section-label:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
-    fontSize: "13px"
+    fontSize: "15px"
     fontWeight: 700
+  panel-title:
+    fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
+    fontSize: "14px"
+    fontWeight: 600
   body:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
     fontSize: "13px"
     fontWeight: 400
   card-title:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
-    fontSize: "12.5px"
+    fontSize: "13px"
     fontWeight: 600
   field-label:
     fontFamily: "Segoe UI Variable Text, Segoe UI, system-ui, -apple-system, Roboto, sans-serif"
@@ -138,9 +142,27 @@ components:
     backgroundColor: "{colors.superficie}"
     textColor: "{colors.tinta-apagada}"
     rounded: "{rounded.key}"
+  button-icon:
+    textColor: "{colors.tinta}"
+    rounded: "{rounded.button}"
+    size: "32px"
+  button-ghost:
+    textColor: "{colors.tinta-apagada}"
+    rounded: "{rounded.button}"
+    padding: "6px 10px"
+  readout-state-ok:
+    backgroundColor: "{colors.azul-tinta-lavada}"
+    textColor: "{colors.azul-tinta-de-caneta}"
+    rounded: "{rounded.pill}"
+    padding: "2px 9px"
+  readout-state-warn:
+    backgroundColor: "{colors.aviso-fundo}"
+    textColor: "{colors.aviso}"
+    rounded: "{rounded.pill}"
+    padding: "2px 9px"
 ---
 
-<!-- Captured from the implementation on 2026-11-03 and refreshed after the critique refinement: contrast, type floor, case, field errors, stale plots, accessibility, responsive layout. -->
+<!-- Captured from the implementation on 2026-11-03, refreshed after the critique refinement and the visual pass: ruled sidebar, header with the project crumb, drawn icons, status as an instrument readout. -->
 
 # Design System: BraggFlow
 
@@ -152,7 +174,8 @@ BraggFlow is a working bench for one test at a time. Everything sits where the
 work needs it:
 
 - a white sidebar of numbered sections follows the order of the job (files,
-  sensors, processing steps);
+  sensors, processing steps). It is one surface divided by hairlines, not a
+  stack of boxes;
 - the plot takes the rest of the screen;
 - the results sit in panels stacked under the plot.
 
@@ -176,8 +199,14 @@ Density is high but calm:
 - the sidebar is 350px wide;
 - figures are tabular everywhere, so numbers line up.
 
-Long explanations live in help boxes and hints rather than in the controls.
-Shortcuts sit where they act, as small key caps.
+Long explanations fold into a "Como funciona ›" disclosure, so the hint you
+see is one line long. Shortcuts sit where they act, as small key caps.
+
+Icons are drawn in one stroke (24 × 24, 2px, round caps) from a sprite in the
+page, never text glyphs. The header reads like a path, **BraggFlow / LMR
+demo**, with the project switcher beside the name. The status bar reads like an
+instrument: values in ink with their unit in faded ink, and the CSV's state in
+a pill at the end.
 
 The character comes from the plots, not the chrome. The plots carry the
 domain's own marks:
@@ -195,13 +224,14 @@ reason under it. A plot that no longer matches the options carries a
 **Key Characteristics:**
 - Cool neutral room (Névoa de Laboratório ground, white surfaces) with one blue
   accent.
-- Numbered sidebar sections in the order of the work, each card reporting its
-  own state.
+- Numbered sidebar sections in the order of the work, separated by hairlines,
+  each block reporting its own state.
 - Soft cards that rest on the ground with a hairline shadow and gently rounded
   corners (10px).
 - Plots fill the main area; results stack under the plot.
 - Text keeps its case: λ, nm and σ stay λ, nm and σ.
 - Errors at the field, stale plots marked, shortcuts visible.
+- Drawn icons in one stroke; the status bar as an instrument readout.
 
 ## Colors
 
@@ -273,17 +303,20 @@ labels match the interface around it. Figures are tabular across the whole
 page.
 
 ### Hierarchy
-- **Brand** (700, 15px, line-height 1.15, -0.01em): the BraggFlow wordmark in
-  the header and the project dialog. Its subtitle hides below 1400px, so the
-  header stays on one line.
+- **Brand** (700, 16px, line-height 1.15, -0.01em): the BraggFlow wordmark in
+  the header and the project dialog. The project name follows in the header at
+  15px 600.
 - **Title** (600, 14px): the project name in the header; empty-state headings
   go up to 17px.
-- **Section label** (700, 13px, ink, sentence case): the numbered step labels
-  ("1 Arquivos", "3 Etapas · de cima para baixo") and the evolution's group
-  titles ("Acompanhar", "Mostrar"). Sub-section labels are 12px 700 ink.
+- **Section label** (700, 15px, ink, sentence case): the numbered step labels
+  ("1 Arquivos", "3 Etapas · de cima para baixo"), 22px above and 4px below.
+  Sub-section labels and the evolution's group titles are 12px 700 ink.
+- **Panel title** (600, 14px): the headers of the panels in the main area
+  ("Evolução entre arquivos", "Estatísticas por intervalo").
 - **Body** (400, 13px): controls, buttons, status text, and file names (12px
   in lists).
-- **Card title** (600, 12.5px): card headers in the sidebar and the main area.
+- **Card title** (600, 13px): the block headers in the sidebar ("Limpeza e
+  amostragem", "Transmissão").
 - **Field label** (400, 12px, faded ink): the label above every input. Field
   error messages use the same size in Perigo.
 - **Hint** (400, 12px, line-height 1.4, faded ink): explanations under groups
@@ -305,23 +338,25 @@ transformed to uppercase; hierarchy comes from weight, size and ink.
 
 The page is a full-height app shell:
 
-- a 56px header holding the wordmark, the three tabs as a segmented control,
-  and the project bar;
+- a 56px header in three columns:
+  - left: the wordmark and the project crumb (name and "Projetos");
+  - centre: the three tabs as a segmented control;
+  - right: the save state, autosave, undo, redo and save;
 - under it, a fixed 350px sidebar that scrolls on its own;
 - a main area that fills the rest.
 
 Each tab has its own sidebar and main area, and they swap in place.
 
-- **Sidebar.** Numbered sections in the order of the work. Cards are 10px
-  apart, with 14px padding around them, and the card bodies use a two-column
-  grid.
+- **Sidebar.** Numbered sections in the order of the work. Within a section,
+  blocks are separated by 1px hairlines with 12–14px of padding, never boxed.
+  Block bodies use a two-column grid.
 - **Main area.** 14px padding, 10px gaps. A status bar sits on top, the plot
   fills the space, and result panels stack under it. The Espectros main area
   scrolls as a whole, with the spectrum plot at 44vh. The evolution card groups
   its controls into "Acompanhar" and "Mostrar", with the actions right-aligned
   and one primary ("Fazer figura").
 - **Responsive.**
-  - Below 1400px, the brand subtitle hides.
+  - Below 1100px, the project name narrows and the autosave label hides.
   - Below 1180px, the sidebar narrows to 300px.
   - Below 900px (a narrow window, or 200% zoom on a laptop), the sidebar moves
     above the work area, the page scrolls, and plots keep at least 340px of
@@ -329,6 +364,11 @@ Each tab has its own sidebar and main area, and they swap in place.
 
 Spacing follows a small scale: 4, 8, 10, 14 and 24px. Groups get the larger
 step; controls within a group get the smaller.
+
+### Named Rules
+**The Ruled Sidebar Rule.** The sidebar is one surface divided by hairlines.
+Boxes, with border, radius and shadow, belong to the panels of the main area.
+A box inside the sidebar is a box inside a box.
 
 ## Elevation & Depth
 
@@ -391,8 +431,18 @@ Soft and orderly: rounded, filled or outlined, never shouting.
   For "+ Adicionar …" and "Aplicar …", anything that adds or copies.
 - **Link:** blue text that underlines on hover; also the disclosure summaries
   ("Adicionar arquivos ao projeto ›").
-- **File import:** a secondary button that opens the file picker, never the
-  browser's native file control.
+- **File import:** a secondary button with the upload icon that opens the file
+  picker, never the browser's native file control.
+- **Icon-only:** 32px square, transparent, ink icon at 18px. On hover, the
+  washed tint and blue. Used for undo, redo and save in the header; each has an
+  `aria-label` and a tooltip with its shortcut.
+- **Ghost:** transparent, faded ink, 12.5px semibold, with an icon. Used for
+  "Projetos" beside the project name.
+- **Icons:** drawn from the page's sprite (`<use href="#i-…">`): play,
+  refresh, download, upload, copy, arrow, chevrons, x, plus, check, folder,
+  undo, redo, save, layers. They are 16px in buttons, 14px in small buttons
+  and 13px in remove buttons. Disclosures use a drawn chevron, rotated when
+  closed.
 
 ### Chips
 - **Status chip:** a white pill with a firm border and blue 11.5px semibold
@@ -401,6 +451,8 @@ Soft and orderly: rounded, filled or outlined, never shouting.
 - **Badge:** "não salvo", an 11.5px bold warning pill.
 
 ### Cards / Containers
+Only the panels of the main area are cards. The sidebar's blocks are not (see
+The Ruled Sidebar Rule).
 - **Corner Style:** 10px.
 - **Background:** white on the Névoa ground.
 - **Shadow Strategy:** Pousada (see Elevation & Depth).
@@ -440,6 +492,19 @@ Soft and orderly: rounded, filled or outlined, never shouting.
   cards. Nothing is hidden behind a menu.
 - **Project dialog:** a modal dialog that keeps focus inside it. Esc returns to
   the current project.
+
+### Status readout
+The status bar of each tab reads like an instrument:
+
+- values in ink 600 with their unit in faded ink ("**9.001** amostras",
+  "**900** s", "**648** pontos");
+- notes in faded ink ("gravado 2026-03-02 09:30:15");
+- the state in a pill at the end.
+
+The pill is pen-ink blue with a check for "CSV salvo", the warning colours for
+"CSV ainda não gravado", and neutral for a CSV written earlier. Messages
+("Processando…", "Corrija o campo destacado…") replace the readout while they
+apply.
 
 ### Feedback
 - **Error notice:** fixed under the header and centred, Perigo on Perigo Fundo,
@@ -492,3 +557,5 @@ the cursor to a crosshair and arm a button that shows the mode. In Espectros,
 - **Don't** set functional text below 11.5px, or labels and hints below 12px.
 - **Don't** leave a control without an accessible name. Fields in tables and
   repeated rows get one through `aria-label`.
+- **Don't** use text glyphs (▶ × ↶ ⭳ ›) as icons. Draw them from the sprite.
+- **Don't** box a block inside the sidebar (The Ruled Sidebar Rule).

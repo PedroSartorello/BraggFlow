@@ -1,7 +1,7 @@
 // Aba Espectros: preparo (o mesmo para todos ou um por arquivo), gráfico,
 // picos e vales e a evolução do vale entre arquivos.
 
-import { $, checkFields, fieldName, fmtNum, markStale, showError } from "./core.js";
+import { $, checkFields, fieldName, fmtNum, icon, markStale, setReadout, showError } from "./core.js";
 import {
   baseName, commonSpectrumSettings, defaultSpectrumSettings, editedSpectrumSettings,
   projectSpectraPaths, referenceSpectra, shared, shortName, spectraCommon, spectraState,
@@ -95,8 +95,8 @@ function syncCommonMode() {
     ? "Preparo de todos os espectros" : "Preparo do espectro selecionado";
   $("btn-copy-spectrum").classList.toggle("hidden", spectraCommon.on);
   $("spectra-common-hint").textContent = spectraCommon.on
-    ? "Recorte, suavização e detecção valem para todos os arquivos do projeto. Desmarque para preparar cada arquivo de um jeito."
-    : "Cada arquivo tem o seu próprio preparo; “Aplicar este preparo a todos” copia o do arquivo selecionado.";
+    ? "Recorte, suavização e detecção valem para todos os arquivos."
+    : "Cada arquivo com o seu preparo; “Aplicar este preparo a todos” copia o do selecionado.";
 }
 
 // A fonte e o fundo não são convertidos com eles mesmos
@@ -358,7 +358,7 @@ function renderSpectrumPlot() {
     showlegend: data.traces.length > 1,       // um traço só: a legenda não diz nada
     shapes, annotations,
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-  }, { responsive: true });
+  }, { responsive: true, displayModeBar: false });
   gd.removeAllListeners?.("plotly_click");
   gd.on("plotly_click", onSpectrumClick);
 }
@@ -370,9 +370,8 @@ function setPicking(on) {
   picking = on;
   $("btn-evo-pick").classList.toggle("on", on);
   $("spectra-plot").classList.toggle("picking", on);
-  $("spectra-status").textContent = on
-    ? "Clique no vale que quer acompanhar · Esc cancela"
-    : lastPreview?.status || $("spectra-status").textContent;
+  if (on) $("spectra-status").textContent = "Clique no vale que quer acompanhar · Esc cancela";
+  else if (lastPreview?.status) setReadout($("spectra-status"), lastPreview.status);
 }
 
 function onSpectrumClick(ev) {
@@ -581,17 +580,20 @@ export async function previewSpectrum() {
     if (!resp.ok) throw new Error(data.error || "Erro ao ler o espectro.");
     showError("");
     const points = data.traces.reduce((total, trace) => total + trace.n_points, 0);
-    const stride = data.traces[0]?.plot_stride > 1 ? ` (gráfico decimado 1:${data.traces[0].plot_stride})` : "";
-    const quando = data.acquired
-      ? ` · gravado ${data.acquired.replace("T", " ")}${data.acquired_from === "filename" ? " (hora do nome)" : ""}`
-      : "";
-    const papel = spectraCommon.on && referenceSpectra().has(file) ? " · fonte/fundo: mostrado sem conversão" : "";
-    const status = `${shortName(file)} · ${data.traces.length} traço(s) · ` +
-      `${points.toLocaleString("pt-BR")} pontos${stride}${quando}${papel}`;
+    const passo = data.traces[0]?.plot_stride;
+    const status = [
+      [baseName(file), ""],
+      [points.toLocaleString("pt-BR"), "pontos"],
+      data.traces.length > 1 ? [String(data.traces.length), "traços"] : null,
+      data.acquired ? `gravado ${data.acquired.replace("T", " ")}${data.acquired_from === "filename" ? " (hora do nome)" : ""}` : null,
+      passo > 1 ? `gráfico decimado 1:${passo}` : null,
+      spectraCommon.on && referenceSpectra().has(file) ? "fonte/fundo: mostrado sem conversão" : null,
+    ];
     lastPreview = { file, data, status };
     renderSpectraResults(data, file);
     renderSpectrumPlot();
-    $("spectra-status").textContent = picking ? "Clique no vale que quer acompanhar · Esc cancela" : status;
+    if (picking) $("spectra-status").textContent = "Clique no vale que quer acompanhar · Esc cancela";
+    else setReadout($("spectra-status"), status);
   } catch (err) {
     if (request !== spectrumPreviewRequest) return;
     showError(err.message);
@@ -853,7 +855,7 @@ function renderEvolution() {
     legend: { orientation: "h", y: eventos.length ? 1.16 : 1.1 },
     hovermode: "closest",
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-  }, { responsive: true });
+  }, { responsive: true, displayModeBar: false });
   gd.removeAllListeners?.("plotly_click");
   gd.on("plotly_click", (ev) => {
     const arquivo = ev.points?.[0]?.customdata;
@@ -1181,7 +1183,7 @@ function eventRow(evento) {
   quando.className = "event-when";
   if (evolution?.start) quando.textContent = `${fmtNum(elapsedOf(evento) / 60, 2)} min`;
   const del = document.createElement("button");
-  del.type = "button"; del.className = "marker-del"; del.textContent = "×";
+  del.type = "button"; del.className = "marker-del"; del.append(icon("x"));
   del.title = "Apagar o evento";
 
   hora.addEventListener("change", () => { setEventClock(evento, hora.value); eventsChanged(); });
