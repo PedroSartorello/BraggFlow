@@ -135,6 +135,11 @@ def test_common_spectrum_settings_exclusions_and_evolution_are_kept():
         {"at": "1900-01-01T09:35:30.25", "label": "Água"}]).to_dict())
     assert [(e["at"], e["label"]) for e in com_eventos.evolution_events] == [
         ("1900-01-01T09:35:30.250", "Água"), ("1900-01-01T09:41:00.000", "Glicerina")]
+    # Frações de segundo com qualquer número de casas e o sufixo Z (o Python 3.10 recusa os dois)
+    outras = Project.from_dict(_project(evolution_events=[
+        {"at": "2026-03-02T09:30:15.5Z"}, {"at": "2026-03-02T09:30:16.1234567"}]).to_dict())
+    assert [e["at"] for e in outras.evolution_events] == [
+        "2026-03-02T09:30:15.500", "2026-03-02T09:30:16.123"]
     with pytest.raises(ValueError, match=r"\[evento 1\] Cor"):
         _project(evolution_events=[{"at": "1900-01-01T09:41:00", "color": "nada"}])
 

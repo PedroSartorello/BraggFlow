@@ -17,6 +17,7 @@ Tudo vale tanto para o espectro bruto quanto para a transmissão: a conversão
 só acontece quando uma fonte ou um ruído de fundo é escolhido.
 """
 
+import re
 from datetime import datetime
 from typing import Callable, List, Optional, Sequence, Tuple
 
@@ -97,6 +98,18 @@ EVENT_SPEC = {
 }
 
 
+def _parse_iso(texto: str) -> datetime:
+    """
+    ``datetime.fromisoformat`` aceitando o que o Python 3.10 recusa: a fração
+    de segundo com qualquer número de casas ("09:35:30.25") e o sufixo Z.
+    """
+    texto = texto.strip()
+    if texto[-1:] in ("Z", "z"):
+        texto = texto[:-1] + "+00:00"
+    texto = re.sub(r"(?<=:\d\d)\.(\d+)", lambda m: "." + m.group(1).ljust(6, "0")[:6], texto, count=1)
+    return datetime.fromisoformat(texto)
+
+
 def parse_evolution_events(raw: Optional[Sequence[dict]]) -> List[dict]:
     """
     Valida os eventos marcados na evolução: ``{at, label, color}``, com ``at``
@@ -113,7 +126,7 @@ def parse_evolution_events(raw: Optional[Sequence[dict]]) -> List[dict]:
             raise ValueError(tr("spectra.invalidEvent", prefix=prefixo))
         e = resolve_section(EVENT_SPEC, item, prefix=prefixo)
         try:
-            quando = datetime.fromisoformat(e["at"].strip()).replace(tzinfo=None)
+            quando = _parse_iso(e["at"]).replace(tzinfo=None)
         except ValueError:
             raise ValueError(tr("spectra.invalidTime", prefix=prefixo, value=repr(e["at"]))) from None
         eventos.append({"at": quando.isoformat(timespec="milliseconds"),
