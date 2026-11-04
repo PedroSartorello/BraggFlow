@@ -113,8 +113,8 @@ Then:
    `src/braggflow/webapp/templates/index.html`. Inputs with
    `data-opt="section.field"` are collected and restored automatically by
    `static/js/series.js`.
-5. Add a line to the "Processing steps" table of the README and to
-   `CHANGELOG.md`.
+5. Add a line to the "Processing steps" table of
+   [`docs/python-library.md`](docs/python-library.md) and to `CHANGELOG.md`.
 
 ## Pull requests
 
