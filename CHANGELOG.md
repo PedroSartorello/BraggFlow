@@ -180,8 +180,13 @@ itself did not change: the same input gives the same output as before.
     CSV's state ("CSV salvo", "CSV ainda não gravado") in a pill.
   - Long hints fold into "Como funciona" disclosures, and the Plotly toolbar
     is hidden, since the plot tools already sit above each plot.
-- The README presents BraggFlow as a product, with screenshots made from
-  synthetic data (`docs/images/`).
+- The README is a short product page:
+  - logo, advantages, screenshots, the library in brief, contributing,
+    security and licence;
+  - the screenshots show the English interface and use synthetic data
+    (`docs/images/`).
+  The full library guide moved to `docs/python-library.md`, and
+  `SECURITY.md` says how to report a vulnerability.
 
 - `main.py` became `examples/01_process_file.py`; without arguments it
   processes the synthetic example.
