@@ -461,10 +461,12 @@ async function flushAutosave() {
   return !projectDirty;
 }
 
-// O estado do projeto, sem o nome (renomear não se desfaz: criaria cópias)
+// O estado do projeto, sem o nome (renomear não se desfaz: criaria cópias) e
+// sem a data de criação (desfazer até antes do 1º salvamento não a apaga)
 function snapshot() {
   const projeto = collectProject();
   delete projeto.name;
+  delete projeto.created;
   return JSON.stringify(projeto);
 }
 
@@ -630,7 +632,7 @@ async function openProject(name) {
 async function applyProjectData(project) {
   clearProjectState();               // nada do projeto anterior fica para trás
   $("project-name").value = project.name;
-  projectCreated = project.created || "";
+  projectCreated = project.created ?? projectCreated;   // desfazer/refazer não a trazem
 
   // Estados por arquivo
   (project.series || []).forEach((entry) => {

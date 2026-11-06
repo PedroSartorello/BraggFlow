@@ -163,10 +163,13 @@ export async function loadVizSources(pending) {
     const checked = marked("viz-series-source");
     if (pending) checked.add(pending);
     // Só os CSVs dos arquivos que estão no projeto, inclusive o de uma junção;
-    // o nome leva a subpasta, como em _processed_name (app.py): dia1__ensaio
+    // o nome leva a subpasta, como em _processed_name (app.py): dia1__ensaio,
+    // ou raw__dia1__ensaio numa subpasta de data/raw
     const doProjeto = new Set();
     projectSeriesPaths().forEach((path) => {
-      const stem = shortName(path).split("/").slice(1).join("__").replace(/\.[^.]+$/, "");
+      const [raiz, ...partes] = shortName(path).split("/");
+      if (raiz === "raw" && partes.length > 1) partes.unshift("raw");
+      const stem = partes.join("__").replace(/\.[^.]+$/, "");
       doProjeto.add(`${data.folder}/${stem}_processado.csv`);
       doProjeto.add(`${data.folder}/${stem}_juntos_processado.csv`);
     });

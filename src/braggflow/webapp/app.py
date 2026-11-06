@@ -576,13 +576,16 @@ def _requested_files(options: dict) -> list[Path]:
 def _processed_name(options: dict) -> str:
     """
     ``<primeiro>_processado.csv``; com vários arquivos, ``_juntos``. Um
-    arquivo numa subpasta de data/raw ou data/uploads leva a pasta no nome
-    (``dia1__ensaio``): dois ``ensaio.ASC`` de pastas diferentes não gravam o
-    mesmo CSV. ``loadVizSources`` (viz.js) monta o mesmo nome.
+    arquivo numa subpasta leva a pasta no nome (``dia1__ensaio``): dois
+    ``ensaio.ASC`` de pastas diferentes não gravam o mesmo CSV. Em data/raw,
+    leva também ``raw__``, para não cruzar com a mesma pasta enviada pela
+    página (data/uploads). ``loadVizSources`` (viz.js) monta o mesmo nome.
     """
     arquivos = options.get("files") or [options.get("file", "")]
     partes = Path(arquivos[0]).parts
-    pastas = partes[2:-1] if partes[:1] == (DataFolder.PREFIX,) else ()
+    raiz, pastas = (partes[1], partes[2:-1]) if partes[:1] == (DataFolder.PREFIX,) else ("", ())
+    if pastas and raiz == "raw":
+        pastas = ("raw", *pastas)
     stem = "__".join([*pastas, Path(arquivos[0]).stem])
     return f"{stem}_juntos" if len(arquivos) > 1 else stem
 
@@ -1156,6 +1159,8 @@ def api_project_save():
             if criado and str(data.get("created") or "") != criado:
                 return jsonify({"error": tr("app.projectExists", name=path.stem)}), 409
             data = {**data, "created": criado or ""}
+        else:
+            data = {**data, "created": ""}      # projeto novo ou cópia (renomear): data própria
         project = Project.from_dict(data)
         project.name = path.stem
         project.save(path)

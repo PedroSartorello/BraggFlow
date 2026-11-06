@@ -36,8 +36,9 @@ and processing steps, the concatenation order, the time markers, the spectra
 settings, the selected curves and the figure style
 (`data/projects/<name>.json`). Processed CSVs go to `data/processed/<project>/`, so two
 projects never overwrite each other's results. A file in a subfolder gets the
-folder in the name of its CSV (`dia1__ensaio_processado.csv`), so two
-`ensaio.ASC` from different days do not share one. Opening a project only shows the
+folder in the name of its CSV (`dia1__ensaio_processado.csv`; `raw__dia1__…`
+for a subfolder of `data/raw`), so two `ensaio.ASC` from different days do not
+share one. Opening a project only shows the
 saved state; "Processar" (or automatic reprocessing) writes the CSV.
 
 *Saving and undoing.* With "Salvar sozinho" on (the default, remembered in

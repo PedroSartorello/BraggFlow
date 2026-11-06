@@ -182,12 +182,12 @@ def test_a_file_in_a_folder_keeps_its_csv_apart_and_reaches_the_figure(app, data
     expect(app.locator("#status-text")).to_contain_text("pré-visualização")
     app.click("#btn-process")
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
-    assert (data_dir / "processed" / "Pastas" / "dia1__ensaio_a_processado.csv").is_file()
+    assert (data_dir / "processed" / "Pastas" / "raw__dia1__ensaio_a_processado.csv").is_file()
 
     app.click('#tabs .tab[data-tab="viz"]')
     fonte = app.locator(".viz-series-source")
     expect(fonte).to_have_count(1)
-    expect(fonte).to_have_value("data/processed/Pastas/dia1__ensaio_a_processado.csv")
+    expect(fonte).to_have_value("data/processed/Pastas/raw__dia1__ensaio_a_processado.csv")
     expect(fonte).to_be_checked()
 
 
@@ -702,6 +702,27 @@ def test_concatenation_card_appears_with_two_files(app):
     expect(app.locator("#card-concat")).to_be_visible()
 
 
+def test_processing_requests_run_one_at_a_time(app):
+    novo_projeto(app, "Fila")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+
+    eventos = []
+    app.on("request", lambda r: "/api/process" in r.url and eventos.append(("início", r.post_data_json["file"])))
+    app.on("requestfinished", lambda r: "/api/process" in r.url and eventos.append(("fim", r.post_data_json["file"])))
+    app.locator("#series-files .file-name", has_text="ensaio_a.asc").click()
+    app.locator("#series-files .file-name", has_text="ensaio_b.asc").click()      # sem esperar o primeiro
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    app.wait_for_timeout(500)
+    # Um de cada vez: cada pedido começa depois que o anterior terminou, e o último é o do arquivo b
+    assert [tipo for tipo, _ in eventos] == ["início", "fim"] * (len(eventos) // 2), eventos
+    assert eventos[-1] == ("fim", "data/raw/ensaio_b.asc"), eventos
+
+
 # ── aba Figura ───────────────────────────────────────────────────────────────
 
 def abrir_figura(page: Page) -> None:
@@ -859,6 +880,20 @@ def test_undo_and_redo_walk_through_the_project_changes(app, data_dir):
     app.locator(".marker-label").fill("evento")
     app.locator(".marker-label").press("Control+z")
     expect(app.locator(".marker-row")).to_have_count(1)
+
+
+def test_undo_back_to_before_the_first_save_still_saves(app, data_dir):
+    novo_projeto(app, "Desfazer cedo")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert len(projeto_no_disco(data_dir, "Desfazer cedo")["series"]) == 1
+
+    app.locator("body").click(position={"x": 5, "y": 400})       # fora dos campos
+    app.keyboard.press("Control+z")                             # antes do arquivo: antes do 1º salvamento
+    expect(app.locator("#series-files .file-name")).to_have_count(0)
+    expect(app.locator("#save-state")).to_contain_text("alterações")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert projeto_no_disco(data_dir, "Desfazer cedo")["series"] == []
 
 
 def test_deleting_the_open_project_does_not_bring_it_back(app, data_dir):

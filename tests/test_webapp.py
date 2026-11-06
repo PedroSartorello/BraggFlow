@@ -287,6 +287,19 @@ def test_a_new_project_does_not_replace_another_with_the_same_name(webapp, nome)
     assert client.get("/api/projects/Ensaio 1").get_json()["description"] == "o original"
 
 
+def test_a_renamed_copy_gets_its_own_creation_date(webapp):
+    _, client = webapp
+    original = client.post("/api/projects", json={**PROJECT, "description": "o original"}).get_json()["created"]
+    # Renomear grava uma cópia com o novo nome; a página manda a data do original
+    copia = client.post("/api/projects", json={**PROJECT, "name": "Cópia", "created": original,
+                                               "description": "a cópia"}).get_json()["created"]
+    assert copia != original
+    # Renomear o original para o nome da cópia não apaga a cópia
+    resp = client.post("/api/projects", json={**PROJECT, "name": "Cópia", "created": original})
+    assert resp.status_code == 409
+    assert client.get("/api/projects/Cópia").get_json()["description"] == "a cópia"
+
+
 @pytest.mark.parametrize("payload, message", [
     ({"name": "  "}, "nome"),
     ({"name": "x", "markers": [{"time": "abc"}]}, "Tempo inválido"),
@@ -1180,10 +1193,16 @@ def test_files_with_the_same_name_in_different_folders_get_their_own_csv(webapp)
         (dados.raw / pasta / "ensaio.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
     salvos = {_process(client, file=f"data/raw/{pasta}/ensaio.ASC", project="P").get_json()["processed_file"]
               for pasta in ("dia1", "dia2")}
-    assert salvos == {"data/processed/P/dia1__ensaio_processado.csv",
-                      "data/processed/P/dia2__ensaio_processado.csv"}
+    assert salvos == {"data/processed/P/raw__dia1__ensaio_processado.csv",
+                      "data/processed/P/raw__dia2__ensaio_processado.csv"}
     raiz = _process(client, project="P").get_json()["processed_file"]
     assert raiz == "data/processed/P/ensaio_processado.csv", "na raiz, o nome de sempre"
+
+    # A mesma pasta enviada pela página (data/uploads) não cruza com a de data/raw
+    (dados.uploads / "dia1").mkdir(parents=True)
+    (dados.uploads / "dia1" / "ensaio.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
+    enviado = _process(client, file="data/uploads/dia1/ensaio.ASC", project="P").get_json()["processed_file"]
+    assert enviado == "data/processed/P/dia1__ensaio_processado.csv"
 
 
 def test_evolution_figure(webapp):

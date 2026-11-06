@@ -124,9 +124,11 @@ class Project:
             for item in (self.spectra or []) if isinstance(item, dict) and item.get("file")
         ]
         self.style = resolve_style(self.style)
-        now = datetime.now().isoformat(timespec="seconds")
-        self.created = self.created or now
-        self.updated = now
+        now = datetime.now()
+        # A data de criação também identifica o projeto ao salvar por cima
+        # (app.py): em microssegundos, uma cópia nunca a repete
+        self.created = self.created or now.isoformat(timespec="microseconds")
+        self.updated = now.isoformat(timespec="seconds")
 
     @staticmethod
     def _clean_series_entry(entry: dict) -> dict:

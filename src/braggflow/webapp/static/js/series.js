@@ -483,6 +483,11 @@ function updateChannelDropdown(channels) {
 // novo dele quando o idioma muda
 let lastProcess = null;   // {data, opts}
 
+// Um processamento por vez, na ordem dos pedidos: o gráfico e o CSV gravado
+// são sempre do último (trocar de arquivo no meio de um longo não volta atrás)
+let processing = Promise.resolve();
+let processSeq = 0;
+
 export async function processData({ save = true, files = null } = {}) {
   const opts = { ...collectOptions(), save };
   if (files) opts.files = files;        // vários arquivos viram um sinal contínuo
@@ -493,7 +498,14 @@ export async function processData({ save = true, files = null } = {}) {
     markStale("plot", "stale.fixFieldSidebar");
     return;
   }
+  const pedido = ++processSeq;
+  const vez = processing.then(() => runProcess(opts, pedido));
+  processing = vez.catch(() => {});
+  return vez;
+}
 
+async function runProcess(opts, pedido) {
+  if (!opts.save && pedido !== processSeq) return;   // prévia já superada por um pedido mais novo
   setBusy(true);
   showError("");
   $("status-text").classList.remove("status-error");
