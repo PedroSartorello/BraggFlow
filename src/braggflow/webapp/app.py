@@ -54,6 +54,7 @@ from braggflow.io.reader import (
 )
 from braggflow.pipeline import OpticalPipeline
 from braggflow.processing import estimate_sampling_rate
+from braggflow.processing.filters import choose_savgol, savgol_cutoff
 from braggflow.projects import Project
 from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
 from braggflow.sensors import SensorSetup
@@ -878,6 +879,29 @@ def api_spectrum_preview():
                     **_acquisition(spectra)})
 
 
+@bp.route("/api/spectra/smoothing-auto", methods=["POST"])
+def api_spectrum_smoothing_auto():
+    """
+    Janela da suavização do espectro (e a ordem, no Savitzky-Golay) escolhida
+    pelos dados, por validação cruzada (``choose_savgol``), no espectro como
+    chega à suavização: recortado e convertido em transmissão, se for o caso.
+    Corpo: ``{file, settings}``, como em ``/api/spectra/preview``.
+    """
+    options = request.get_json(silent=True) or {}
+    try:
+        path = _resolve_data_file(options.get("file", ""))
+        spectra = _state().spectra.get(path)
+        settings = resolve_spectrum_settings({**(options.get("settings") or {}), "smooth_window": None,
+                                              "detrend": None, "normalize": "none", "offset": 0})
+        preparados = [_prepared(spectrum, settings) for spectrum in spectra.spectra]
+        savgol = settings["smooth_method"] == "savgol"
+        escolha = choose_savgol([y for _, y in preparados], orders=(2, 4) if savgol else (0,))
+        passo = float(np.median(np.diff(preparados[0][0])))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({**escolha, "method": settings["smooth_method"], "window_nm": escolha["window"] * passo})
+
+
 @bp.route("/api/spectra/evolution", methods=["POST"])
 def api_spectrum_evolution():
     """
@@ -1295,6 +1319,32 @@ def api_process():
         }
 
     return jsonify(payload)
+
+
+@bp.route("/api/savgol/auto", methods=["POST"])
+def api_savgol_auto():
+    """
+    Janela e ordem do Savitzky-Golay escolhidas pelos dados, por validação
+    cruzada (``choose_savgol``), no sinal como chega ao filtro: depois do
+    recorte, da limpeza, dos nulos, dos outliers e da reamostragem, sem os
+    filtros nem o Δλ. Corpo: as mesmas opções de ``/api/process``. Devolve
+    também o corte de −3 dB em Hz.
+    """
+    options = request.get_json(silent=True) or {}
+    try:
+        antes_do_filtro = {**options, **{etapa: {"enabled": False} for etapa in (
+            "savgol", "moving_average", "lowpass", "highpass", "delta_lambda", "temp_comp")}}
+        pipeline, _, _ = _run_pipeline(antes_do_filtro)
+        t, sig, _ = pipeline.get_data()
+        escolha = choose_savgol([sig[:, i] for i in range(sig.shape[1])])
+        fs = estimate_sampling_rate(t)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    avisos = []
+    if (options.get("timebase") or {}).get("resample"):
+        avisos.append(tr("app.autoResampled"))
+    return jsonify({**escolha, "fs": fs, "warnings": avisos,
+                    "cutoff_hz": savgol_cutoff(escolha["window"], escolha["order"]) * fs})
 
 
 @bp.route("/api/series/stats", methods=["POST"])

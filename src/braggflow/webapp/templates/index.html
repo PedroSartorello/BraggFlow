@@ -298,6 +298,9 @@
         <div class="step-body hidden">
       <label class="field" data-i18n="savgol.window">Janela (ímpar) <input type="number" id="savgol-window" data-opt="savgol.window_length" value="11" step="2" min="3"></label>
       <label class="field" data-i18n="savgol.order">Ordem polin. <input type="number" id="savgol-poly" data-opt="savgol.polyorder" value="2" min="1"></label>
+      <button type="button" id="btn-savgol-auto" class="btn-dashed span2" data-i18n="savgol.auto" data-i18n-title="savgol.autoTitle"
+        title="Validação cruzada: a janela e a ordem que melhor preveem cada amostra a partir das vizinhas, no sinal como chega ao filtro.">Escolher janela e ordem pelos dados</button>
+      <p class="hint span2 hidden" id="savgol-auto-note" aria-live="polite"></p>
     </div>
       </div>
       <div class="step" data-step="movavg">
@@ -463,6 +466,9 @@
       </label>
       <label class="field" data-i18n="spectra.window">Janela (pontos) <input type="number" step="1" min="3" data-spec="smooth_window" placeholder="sem suavização" data-i18n-placeholder="spectra.noSmoothing"></label>
       <label class="field" id="spec-order-field" data-i18n="spectra.order">Ordem do ajuste <input type="number" step="1" min="1" max="10" data-spec="smooth_order"></label>
+      <button type="button" id="btn-spec-smooth-auto" class="btn-dashed span2" data-i18n="spectra.smoothAuto" data-i18n-title="spectra.smoothAutoTitle"
+        title="Validação cruzada no espectro aberto, recortado e sem suavização: a janela que melhor prevê cada ponto a partir dos vizinhos.">Escolher a janela pelos dados</button>
+      <p class="hint span2 hidden" id="spec-smooth-auto-note" aria-live="polite"></p>
       <label class="field span2" title="Subtrai um polinômio ajustado ao espectro recortado. Vales e picos rasos sobre uma linha de base inclinada (LMR, SPR, franjas) passam a ser medidos em relação a essa linha de base." data-i18n="spectra.detrend" data-i18n-title="spectra.detrendTitle">Remover tendência
         <select data-spec="detrend">
           <option value="" data-i18n="common.no">não</option>
