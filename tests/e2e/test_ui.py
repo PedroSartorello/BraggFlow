@@ -725,6 +725,38 @@ def test_concatenation_card_appears_with_two_files(app):
     expect(app.locator("#card-concat")).to_be_visible()
 
 
+def test_joined_files_work_as_one_signal(app, data_dir):
+    novo_projeto(app, "Junta")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    expect(app.locator("#status-text")).to_contain_text("9.001 amostras")
+
+    app.locator("#card-concat > summary").click()                     # abrir junta os marcados
+    expect(app.locator("#status-text")).to_contain_text("18.002 amostras")
+    expect(app.locator("#status-text")).to_contain_text("2 arquivos juntos")
+    app.click("#btn-process-join")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    assert (data_dir / "processed" / "Junta" / "ensaio_a_juntos_processado.csv").is_file()
+
+    # Mudar o filtro reprocessa a junção, não só o primeiro arquivo
+    app.locator('.step[data-step="savgol"] .step-name').click()
+    with app.expect_response(lambda r: "/api/process" in r.url) as resposta:
+        app.fill("#savgol-window", "31")
+        app.locator("#savgol-window").press("Tab")
+    assert resposta.value.request.post_data_json["files"] == ["data/raw/ensaio_a.asc", "data/raw/ensaio_b.asc"]
+    expect(app.locator("#status-text")).to_contain_text("18.002 amostras")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    series = projeto_no_disco(data_dir, "Junta")["series"]
+    assert [s["processing"]["savgol"]["window_length"] for s in series] == ["31", "31"], "um sinal: as mesmas etapas"
+
+    app.locator("#card-concat > summary").click()                     # fechar volta a um arquivo
+    expect(app.locator("#status-text")).to_contain_text("9.001 amostras")
+    expect(app.locator("#status-text")).not_to_contain_text("juntos")
+
+
 def test_processing_requests_run_one_at_a_time(app):
     novo_projeto(app, "Fila")
     adicionar_serie(app, "ensaio_a.asc")

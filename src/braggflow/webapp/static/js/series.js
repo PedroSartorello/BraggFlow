@@ -80,7 +80,7 @@ export function applyProcessing(processing) {
 }
 
 function collectOptions() {
-  return {
+  const opts = {
     project: $("project-name").value.trim(),   // pasta dos CSVs processados
     file: $("file-select").value,
     sensors: collectSensors(),
@@ -88,6 +88,10 @@ function collectOptions() {
     ...collectProcessing(),
     include_raw: $("show-raw").checked,       // preferência de quem olha, não do projeto
   };
+  // Com a concatenação aberta, os arquivos marcados são um sinal só: tudo
+  // (processar, baixar, medir, escolher o filtro) vale para a junção
+  if (joining()) opts.files = concatFiles();
+  return opts;
 }
 
 // ── Plot ─────────────────────────────────────────────────────────────────────
@@ -487,10 +491,12 @@ let lastProcess = null;   // {data, opts}
 // são sempre do último (trocar de arquivo no meio de um longo não volta atrás)
 let processing = Promise.resolve();
 let processSeq = 0;
+let joinedOnScreen = false;   // o último pedido foi da junção (para abrir/fechar o cartão saber se refaz)
 
+// `files`: força estes arquivos (um só, no processamento em lote)
 export async function processData({ save = true, files = null } = {}) {
   const opts = { ...collectOptions(), save };
-  if (files) opts.files = files;        // vários arquivos viram um sinal contínuo
+  if (files) opts.files = files;
   if (!opts.file) { showError(t("series.pickFileFirst")); return; }
   const invalido = checkFields($("tab-series-sidebar"));
   if (invalido) {        // nem vai ao servidor: o campo diz o que corrigir
@@ -499,6 +505,7 @@ export async function processData({ save = true, files = null } = {}) {
     return;
   }
   const pedido = ++processSeq;
+  joinedOnScreen = (opts.files?.length || 0) > 1;
   const vez = processing.then(() => runProcess(opts, pedido));
   processing = vez.catch(() => {});
   return vez;
@@ -540,6 +547,7 @@ async function runProcess(opts, pedido) {
       partes: [
         [fmtNum(data.n_samples, 0), t("series.samples", { n: data.n_samples })],
         [fmtNum(duracao, 0), "s"],
+        (opts.files?.length || 0) > 1 ? [opts.files.length, t("series.filesJoined")] : null,
         [data.channels.join(", "), ""],
       ],
       estado: data.processed_file ? { texto: t("series.csvSaved"), tipo: "ok", title: shortName(data.processed_file) }
@@ -958,7 +966,6 @@ export async function addFilesAndShow(paths) {
 async function chooseSavgolFromData() {
   const opts = collectOptions();
   if (!opts.file) { showError(t("series.pickFileFirst")); return; }
-  if (lastProcess?.opts.files) opts.files = lastProcess.opts.files;     // a junção que está na tela
   const botao = $("btn-savgol-auto");
   const nota = $("savgol-auto-note");
   botao.disabled = true;
@@ -1006,9 +1013,15 @@ export function scheduleAutoProcess() {
 export function saveCurrentSeriesState() {
   const path = $("file-select").value;
   if (!path || !document.querySelectorAll(".sensor-row").length) return;
-  const state = seriesStateFor(path);
-  state.sensors = collectSensors();
-  state.processing = collectProcessing();
+  const sensors = collectSensors();
+  const processing = collectProcessing();
+  // Juntos, os arquivos são um sinal só: todos os marcados ficam com o que está na tela
+  const arquivos = joining() && concatFiles().includes(path) ? concatFiles() : [path];
+  arquivos.forEach((arquivo) => {
+    const state = seriesStateFor(arquivo);
+    state.sensors = structuredClone(sensors);
+    state.processing = structuredClone(processing);
+  });
 }
 
 export function applySensors(sensors) {
@@ -1050,6 +1063,7 @@ export function renderSeriesFiles() {
       state.include = include.checked;
       scheduleConcatPlan();
       markProjectDirty();
+      if ($("card-concat").open) processData({ save: false });   // a junção mudou
     });
     box.appendChild(fileRow(path, {
       selected: path === current, onSelect: showSeriesFile, checkbox: include,
@@ -1110,7 +1124,7 @@ async function processAll() {
   for (const [i, path] of files.entries()) {
     setText($("status-text"), "series.processingBatch", { i: i + 1, total: files.length, name: shortName(path) });
     await selectSeriesFile(path);
-    await processData();
+    await processData({ files: [path] });
   }
   setText($("status-text"), "series.batchDone", { n: files.length });
 }
@@ -1121,6 +1135,10 @@ let concatPlan = null;
 let concatTimer = null;
 
 const concatFiles = () => projectSeriesPaths().filter((path) => seriesStateFor(path).include);
+// Cartão aberto, dois ou mais marcados e um deles na tela: os arquivos são
+// processados como um sinal só (um arquivo desmarcado aparece sozinho)
+const joining = () => $("card-concat").open && concatFiles().length >= 2
+  && concatFiles().includes($("file-select").value);
 
 function moveSeriesFile(path, direcao) {
   const i = seriesOrder.indexOf(path);
@@ -1129,6 +1147,7 @@ function moveSeriesFile(path, direcao) {
   [seriesOrder[i], seriesOrder[j]] = [seriesOrder[j], seriesOrder[i]];
   renderSeriesFiles();                 // a lista de arquivos segue a mesma ordem
   markProjectDirty();
+  if (joining()) processData({ save: false });   // outra ordem, outro sinal
 }
 
 function concatRow(path, posicao, total, parte) {
@@ -1221,14 +1240,17 @@ async function processJoined() {
   const arquivos = concatFiles();
   if (arquivos.length < 2) { showError(t("concat.checkTwo")); return; }
   showError("");
-  await selectSeriesFile(arquivos[0]);      // valem os sensores e as etapas do primeiro
   setText($("status-text"), "concat.joining", { n: arquivos.length });
   await processData({ files: arquivos });
 }
 
+// Abrir o cartão junta os marcados; fechar volta ao arquivo da lista. Só
+// refaz quando o que está na tela é o outro caso (abrir um projeto já pede
+// o certo)
 $("card-concat").addEventListener("toggle", () => {
   if ($("card-concat").open) refreshConcatPlan();
   markProjectDirty();
+  if (lastProcess && joining() !== joinedOnScreen) processData({ save: false });
 });
 $("btn-process-join").addEventListener("click",
   () => processJoined().catch((err) => showError(err.message)));

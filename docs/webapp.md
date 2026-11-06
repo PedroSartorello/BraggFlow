@@ -102,8 +102,26 @@ cross-validation on the signal as it reaches the filter (after cleaning,
 nulls, outliers and resampling) picks the window and order (2 or 4) that best
 predict each sample from its neighbours, and the note gives the resulting
 −3 dB cut-off in Hz. With resampling on, neighbouring samples are correlated
-and the window tends to come out short; the note says so. Several files of one run can be joined in the "Concatenação"
-card, which appears once the project has two or more files. Shortcuts:
+and the window tends to come out short; the note says so.
+
+*Joining files.* Several files of one run can be joined in the
+"Concatenação" card, which appears once the project has two or more files.
+While the card is open, the files checked in the list are one signal, in the
+order of the card:
+- every processing works on the join: changing a step, "Processar",
+  "Baixar CSV", the measurements, the statistics and the automatic
+  Savitzky-Golay;
+- the sensors and steps on screen apply to all of them, and the project saves
+  them in each file;
+- the status reads "N arquivos juntos", and the CSV is
+  `<first>_juntos_processado.csv`.
+
+Checking, unchecking or moving a file reprocesses the join. Clicking a file
+that is not checked shows it alone, and closing the card goes back to the
+file selected in the list. "Processar marcados" still processes each checked
+file on its own.
+
+Shortcuts:
 Ctrl+Enter processes, Ctrl+S saves the project.
 
 *Hiding a column.* "ocultar" on a sensor row leaves that column out of
