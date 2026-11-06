@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 
 _UNIT_RE = re.compile(r"^(.*?)\s*\[([^\]]*)\]\s*$")
@@ -28,6 +29,19 @@ def split_unit(column: str) -> Tuple[str, Optional[str]]:
 def format_column(name: str, unit: Optional[str]) -> str:
     """Inverse of :func:`split_unit`."""
     return f"{name} [{unit}]" if unit else name
+
+
+def csv_header(channels, units) -> str:
+    """CSV header with units: ``Time [s],EFBG1 [nm],...``."""
+    columns = [format_column("Time", "s")]
+    columns += [format_column(ch, unit) for ch, unit in zip(channels, units)]
+    return ",".join(columns)
+
+
+def write_processed_csv(target, time, signals, channels, units) -> None:
+    """Writes the processed CSV (time, then one column per channel) to a path or open file."""
+    data = np.hstack((np.asarray(time, dtype=float).reshape(-1, 1), signals))
+    np.savetxt(target, data, delimiter=",", header=csv_header(channels, units), comments="")
 
 
 def metadata_path_for(csv_path) -> Path:

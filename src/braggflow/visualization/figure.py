@@ -378,9 +378,9 @@ _LABELS = {
            "transmission": "Transmissão", "absorbance": "Absorbância", "spectrum": "Espectro",
            "depth": "Profundidade", "height": "Altura"},
 }
-# Unidade da intensidade depois do preparo → o que ela mede
-_INTENSITY_NAMES = {"%": "transmission", "": "transmission", "dB": "transmission",
-                    "AU": "absorbance"}
+# Unidade da intensidade depois do preparo → o que ela mede. dB fica de fora:
+# vem tanto da transmissão em dB quanto do espectro bruto (catman, OSA)
+_INTENSITY_NAMES = {"%": "transmission", "": "transmission", "AU": "absorbance"}
 
 
 def series_labels(unit: str, is_shift: bool, time_unit: str,

@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .paths import write_text_atomic
+
 
 @dataclass
 class Sensor:
@@ -127,10 +129,7 @@ class SensorSetup:
         return cls(name=name, sensors=[Sensor(ch, new) for ch, new in rename_map.items()])
 
     def save(self, path) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False),
-                        encoding="utf-8")
+        write_text_atomic(path, json.dumps(self.to_dict(), indent=2, ensure_ascii=False))
 
     @classmethod
     def load(cls, path) -> "SensorSetup":

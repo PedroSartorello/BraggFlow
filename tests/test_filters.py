@@ -65,3 +65,12 @@ def test_savgol_filter_linear():
     filtered = apply_savgol_filter(signals, window_length=5, polyorder=1)
 
     np.testing.assert_allclose(filtered, signals, rtol=1e-6, atol=1e-6)
+
+
+def test_moving_average_keeps_a_lost_reading_local():
+    """Um NaN (pico perdido, sem a remoção de nulos) fica só onde estava."""
+    x = np.ones((1000, 1))
+    x[100] = np.nan
+    y = apply_moving_average_filter(x, 30)
+    assert np.isnan(y[100, 0]) and np.isnan(y).sum() == 1
+    np.testing.assert_allclose(np.delete(y[:, 0], 100), 1.0)

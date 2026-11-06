@@ -243,3 +243,33 @@ itself did not change: the same input gives the same output as before.
 
 - The "Projetos…" screen no longer erases a project name typed while the
   project list is still loading.
+- Fixes from the code review (`/ponytail-audit`):
+  - A new project, or a renamed one, with the name of an existing project
+    replaced it at the first autosave. The page now sends the creation date of
+    the open project, and the server only replaces the file with that date
+    (409 otherwise). The project screen refuses the name before that.
+  - Uploading a file with the name of one already in `data/uploads/` replaced
+    it. A file with other content now goes in as `nome (2).ext`; the same
+    file again is reused.
+  - With null removal off, one lost reading made the moving average blank
+    the rest of the channel (915 of 1000 samples in the test). Missing
+    samples now stay where they are and leave their neighbours' windows.
+  - The server answers only its own page: requests with another `Host` (DNS
+    rebinding) or, for uploads and changes, another `Origin` are refused (403).
+  - Two files with the same name in different folders wrote the same
+    processed CSV. A file in a subfolder now gets the folder in the name
+    (`dia1__ensaio_processado.csv`); files at the root keep their name. A
+    result already processed from a subfolder under the old name shows again
+    after processing it once more.
+  - Projects, sensor setups and figure styles are written to a temporary file
+    and then put in place, so an interrupted save no longer leaves half a JSON.
+  - The last interval of the statistics left out the last sample.
+  - The evolution figure called raw spectra in dB (catman, OSA) "Transmissão
+    (dB)"; it now says "Intensidade (dB)".
+  - The spectra cache is limited by points (8 million, about 128 MB) instead
+    of by files, so hundreds of catman `.BIN` files (32,768 points each) do
+    not take half a gigabyte.
+  - "Baixar CSV" reuses the last processing instead of running it again, and
+    shares the CSV writer with `save_processed_data`
+    (`braggflow.io.processed.write_processed_csv`).
+  - The unused `processing.filters.detrend_signal` was removed.

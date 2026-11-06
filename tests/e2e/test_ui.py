@@ -1,6 +1,7 @@
 """Fluxos principais da interface, clicando como o usuário clica."""
 
 import re
+import shutil
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -109,6 +110,23 @@ def test_switching_projects_does_not_mix_their_files(app):
     assert arquivos_do_projeto(app) == ["ensaio_b.asc"]
 
 
+def test_a_new_project_cannot_take_the_name_of_another(app):
+    novo_projeto(app, "Ensaio A")
+    adicionar_serie(app, "ensaio_a.asc")
+    salvar_projeto(app)
+
+    app.click("#btn-projects")
+    expect(app.locator("#gate-projects .gate-row", has_text="Ensaio A")).to_be_visible()
+    app.fill("#gate-name", "ensaio a")          # no Windows, o mesmo arquivo
+    app.click("#btn-gate-new")
+    expect(app.locator("#gate-error")).to_contain_text("Já existe o projeto Ensaio A")
+    expect(app.locator("#project-gate")).to_be_visible()
+
+    abrir_projeto(app, "Ensaio A")
+    assert arquivos_do_projeto(app) == ["ensaio_a.asc"], "o projeto antigo continua inteiro"
+    salvar_projeto(app)                          # e o projeto aberto segue salvando sobre si mesmo
+
+
 def test_unsaved_changes_ask_before_leaving_the_project(app):
     novo_projeto(app, "Rascunho")
     app.uncheck("#autosave")                     # sem salvar sozinho, a pergunta volta
@@ -152,6 +170,25 @@ def test_figure_is_drawn_from_the_processed_csv(app):
     expect(app.locator("#viz-img")).to_be_visible()
     assert app.locator("#viz-img").get_attribute("src").startswith("data:image/png;base64,")
     expect(app.locator("#viz-status")).to_contain_text("3 curva(s)")
+
+
+def test_a_file_in_a_folder_keeps_its_csv_apart_and_reaches_the_figure(app, data_dir):
+    pasta = data_dir / "raw" / "dia1"
+    pasta.mkdir()
+    shutil.copy(data_dir / "raw" / "ensaio_a.asc", pasta / "ensaio_a.asc")   # mesmo nome do da raiz
+    app.reload()
+    novo_projeto(app, "Pastas")
+    app.locator("#series-empty-files .empty-folder", has_text="dia1/").click()
+    expect(app.locator("#status-text")).to_contain_text("pré-visualização")
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    assert (data_dir / "processed" / "Pastas" / "dia1__ensaio_a_processado.csv").is_file()
+
+    app.click('#tabs .tab[data-tab="viz"]')
+    fonte = app.locator(".viz-series-source")
+    expect(fonte).to_have_count(1)
+    expect(fonte).to_have_value("data/processed/Pastas/dia1__ensaio_a_processado.csv")
+    expect(fonte).to_be_checked()
 
 
 def test_temperature_compensation_uses_the_thermal_sensitivity_of_each_fbg(app):

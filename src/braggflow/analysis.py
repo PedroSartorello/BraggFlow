@@ -31,12 +31,14 @@ class Interval:
     label: str
     start: float
     end: float
+    last: bool = False      # o último vai até o fim dos dados e inclui a última amostra
 
 
 def intervals_from_markers(markers: Sequence[dict], t_min: float, t_max: float,
                            include_before: bool = True) -> List[Interval]:
     """
-    Converte as marcações em intervalos ``[início, fim)``.
+    Converte as marcações em intervalos ``[início, fim)``; o último é
+    ``[início, fim]``, para a última amostra não ficar de fora.
 
     Cada marcação abre um intervalo que vai até a marcação seguinte (ou até o
     fim dos dados). Com ``include_before``, o trecho antes da primeira
@@ -47,15 +49,16 @@ def intervals_from_markers(markers: Sequence[dict], t_min: float, t_max: float,
         key=lambda m: m["time"],
     )
     if not pontos:
-        return [Interval(tr("analysis.wholeSignal"), t_min, t_max)]
+        return [Interval(tr("analysis.wholeSignal"), t_min, t_max, last=True)]
 
     intervalos = []
     if include_before and pontos[0]["time"] > t_min:
         intervalos.append(Interval(tr("analysis.beforeFirst"), t_min, pontos[0]["time"]))
     for i, marcacao in enumerate(pontos):
-        fim = pontos[i + 1]["time"] if i + 1 < len(pontos) else t_max
+        ultimo = i + 1 == len(pontos)
+        fim = t_max if ultimo else pontos[i + 1]["time"]
         rotulo = (marcacao.get("label") or "").strip() or tr("analysis.marker", n=i + 1)
-        intervalos.append(Interval(rotulo, marcacao["time"], fim))
+        intervalos.append(Interval(rotulo, marcacao["time"], fim, last=ultimo))
     return intervalos
 
 
@@ -83,7 +86,9 @@ def interval_statistics(time: np.ndarray, values: np.ndarray, interval: Interval
     A deriva vem de uma reta ajustada ao trecho; ``noise`` é o desvio dos
     resíduos dessa reta, isto é, o que sobra depois de tirar a tendência.
     """
-    mask = (time >= interval.start) & (time < interval.end)
+    # O fim do último intervalo é a última amostra: ela entra
+    fim = np.nextafter(interval.end, np.inf) if interval.last else interval.end
+    mask = (time >= interval.start) & (time < fim)
     t, y = time[mask], values[mask]
     validos = np.isfinite(y)
     t, y = t[validos], y[validos]
@@ -118,7 +123,7 @@ def interval_statistics(time: np.ndarray, values: np.ndarray, interval: Interval
         linha["noise"] = float(np.std(residuos, ddof=2))
 
     if settle_window:
-        regime = _window_mean(t, y, max(interval.start, interval.end - settle_window), interval.end)
+        regime = _window_mean(t, y, max(interval.start, interval.end - settle_window), fim)
         linha.update({"settle_mean": regime["mean"], "settle_std": regime["std"],
                       "settle_n": regime["n"]})
     return linha

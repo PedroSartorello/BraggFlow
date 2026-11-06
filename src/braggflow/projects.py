@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .i18n import tr
+from .paths import write_text_atomic
 from .processing.spectra import (
     parse_evolution_events,
     resolve_evolution_options,
@@ -200,13 +201,11 @@ class Project:
             "n_markers": len(self.markers),
             "n_series": len(self.series),
             "n_spectra": len(self.spectra_files),
+            "created": self.created,
         }
 
     def save(self, path) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False),
-                        encoding="utf-8")
+        write_text_atomic(path, json.dumps(self.to_dict(), indent=2, ensure_ascii=False))
 
     @classmethod
     def load(cls, path) -> "Project":
