@@ -109,7 +109,8 @@ The full description of every format (interrogator exports, spectra, gas
 event tables, processed CSV + JSON, sensor setups) is in
 [`docs/data-formats.md`](data-formats.md). In short: format detection is
 automatic, whatever the extension (`.ASC`, `.txt`, `.csv`,
-`.dat`, `.tsv`, `.prn`…): encoding (UTF-8, UTF-8 with BOM, UTF-16 LE/BE,
+`.dat`, `.tsv`, `.prn`…), and spectra recorded by catman in its binary format
+(`.BIN`) are read too. For text files that means the encoding (UTF-8, UTF-8 with BOM, UTF-16 LE/BE,
 Latin-1), separator (tab, `;`, `,` or whitespace), decimal mark, instrument
 preamble lines and whether there is a header row at all.
 

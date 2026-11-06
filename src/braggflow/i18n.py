@@ -100,6 +100,17 @@ MESSAGES = {
                                  "en": "The file does not have two numeric columns (wavelength and intensity)."},
     "reader.noSpectrumTrace": {"pt": "Nenhum traço espectral válido encontrado no arquivo.",
                                "en": "No valid spectral trace found in the file."},
+    "reader.catmanFormat": {"pt": "catman binário (versão {version})", "en": "catman binary (version {version})"},
+    "reader.catmanBroken": {"pt": "{name}: o binário do catman está incompleto ou corrompido.",
+                            "en": "{name}: the catman binary file is incomplete or corrupted."},
+    "reader.catmanChannelFormat": {"pt": "{name}: o canal {channel} não é numérico; só canais numéricos do catman são lidos.",
+                                   "en": "{name}: channel {channel} is not numeric; only numeric catman channels are read."},
+    "reader.catmanSeries": {"pt": "{name} é um binário do catman sem canal de comprimento de onda. Séries temporais em "
+                                  ".BIN ainda não são lidas: exporte do catman em ASCII (.ASC).",
+                            "en": "{name} is a catman binary file without a wavelength channel. Time series in .BIN "
+                                  "are not read yet: export them from catman as ASCII (.ASC)."},
+    "reader.notCatman": {"pt": "{name} não é um binário do catman (HBM), o único formato .BIN aceito.",
+                         "en": "{name} is not a catman (HBM) binary file, the only .BIN format accepted."},
     "data.invalidPath": {"pt": "Arquivo inválido ou fora de data/: {path}",
                          "en": "Invalid file or outside data/: {path}"},
 

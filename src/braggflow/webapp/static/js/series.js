@@ -877,7 +877,7 @@ export async function loadFileList(selectValue) {
 
 // Extensões que o servidor aceita (RAW_EXTENSIONS em webapp/app.py): de uma
 // pasta enviada inteira, o resto (fotos, anotações) fica de fora sem erro
-const DATA_EXTENSIONS = [".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec"];
+const DATA_EXTENSIONS = [".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec", ".bin"];
 const UPLOAD_BATCH = 25;     // arquivos por requisição
 
 // `fileList`: os arquivos de um <input> (os de uma pasta trazem o caminho em

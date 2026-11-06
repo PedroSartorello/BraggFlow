@@ -148,7 +148,7 @@
           <button type="button" id="btn-add-series" class="btn-dashed" data-i18n="files.addChecked"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
             <label class="btn-secondary btn-sm" data-i18n="files.import"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
-              <input type="file" id="file-upload" class="file-hidden" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
+              <input type="file" id="file-upload" class="file-hidden" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec,.bin,.BIN"></label>
           </div>
         </div>
       </details>
@@ -401,7 +401,7 @@
           <button type="button" id="btn-add-spectra" class="btn-dashed" data-i18n="files.addChecked"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>Adicionar marcados</button>
           <div class="upload-row">
             <label class="btn-secondary btn-sm" data-i18n="files.import"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar arquivos
-              <input type="file" id="spectra-upload" class="file-hidden" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
+              <input type="file" id="spectra-upload" class="file-hidden" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec,.bin,.BIN"></label>
             <label class="btn-secondary btn-sm" data-i18n="files.importFolder"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Importar pasta
               <input type="file" id="spectra-upload-dir" class="file-hidden" webkitdirectory multiple></label>
           </div>
@@ -956,7 +956,7 @@
         <strong data-i18n="seriesEmpty.drop">Solte aqui os arquivos de série temporal</strong>
         .asc, .txt, .csv, .dat, .tsv… o formato é detectado sozinho
         <br><label class="btn-secondary" data-i18n="common.chooseFiles"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
-          <input type="file" class="dropzone-input" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec"></label>
+          <input type="file" class="dropzone-input" multiple accept=".asc,.ASC,.txt,.csv,.dat,.tsv,.prn,.spec,.bin,.BIN"></label>
       </div>
       <div class="empty-files" id="series-empty-files"></div>
       <span class="hint" data-i18n="seriesEmpty.hint">Vários arquivos de um mesmo ensaio podem ser juntados depois, no cartão Concatenação.</span>
@@ -1137,7 +1137,7 @@
         <strong data-i18n="spectraEmpty.drop">Solte aqui os arquivos de espectro</strong>
         intensidade × comprimento de onda; vários traços por arquivo são aceitos
         <br><label class="btn-secondary" data-i18n="common.chooseFiles"><svg class="icon" aria-hidden="true"><use href="#i-upload"/></svg>Escolher no computador
-          <input type="file" class="dropzone-input" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec"></label>
+          <input type="file" class="dropzone-input" multiple accept=".dat,.txt,.csv,.asc,.tsv,.prn,.spec,.bin,.BIN"></label>
       </div>
       <div class="empty-files" id="spectra-empty-files"></div>
     </div>
