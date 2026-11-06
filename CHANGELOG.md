@@ -236,6 +236,14 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- Joined files only worked as one signal for the "Processar juntos" click:
+  any later change (a filter, a sensor) reprocessed the first file alone and
+  was saved only in it. While the "Concatenação" card is open, the checked
+  files are now one signal for every processing (steps, "Processar", CSV
+  download, measurements, statistics, automatic Savitzky-Golay); the
+  settings on screen are saved in all of them, and opening or closing the
+  card switches between the join and the single file.
+
 - Switching projects left the "Evolução entre arquivos" (and the peaks and
   valleys table) of the previous project on screen. They are cleared, and the
   evolution is recomputed for the open project, also when its files or their
