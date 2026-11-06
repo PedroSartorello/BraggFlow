@@ -17,7 +17,7 @@
 
 BraggFlow is an open-source workbench for optical fibre sensor research. It
 takes FBG interrogator data and optical spectra (OSA, UV-VIS-NIR, OceanView
-LMR exports) from the files the equipment wrote to the numbers and figures of
+LMR exports, catman `.BIN`) from the files the equipment wrote to the numbers and figures of
 a paper. It runs in the browser, on your own computer, in English or
 Brazilian Portuguese.
 

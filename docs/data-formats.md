@@ -90,6 +90,21 @@ Wavelength [nm];Reflection [dBm]
 1535,01;-60,000
 ```
 
+**catman binary (`.BIN`)** — spectra recorded by HBM catman, for example from
+the FS22 interrogator. The file is recognised by its first two bytes (file
+version 5010–5012), not by the extension (`braggflow.io.reader.read_catman_binary`):
+
+- The channel named `Wavelength…` is the axis ("Wavelength CH1", nm).
+- Every other channel of the same length is a trace ("Spectrum CH1", in dB).
+- With several axes, each trace takes the axis whose name ends the same way
+  (`CH1`, `CH2`…).
+- The acquisition time is the date catman stores with the channel, to the
+  millisecond.
+- Only numeric channels (4- or 8-byte floats) are read.
+- A `.BIN` without a wavelength channel (a time series) is refused, with the
+  advice to export it from catman as ASCII.
+- Any other `.bin` file is refused.
+
 ## 3. Gas event table
 
 The instants at which the gas (or flow, or any condition) changes during a

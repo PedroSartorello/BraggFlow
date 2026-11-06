@@ -135,6 +135,13 @@ itself did not change: the same input gives the same output as before.
   - Tests: `tests/test_i18n.py` checks the dictionary and the server messages;
     browser tests switch to English and back, check that the choice survives
     a reload, and look for untranslated text on every tab.
+- Spectra in the catman binary format (`.BIN`, HBM), as recorded from the
+  FS22, open in the Espectros tab like the text exports:
+  - the "Wavelength CH…" channel is the axis, and "Spectrum CH…" are the traces;
+  - the acquisition time comes from the file.
+
+  `braggflow.io.reader.read_catman_binary` reads the channels. Tests use
+  synthetic `.BIN` files (`tests/catman_synthetic.py`).
 
 ### Changed
 

@@ -205,3 +205,63 @@ def test_describe_file_reports_format_and_content(tmp_path):
 	assert info["traces"] == ["CH 1"]
 	assert info["wavelength_range"][0] == 1510.0
 	assert "utf-16" in info["format"] and "tabulação" in info["format"]
+
+
+# ── catman binário (.BIN) ────────────────────────────────────────────────────
+
+def test_catman_binary_spectrum(tmp_path):
+	from datetime import datetime
+	from .catman_synthetic import fs22_spectrum
+
+	path = fs22_spectrum(tmp_path, when=datetime(2026, 3, 2, 9, 30, 15, 250000))
+	assert classify_file(path) == "spectrum"
+	spectra = load_spectra(path)
+	assert spectra.names == ["Spectrum CH1"] and spectra.intensity_unit == "dB"
+	spectrum = spectra.spectra[0]
+	assert spectrum.n_points == 4000
+	np.testing.assert_allclose(spectrum.wavelength[[0, 1]], [1510.0, 1510.02])
+	assert spectrum.wavelength[np.argmax(spectrum.intensity)] == pytest.approx(1530.0, abs=0.05)
+	assert spectra.acquired == datetime(2026, 3, 2, 9, 30, 15, 250000)
+	assert spectra.acquired_from == "header"
+
+	info = describe_file(path)
+	assert info["kind"] == "spectrum" and info["traces"] == ["Spectrum CH1"]
+	assert info["wavelength_range"] == [1510.0, 1589.98] and "catman" in info["format"]
+	with pytest.raises(ValueError, match="espectro"):
+		load_interrogator_file(path)
+
+
+def test_catman_traces_take_the_wavelength_of_their_own_channel(tmp_path):
+	from .catman_synthetic import catman_bytes
+
+	lam1, lam2 = np.linspace(1510, 1590, 500), np.linspace(1520, 1600, 500)
+	path = tmp_path / "dois.bin"
+	path.write_bytes(catman_bytes([
+		("Wavelength CH1", "nm", lam1), ("Wavelength CH2", "nm", lam2),
+		("Spectrum CH2", "dBm", np.full(500, 2.0)), ("Spectrum CH1", "dBm", np.full(500, 1.0)),
+	], width=4))
+	spectra = load_spectra(path)
+	assert spectra.names == ["Spectrum CH2", "Spectrum CH1"] and spectra.intensity_unit == "dBm"
+	assert spectra.get("Spectrum CH2").wavelength[0] == pytest.approx(1520.0)
+	assert spectra.get("Spectrum CH1").wavelength[0] == pytest.approx(1510.0)
+
+
+def test_catman_binary_problems_are_explained(tmp_path):
+	from .catman_synthetic import catman_bytes, fs22_spectrum
+
+	inteiro = fs22_spectrum(tmp_path).read_bytes()
+	cortado = tmp_path / "cortado.BIN"
+	cortado.write_bytes(inteiro[:len(inteiro) // 2])
+	with pytest.raises(ValueError, match="incompleto"):
+		load_spectra(cortado)
+
+	serie = tmp_path / "serie.BIN"
+	serie.write_bytes(catman_bytes([("Time", "s", np.arange(100.0)), ("CH_1 Sensor_1", "nm", np.full(100, 1550.0))]))
+	assert classify_file(serie) == "timeseries"
+	with pytest.raises(ValueError, match="Séries temporais em .BIN"):
+		load_interrogator_file(serie)
+
+	outro = tmp_path / "firmware.bin"
+	outro.write_bytes(bytes(range(256)) * 8)
+	with pytest.raises(ValueError, match="não é um binário do catman"):
+		load_spectra(outro)

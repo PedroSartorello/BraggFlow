@@ -16,14 +16,18 @@ Dois tipos de conteúdo são reconhecidos:
   (OSA) e espectrômetros UV-VIS-NIR (OceanView/SpectraSuite, com ou sem o
   cabeçalho ``>>>>>Begin Spectral Data<<<<<``). O instante da aquisição vem
   do cabeçalho (``Date: ...``) ou do nome do arquivo (``..._09-30-15-250``).
+
+Espectros também podem vir no binário do catman (HBM, ``.BIN``), reconhecido
+pelo identificador no começo do arquivo (:func:`read_catman_binary`).
 """
 
 import codecs
 import hashlib
 import re
+import struct
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -249,6 +253,8 @@ def _looks_like_data(fields: List[str]) -> bool:
 
 def detect_text_format(path, max_lines: int = 60) -> TextFormat:
     """Descobre codificação, separador, decimal e cabeçalho de um arquivo."""
+    if Path(path).suffix.lower() == ".bin":
+        raise ValueError(tr("reader.notCatman", name=Path(path).name))   # binário que não é do catman
     with open(path, "rb") as f:
         raw = f.read(_HEAD_BYTES)
     if not raw.strip():
@@ -459,12 +465,16 @@ def _looks_like_fbg_peaks(values: np.ndarray) -> bool:
 
 def classify_file(path, nrows: int = 2000) -> str:
     """Tipo do conteúdo lendo só o começo do arquivo (listagens rápidas)."""
+    if is_catman_binary(path):
+        return _classify_catman(read_catman_binary(path)[0])
     df, fmt = read_table(path, nrows=nrows)
     return classify_table(df, fmt)
 
 
 def describe_file(path) -> dict:
     """Resumo do arquivo para a interface: tipo, formato e colunas."""
+    if is_catman_binary(path):
+        return _describe_catman(path)
     df, fmt = read_table(path)
     kind = classify_table(df, fmt)
     info = {
@@ -541,6 +551,10 @@ def load_interrogator_file(path) -> InterrogatorData:
     * Os valores saem como foram exportados: picos perdidos (0) são tratados
       por :func:`braggflow.processing.cleaning.mark_invalid_peaks`.
     """
+    if is_catman_binary(path):
+        if _classify_catman(read_catman_binary(path)[0]) == "spectrum":
+            raise ValueError(tr("reader.isSpectrum", name=Path(path).name))
+        raise ValueError(tr("reader.catmanSeries", name=Path(path).name))
     df, fmt = read_table(path)
     if classify_table(df, fmt) == "spectrum":
         raise ValueError(
@@ -718,8 +732,11 @@ def load_spectra(path) -> SpectrumSet:
     Aceita o formato largo (uma coluna de comprimento de onda e uma coluna de
     intensidade por traço) e o formato longo de analisadores de espectro, em
     que os traços vêm empilhados com uma coluna de rótulo (``CH 1``,
-    ``Subset 2``…); traços sem dados são descartados.
+    ``Subset 2``…); traços sem dados são descartados. Também lê o binário do
+    catman (:func:`read_catman_binary`).
     """
+    if is_catman_binary(path):
+        return _load_catman_spectra(path)
     df, fmt = read_table(path)
     spectra = _spectra_from_table(df, fmt, Path(path).name)
     spectra.metadata = read_preamble(path, fmt)
@@ -727,6 +744,171 @@ def load_spectra(path) -> SpectrumSet:
     if "transmission" in Path(path).stem.lower():
         spectra.intensity_unit = "%"
     return spectra
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# catman binário (.BIN)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Os dois primeiros bytes de um binário do catman (HBM): 5010 a 5012,
+# conforme a versão que gravou
+CATMAN_FILE_IDS = (5010, 5011, 5012)
+_CATMAN_RESERVED = 32                    # textos reservados depois do comentário
+_OLE_EPOCH = datetime(1899, 12, 30)     # as datas do catman contam dias a partir daqui
+# Nome do canal que é o eixo de um espectro ("Wavelength CH1" no FS22)
+_WAVELENGTH_NAMES = ("wavelength", "comprimento de onda", "lambda", "λ")
+_UNIT_NAMES = {"db": "dB", "dbm": "dBm"}
+
+
+@dataclass
+class CatmanChannel:
+    """Um canal do binário do catman: valores, unidade e quando foi gravado."""
+
+    name: str
+    unit: str
+    values: np.ndarray
+    recorded: Optional[datetime] = None
+
+
+def is_catman_binary(path) -> bool:
+    """O arquivo começa com o identificador de um binário do catman?"""
+    with open(path, "rb") as f:
+        head = f.read(2)
+    return len(head) == 2 and struct.unpack("<h", head)[0] in CATMAN_FILE_IDS
+
+
+def _ole_date(dias: float) -> Optional[datetime]:
+    if not np.isfinite(dias) or dias <= 0:
+        return None
+    return _OLE_EPOCH + timedelta(milliseconds=round(dias * 86_400_000))
+
+
+def read_catman_binary(path) -> Tuple[List[CatmanChannel], int]:
+    """
+    Lê os canais de um binário do catman (HBM); devolve ``(canais, versão)``.
+
+    O cabeçalho diz onde começam os dados, traz um comentário e 32 textos
+    reservados, e aponta o cabeçalho de cada canal: número de valores, nome,
+    unidade, comentário, formato, bytes por valor e a data da gravação. Os
+    valores vêm depois, um canal após o outro. O resto do cabeçalho de cada
+    canal (escala, sensor, fórmula) não muda os valores gravados.
+    """
+    raw = Path(path).read_bytes()
+    nome = Path(path).name
+    pos = 0
+
+    def take(fmt):
+        nonlocal pos
+        valor = struct.unpack_from(fmt, raw, pos)
+        pos += struct.calcsize(fmt)
+        return valor[0] if len(valor) == 1 else valor
+
+    def text():
+        nonlocal pos
+        n = take("<h")
+        if n < 0 or pos + n > len(raw):
+            raise struct.error
+        valor = raw[pos:pos + n].decode("cp1252", errors="replace")
+        pos += n
+        return valor.replace("\x00", "").strip()
+
+    try:
+        versao, inicio = take("<h"), take("<i")
+        text()                                          # comentário do arquivo
+        for _ in range(_CATMAN_RESERVED):
+            text()
+        n_canais = take("<h")
+        take("<i")                                      # maior número de valores
+        cabecalhos = [take("<i") for _ in range(max(n_canais, 0))]
+        if not (0 < n_canais and 0 < inicio <= len(raw)):
+            raise struct.error
+
+        canais, tamanhos = [], []
+        for onde in cabecalhos:
+            if not 0 <= onde < len(raw):
+                raise struct.error
+            pos = onde
+            n, canal, unidade = take("<i"), text(), text()
+            text()                                      # comentário do canal
+            formato, largura, dias = take("<h"), take("<h"), take("<d")
+            if formato != 0 or largura not in (4, 8):
+                raise ValueError(tr("reader.catmanChannelFormat", name=nome, channel=canal))
+            canais.append(CatmanChannel(canal, unidade, np.empty(0), _ole_date(dias)))
+            tamanhos.append((n, largura))
+    except struct.error:
+        raise ValueError(tr("reader.catmanBroken", name=nome)) from None
+
+    pos = inicio
+    for canal, (n, largura) in zip(canais, tamanhos):
+        if n < 0 or pos + n * largura > len(raw):
+            raise ValueError(tr("reader.catmanBroken", name=nome))
+        canal.values = np.frombuffer(raw, f"<f{largura}", n, pos).astype(float)
+        pos += n * largura
+    return canais, versao
+
+
+def _is_axis(channel: CatmanChannel) -> bool:
+    return channel.name.lower().startswith(_WAVELENGTH_NAMES)
+
+
+def _catman_pairs(channels: List[CatmanChannel]) -> List[Tuple[CatmanChannel, CatmanChannel]]:
+    """
+    ``(eixo, traço)`` de cada espectro. O eixo é o canal de comprimento de
+    onda ("Wavelength CH1"); cada traço usa o eixo com o mesmo final de nome
+    ("Spectrum CH1") ou, não havendo, o único eixo com o mesmo número de pontos.
+    """
+    eixos = [c for c in channels if _is_axis(c)] or [c for c in channels if _is_wavelength(c.values)]
+    pares = []
+    for canal in channels:
+        if canal in eixos:
+            continue
+        mesmos = [e for e in eixos if len(e.values) == len(canal.values)]
+        final = canal.name.split()[-1].lower() if canal.name.split() else ""
+        eixo = next((e for e in mesmos if e.name.split() and e.name.split()[-1].lower() == final), None)
+        if eixo is None and len(mesmos) == 1:
+            eixo = mesmos[0]
+        if eixo is not None:
+            pares.append((eixo, canal))
+    return pares
+
+
+def _classify_catman(channels: List[CatmanChannel]) -> str:
+    return "spectrum" if _catman_pairs(channels) else "timeseries"
+
+
+def _load_catman_spectra(path) -> SpectrumSet:
+    channels, _ = read_catman_binary(path)
+    lidos = [(s, traco) for eixo, traco in _catman_pairs(channels)
+             if (s := _make_spectrum(traco.name, eixo.values, traco.values))]
+    if not lidos:
+        raise ValueError(tr("reader.noSpectrumTrace"))
+    traco = lidos[0][1]
+    resultado = SpectrumSet(spectra=[s for s, _ in lidos], source=Path(path).name,
+                            intensity_unit=_UNIT_NAMES.get(traco.unit.lower(), traco.unit) or "a.u.")
+    if traco.recorded:
+        resultado.metadata = {"Date": traco.recorded.isoformat(timespec="milliseconds")}
+    resultado.acquired, resultado.acquired_from = acquisition_time(path, resultado.metadata)
+    return resultado
+
+
+def _describe_catman(path) -> dict:
+    channels, versao = read_catman_binary(path)
+    info = {
+        "kind": _classify_catman(channels),
+        "format": tr("reader.catmanFormat", version=versao),
+        "encoding": "binary",
+        "columns": [f"{c.name} [{c.unit}]" if c.unit else c.name for c in channels],
+        "n_rows": max(len(c.values) for c in channels),
+    }
+    if info["kind"] == "spectrum":
+        spectra = _load_catman_spectra(path)
+        first = spectra.spectra[0]
+        info.update(traces=spectra.names, n_points=first.n_points,
+                    wavelength_range=[round(float(first.wavelength[0]), 3),
+                                      round(float(first.wavelength[-1]), 3)])
+    else:
+        info["channels"] = [c.name for c in channels]
+    return info
 
 
 # ─────────────────────────────────────────────────────────────────────────────

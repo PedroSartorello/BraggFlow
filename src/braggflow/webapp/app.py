@@ -96,7 +96,7 @@ mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 
 # Qualquer exportação de texto do interrogador ou do analisador de espectro
-RAW_EXTENSIONS = {".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec"}
+RAW_EXTENSIONS = {".asc", ".txt", ".csv", ".dat", ".tsv", ".prn", ".spec", ".bin"}   # .bin: binário do catman
 
 # rcParams do matplotlib são globais do processo (não do app); o servidor
 # Flask atende em threads

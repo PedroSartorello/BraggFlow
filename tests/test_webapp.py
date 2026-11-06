@@ -1135,6 +1135,25 @@ def test_evolution_figure(webapp):
     assert client.post("/api/figure", json=por_ordem).status_code == 200
 
 
+def test_catman_binary_spectra_are_uploaded_listed_and_analysed(webapp):
+    from .catman_synthetic import catman_bytes, fbg_spectrum
+
+    _, client = webapp
+    lam, refl = fbg_spectrum(peaks=(1535.0, 1555.0))
+    resp = client.post("/api/upload", content_type="multipart/form-data", data={"file": [
+        (io.BytesIO(catman_bytes([("Spectrum CH1", "db", refl), ("Wavelength CH1", "nm", lam)])), "FBG.BIN"),
+    ]})
+    assert resp.status_code == 200 and resp.get_json()["files"] == ["data/uploads/FBG.BIN"]
+    kinds = {f["path"]: f["kind"] for f in client.get("/api/files").get_json()["files"]}
+    assert kinds["data/uploads/FBG.BIN"] == "spectrum"
+
+    trace = client.post("/api/spectra/preview", json={
+        "file": "data/uploads/FBG.BIN", "settings": {"find_max": True, "max_peaks": 2},
+    }).get_json()["traces"][0]
+    assert trace["name"] == "Spectrum CH1" and trace["n_points"] == 4000
+    assert [round(e["wavelength"]) for e in trace["extrema"]] == [1535, 1555]
+
+
 def test_evolution_events_come_back_in_seconds_from_the_first_spectrum(webapp):
     from .lmr_synthetic import lmr_series
 
