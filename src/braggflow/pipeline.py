@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 
-from .io.processed import format_column, metadata_path_for
+from .io.processed import csv_header, metadata_path_for, write_processed_csv
 from .io.reader import InterrogatorData, file_fingerprint, load_interrogator_file
 from .processing.delimiting import slice_time_window
 from .sensors import SensorSetup
@@ -258,9 +258,7 @@ class OpticalPipeline:
     def csv_header(self) -> str:
         """CSV header with units: ``Time [s],EFBG1 [nm],...``."""
         self._check_loaded()
-        columns = [format_column("Time", "s")]
-        columns += [format_column(ch, unit) for ch, unit in zip(self.channels, self.units)]
-        return ",".join(columns)
+        return csv_header(self.channels, self.units)
 
     def metadata(self) -> dict:
         """Everything needed to trace how the current data was produced."""
@@ -307,11 +305,7 @@ class OpticalPipeline:
         self._check_loaded()
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-
-        # Add time array as the first column to the signals array
-        data_matrix = np.hstack((self.time_array.reshape(-1, 1), self.signals_array))
-        # Save the data matrix to a CSV file with channel names and units as headers
-        np.savetxt(output_path, data_matrix, delimiter=",", header=self.csv_header(), comments='')
+        write_processed_csv(output_path, self.time_array, self.signals_array, self.channels, self.units)
 
         if metadata_path == "auto":
             metadata_path = metadata_path_for(output_path)

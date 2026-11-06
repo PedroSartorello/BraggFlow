@@ -41,7 +41,7 @@ SENSORS = [
 ]
 
 
-def _process(client, **overrides):
+def _process_options(**overrides):
     options = {
         "file": "data/raw/ensaio.ASC",
         "sensors": SENSORS,
@@ -53,7 +53,11 @@ def _process(client, **overrides):
         "savgol": {"enabled": True, "window_length": "11", "polyorder": "2"},
     }
     options.update(overrides)
-    return client.post("/api/process", json=options)
+    return options
+
+
+def _process(client, **overrides):
+    return client.post("/api/process", json=_process_options(**overrides))
 
 
 def test_channels_endpoint_reports_nominal_and_fs(webapp):
@@ -132,6 +136,31 @@ def test_download_csv_has_units(webapp):
     resp = client.post("/api/download", json={"file": "data/raw/ensaio.ASC", "sensors": SENSORS})
     assert resp.status_code == 200
     assert resp.data.decode().splitlines()[0] == "Time [s],S1 [nm],S2 [nm]"
+
+
+def test_download_reuses_the_last_processing(webapp, monkeypatch):
+    import braggflow.webapp.app as app_module
+
+    _, client = webapp
+    chamadas = []
+    original = app_module.run_recipe
+    monkeypatch.setattr(app_module, "run_recipe", lambda *a, **k: chamadas.append(1) or original(*a, **k))
+    processado = _process(client).get_json()
+    csv = client.post("/api/download", json=_process_options()).data.decode()
+    assert len(chamadas) == 1, "o download não processa de novo"
+    assert len(csv.splitlines()) == processado["n_samples"] + 1
+
+
+def test_only_this_page_is_answered(webapp):
+    _, client = webapp
+    assert client.get("/api/projects").status_code == 200
+    # DNS rebinding: um domínio que aponta para 127.0.0.1 chega com outro Host
+    resp = client.get("/api/projects", base_url="http://ataque.example:5000")
+    assert resp.status_code == 403 and "só atende a própria página" in resp.get_json()["error"]
+    # Um formulário de outro site enviando um arquivo
+    arquivo = lambda: {"file": (io.BytesIO(b"500\t1\n"), "a.txt")}
+    assert client.post("/api/upload", headers={"Origin": "http://ataque.example"}, data=arquivo()).status_code == 403
+    assert client.post("/api/upload", headers={"Origin": "http://localhost"}, data=arquivo()).status_code == 200
 
 
 def test_preview_does_not_overwrite_saved_result(webapp):
@@ -242,11 +271,20 @@ def test_project_save_list_open_and_delete(webapp):
 
 def test_project_keeps_creation_date_when_replaced(webapp):
     _, client = webapp
-    client.post("/api/projects", json=PROJECT)
-    created = client.get("/api/projects/Ensaio 1").get_json()["created"]
-    client.post("/api/projects", json={**PROJECT, "description": "revisado"})
+    created = client.post("/api/projects", json=PROJECT).get_json()["created"]
+    assert client.get("/api/projects/Ensaio 1").get_json()["created"] == created
+    client.post("/api/projects", json={**PROJECT, "created": created, "description": "revisado"})
     updated = client.get("/api/projects/Ensaio 1").get_json()
     assert updated["created"] == created and updated["description"] == "revisado"
+
+
+@pytest.mark.parametrize("nome", ["Ensaio 1", "Ensaio: 1"])      # "Ensaio: 1" vira o mesmo arquivo
+def test_a_new_project_does_not_replace_another_with_the_same_name(webapp, nome):
+    _, client = webapp
+    client.post("/api/projects", json={**PROJECT, "description": "o original"})
+    resp = client.post("/api/projects", json={**PROJECT, "name": nome, "description": "novo e vazio"})
+    assert resp.status_code == 409 and "Já existe um projeto chamado Ensaio 1" in resp.get_json()["error"]
+    assert client.get("/api/projects/Ensaio 1").get_json()["description"] == "o original"
 
 
 @pytest.mark.parametrize("payload, message", [
@@ -865,6 +903,19 @@ def test_file_cache_reloads_a_changed_file(tmp_path):
     assert len(leituras) == 4
 
 
+def test_file_cache_limit_can_count_points_instead_of_files(tmp_path):
+    from braggflow.webapp.state import FileCache
+
+    cache = FileCache(lambda p: p.read_text(), size=10, weigh=len)    # peso = nº de caracteres
+    a, b, c = (tmp_path / n for n in ("a.txt", "b.txt", "c.txt"))
+    for arquivo in (a, b, c):
+        arquivo.write_text("1234")
+        cache.get(arquivo)
+    assert [k[0] for k in cache._entries] == [str(b), str(c)], "4 + 4 cabem em 10; o mais antigo saiu"
+    c.write_text("x" * 50)                       # sozinho passa do limite, mas fica (é o mais recente)
+    assert cache.get(c) == "x" * 50 and [k[0] for k in cache._entries] == [str(c)]
+
+
 # ── espectros LMR: transmissão a partir do bruto e evolução entre arquivos ────
 
 LMR_PREPARO = {"lambda_min": 450, "lambda_max": 950, "smooth_window": 21, "detrend": 2}
@@ -1108,6 +1159,31 @@ def test_upload_takes_many_files_and_keeps_the_folder(webapp):
 
     listados = [f["path"] for f in client.get("/api/files").get_json()["files"]]
     assert {"data/uploads/LMR dia 1/a.txt", "data/uploads/LMR dia 1/sub/b.txt"} <= set(listados)
+
+
+def test_upload_with_the_same_name_keeps_the_earlier_file(webapp):
+    dados, client = webapp
+
+    def enviar(conteudo):
+        return client.post("/api/upload", data={"file": (io.BytesIO(conteudo), "ensaio.txt")}).get_json()["files"]
+
+    assert enviar(b"500\t1\n") == ["data/uploads/ensaio.txt"]
+    assert enviar(b"500\t1\n") == ["data/uploads/ensaio.txt"], "o mesmo arquivo de novo: reaproveita"
+    assert enviar(b"600\t2\n") == ["data/uploads/ensaio (2).txt"], "outro conteúdo: não apaga o primeiro"
+    assert (dados.uploads / "ensaio.txt").read_bytes() == b"500\t1\n"
+
+
+def test_files_with_the_same_name_in_different_folders_get_their_own_csv(webapp):
+    dados, client = webapp
+    for pasta in ("dia1", "dia2"):
+        (dados.raw / pasta).mkdir()
+        (dados.raw / pasta / "ensaio.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
+    salvos = {_process(client, file=f"data/raw/{pasta}/ensaio.ASC", project="P").get_json()["processed_file"]
+              for pasta in ("dia1", "dia2")}
+    assert salvos == {"data/processed/P/dia1__ensaio_processado.csv",
+                      "data/processed/P/dia2__ensaio_processado.csv"}
+    raiz = _process(client, project="P").get_json()["processed_file"]
+    assert raiz == "data/processed/P/ensaio_processado.csv", "na raiz, o nome de sempre"
 
 
 def test_evolution_figure(webapp):

@@ -64,14 +64,18 @@ class FileCache:
     """
     Resultado de ``loader(path)`` guardado enquanto o arquivo não mudar
     (mesmo caminho, data de modificação e tamanho). Uma versão nova de um
-    arquivo substitui a antiga; acima de ``size`` entradas, sai a usada há
-    mais tempo (``None`` = sem limite).
+    arquivo substitui a antiga; acima de ``size``, sai a usada há mais tempo
+    (``None`` = sem limite). ``size`` conta entradas ou, com ``weigh``, a
+    soma de ``weigh(resultado)`` (pontos de espectro, por exemplo); a mais
+    recente fica mesmo que sozinha passe do limite.
     """
 
-    def __init__(self, loader: Callable, size: Optional[int]):
+    def __init__(self, loader: Callable, size: Optional[int], weigh: Optional[Callable] = None):
         self._loader = loader
         self._size = size
-        self._entries: OrderedDict = OrderedDict()
+        self._weigh = weigh or (lambda entry: 1)
+        self._entries: OrderedDict = OrderedDict()     # chave → (resultado, peso)
+        self._total = 0
         self._lock = threading.Lock()
 
     def get(self, path: Path):
@@ -80,15 +84,17 @@ class FileCache:
         with self._lock:
             if key in self._entries:
                 self._entries.move_to_end(key)
-                return self._entries[key]
+                return self._entries[key][0]
 
         entry = self._loader(path)
+        peso = self._weigh(entry)
         with self._lock:
             for old in [k for k in self._entries if k[0] == key[0]]:
-                del self._entries[old]  # versões antigas do mesmo arquivo
-            self._entries[key] = entry
-            while self._size is not None and len(self._entries) > self._size:
-                self._entries.popitem(last=False)
+                self._total -= self._entries.pop(old)[1]   # versões antigas do mesmo arquivo
+            self._entries[key] = (entry, peso)
+            self._total += peso
+            while self._size is not None and self._total > self._size and len(self._entries) > 1:
+                self._total -= self._entries.popitem(last=False)[1][1]
         return entry
 
 
@@ -134,9 +140,15 @@ class ResultCache:
 FILE_CACHE_SIZE = 2
 # Espectros lidos e extremos já medidos: uma evolução com centenas de
 # arquivos é recalculada (outro λ de referência, outro modo) sem reler nada.
-# Um espectro de 1000–4000 pontos ocupa de 20 a 70 kB.
-SPECTRA_CACHE_SIZE = 1024
+# O limite é em pontos (16 bytes cada: λ e intensidade), não em arquivos:
+# 8 milhões ≈ 128 MB cabem ~2000 espectros do OceanView (2–4 mil pontos) ou
+# ~240 do catman (.BIN, 32.768 pontos).
+SPECTRA_CACHE_POINTS = 8_000_000
 ANALYSIS_CACHE_SIZE = 8192
+
+
+def _spectrum_points(spectra) -> int:
+    return sum(s.n_points for s in spectra.spectra)
 
 
 def _load_processed(path: Path):
@@ -157,7 +169,8 @@ class AppState:
     data: DataFolder
     interrogator: FileCache = field(default_factory=lambda: FileCache(load_file, FILE_CACHE_SIZE))
     processed: FileCache = field(default_factory=lambda: FileCache(_load_processed, FILE_CACHE_SIZE * 3))
-    spectra: FileCache = field(default_factory=lambda: FileCache(load_spectra, SPECTRA_CACHE_SIZE))
+    spectra: FileCache = field(default_factory=lambda: FileCache(load_spectra, SPECTRA_CACHE_POINTS,
+                                                                 weigh=_spectrum_points))
     kinds: FileCache = field(default_factory=lambda: FileCache(_classify, None))
     results: ResultCache = field(default_factory=ResultCache)
     analyses: ResultCache = field(default_factory=lambda: ResultCache(ANALYSIS_CACHE_SIZE))

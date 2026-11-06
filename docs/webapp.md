@@ -35,7 +35,9 @@ A project keeps a whole analysis under a name: the files with their own sensors
 and processing steps, the concatenation order, the time markers, the spectra
 settings, the selected curves and the figure style
 (`data/projects/<name>.json`). Processed CSVs go to `data/processed/<project>/`, so two
-projects never overwrite each other's results. Opening a project only shows the
+projects never overwrite each other's results. A file in a subfolder gets the
+folder in the name of its CSV (`dia1__ensaio_processado.csv`), so two
+`ensaio.ASC` from different days do not share one. Opening a project only shows the
 saved state; "Processar" (or automatic reprocessing) writes the CSV.
 
 *Saving and undoing.* With "Salvar sozinho" on (the default, remembered in
@@ -44,8 +46,9 @@ header says "alterações…", "salvando…" or "salvo às 14:03" (a failed save
 shows "erro ao salvar", click to retry). Switching projects or closing the
 page saves what is pending first, without asking. The project name is saved
 when you leave the field or press Enter, not at each letter, since saving
-under another name makes a copy. A project deleted while open is not saved
-again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
+under another name makes a copy. A name already taken by another project is
+refused, on the project screen and when saving, so a project never replaces
+another. A project deleted while open is not saved again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
 asks before leaving a project with unsaved changes.
 
 The undo and redo buttons in the header (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y
@@ -144,7 +147,9 @@ exports with or without header), from one file to hundreds.
 
 *Files.* "Importar pasta" (or dropping a folder on the empty page) sends a
 whole folder at once, kept as `data/uploads/<folder>/`; files of other types
-in it (notes, photos) are left out without an error. A subfolder of
+in it (notes, photos) are left out without an error. A file with the name of
+one already sent, but other content, goes in as `nome (2).ext` instead of
+replacing it. A subfolder of
 `data/raw` or `data/uploads` shows up as one button, "N arquivo(s) ·
 adicionar todos", and as a group in "Adicionar arquivos ao projeto", which
 also has a name filter. The project list is sorted by name (01, 02… 10),

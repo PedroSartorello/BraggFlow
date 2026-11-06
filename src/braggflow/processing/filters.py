@@ -34,7 +34,9 @@ def apply_moving_average_filter(signals: np.ndarray, window_size: int) -> np.nda
     it, so the filter introduces no time lag (for an even ``window_size`` the
     window extends one sample further forward, a half-sample offset).
     Uses a cumulative sum without zero-padding: border samples are averaged
-    over the available (real) data points only.
+    over the available (real) data points only. Missing samples (NaN) stay
+    missing and are left out of their neighbours' windows, so one lost
+    reading does not blank the rest of the channel.
 
     Parameters:
     - signals: 2D numpy array of shape (n_samples, n_channels) containing the signal data.
@@ -50,34 +52,21 @@ def apply_moving_average_filter(signals: np.ndarray, window_size: int) -> np.nda
     if window_size > n_samples:
         raise ValueError("window_size must not be greater than the number of samples.")
 
-    # cumsum[k] = sum of the first k samples of each channel
+    # Sums and counts of the valid samples: cumsum[k] = sum of the first k
+    values = signals.astype(float)
+    valid = np.isfinite(values)
     cumsum = np.zeros((n_samples + 1, signals.shape[1]))
-    np.cumsum(signals.astype(float), axis=0, out=cumsum[1:])
+    counts = np.zeros((n_samples + 1, signals.shape[1]))
+    np.cumsum(np.where(valid, values, 0.0), axis=0, out=cumsum[1:])
+    np.cumsum(valid, axis=0, out=counts[1:])
 
     idx = np.arange(n_samples)
     lo = np.maximum(idx - (window_size - 1) // 2, 0)
     hi = np.minimum(idx + window_size // 2 + 1, n_samples)
 
-    return (cumsum[hi] - cumsum[lo]) / (hi - lo)[:, None]
-
-def detrend_signal(signals: np.ndarray) -> np.ndarray:
-    """
-    Removes the linear trend from the input signals.
-    
-    Parameters:
-    - signals: 2D numpy array of shape (n_samples, n_channels) containing the signal data.
-    
-    Returns:
-    - detrended_signals: 2D numpy array of the same shape as input containing the detrended signals.
-    """
-    from scipy.signal import detrend
-
-    detrended_signals = np.empty_like(signals, dtype=float)
-
-    for i in range(signals.shape[1]):  # Apply detrending to each channel
-        detrended_signals[:, i] = detrend(signals[:, i].astype(float))
-
-    return detrended_signals
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = (cumsum[hi] - cumsum[lo]) / (counts[hi] - counts[lo])
+    return np.where(valid, mean, np.nan)    # a valid sample is in its own window: never 0/0
 
 
 def estimate_sampling_rate(time_array: np.ndarray) -> float:

@@ -151,10 +151,15 @@ function closeProjectGate() {
   $("project-gate").classList.add("hidden");
 }
 
+// O nome de arquivo que o servidor dá ao projeto (_safe_name em app.py); no
+// Windows, maiúsculas e minúsculas dão o mesmo arquivo
+const projectFileName = (nome) => nome.replace(/[^\p{L}\p{N}._ -]/gu, "").replace(/^[. ]+|[. ]+$/g, "").toLowerCase();
+
 function startNewProject() {
   const name = $("gate-name").value.trim();
-  if (!name) {                       // o nome dá a pasta dos resultados
-    setText($("gate-error"), "gate.nameRequired");
+  const existente = gateList?.projects.find((p) => projectFileName(p.name) === projectFileName(name));
+  if (!name || existente) {          // o nome dá a pasta dos resultados
+    setText($("gate-error"), existente ? "gate.nameTaken" : "gate.nameRequired", { name: existente?.name });
     $("gate-error").classList.remove("hidden");
     $("gate-name").focus();
     return;
@@ -398,6 +403,9 @@ let autosaveTimer = null;
 let snapshotTimer = null;
 let changeSeq = 0;               // conta mudanças: um save só limpa o "não salvo" se nada mudou durante ele
 let saving = Promise.resolve();  // saves em fila, um de cada vez
+// Data de criação do projeto na tela: o servidor só substitui o arquivo que
+// tem a mesma (um projeto novo com o nome de outro não o apaga)
+let projectCreated = "";
 let restoring = false;           // aplicando um estado (abrir, desfazer): não é mudança do usuário
 const historico = { states: [], index: -1 };   // estados para desfazer/refazer
 
@@ -544,6 +552,7 @@ function collectProject() {
 
   return {
     name: $("project-name").value.trim(),
+    created: projectCreated,
     file: $("file-select").value,
     sensors: sensorsForProject(collectSensors()),
     processing: collectProcessing(),
@@ -621,6 +630,7 @@ async function openProject(name) {
 async function applyProjectData(project) {
   clearProjectState();               // nada do projeto anterior fica para trás
   $("project-name").value = project.name;
+  projectCreated = project.created || "";
 
   // Estados por arquivo
   (project.series || []).forEach((entry) => {
@@ -699,6 +709,7 @@ async function saveProjectNow(silent) {
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || t("project.saveError"));
+    projectCreated = data.created || projectCreated;
     try { localStorage.setItem(LAST_PROJECT_KEY, data.name); } catch { /* sem armazenamento */ }
     if (seq === changeSeq) markProjectDirty(false);   // mudou durante o envio: o próximo save leva
     setSaveState("project.savedAt", { at: new Date() });
@@ -748,6 +759,7 @@ async function deleteProject(name, button) {
 
 function newProject() {
   $("project-name").value = "";
+  projectCreated = "";
   markProjectDirty(false);
   setSaveState("");
   try { localStorage.removeItem(LAST_PROJECT_KEY); } catch { /* sem armazenamento */ }

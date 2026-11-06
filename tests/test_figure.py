@@ -303,6 +303,8 @@ def test_evolution_labels():
     assert evolution_labels("intensity", "a.u.", "max", "s")[1] == "Intensity (a.u.)"
     assert evolution_labels("intensity", "AU", "min", "s")[1] == "Absorbance"
     assert evolution_labels("prominence", "dB", "min", "s", "pt")[1] == "Profundidade (dB)"
+    # dB também é o espectro bruto (catman, OSA): não dá para dizer que é transmissão
+    assert evolution_labels("intensity", "dB", "max", "s", "pt")[1] == "Intensidade (dB)"
     assert evolution_labels("prominence", "", "max", "s")[1] == "Height"
     with pytest.raises(ValueError, match="Grandeza"):
         evolution_labels("x", "", "min")

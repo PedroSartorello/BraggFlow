@@ -294,6 +294,10 @@ MESSAGES = {
                            "en": "{name} describes the test but does not contain the data. Upload {target}, "
                                  "the file named inside it."},
     "app.descriptorTarget": {"pt": "o arquivo .ASC ou .txt do ensaio", "en": "the test's .ASC or .txt file"},
+    "app.projectExists": {"pt": "Já existe um projeto chamado {name}. Abra-o pela lista de projetos ou escolha outro nome.",
+                          "en": "A project named {name} already exists. Open it from the project list or choose another name."},
+    "app.foreignRequest": {"pt": "Pedido recusado: o BraggFlow só atende a própria página, aberta em 127.0.0.1 ou localhost.",
+                           "en": "Request refused: BraggFlow only answers its own page, opened at 127.0.0.1 or localhost."},
     "app.badExtension": {"pt": "{name}: extensão não suportada ({suffix}). Aceito: {accepted}.",
                          "en": "{name}: unsupported extension ({suffix}). Accepted: {accepted}."},
     "app.noExtension": {"pt": "sem extensão", "en": "no extension"},

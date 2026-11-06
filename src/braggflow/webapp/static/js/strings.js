@@ -7,6 +7,7 @@ export default {
   "gate.subtitle": {"pt": "Escolha um projeto para continuar ou comece um novo", "en": "Choose a project to continue, or start a new one"},
   "gate.new": {"pt": "Novo projeto", "en": "New project"},
   "gate.nameRequired": {"pt": "Dê um nome ao projeto: os resultados ficam numa pasta com esse nome.", "en": "Name the project: the results go in a folder with this name."},
+  "gate.nameTaken": {"pt": "Já existe o projeto {name}: abra-o na lista ou escolha outro nome.", "en": "The project {name} already exists: open it from the list or choose another name."},
   "gate.back": {"pt": "← Voltar ao projeto atual", "en": "← Back to the current project"},
   "leave.title": {"pt": "Alterações não salvas", "en": "Unsaved changes"},
   "project.name": {"pt": "Nome do projeto", "en": "Project name"},

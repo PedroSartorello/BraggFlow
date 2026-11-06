@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -68,11 +69,27 @@ def test_save_and_load_roundtrip(tmp_path):
 
 
 def test_summary_is_short():
-    assert _project().summary() == {
+    projeto = _project()
+    assert projeto.summary() == {
         "name": "Ensaio CO2", "file": "data/raw/ensaio.ASC",
-        "description": "teste de ciclos", "updated": _project().updated,
+        "description": "teste de ciclos", "updated": projeto.updated,
         "n_sensors": 1, "n_markers": 2, "n_series": 1, "n_spectra": 0,
+        "created": projeto.created,
     }
+
+
+def test_saving_is_atomic(tmp_path, monkeypatch):
+    destino = tmp_path / "Ensaio CO2.json"
+    _project().save(destino)
+    antes = destino.read_text(encoding="utf-8")
+
+    def falha(self, alvo):
+        raise PermissionError("arquivo travado pelo OneDrive")
+    monkeypatch.setattr(Path, "replace", falha)
+    with pytest.raises(PermissionError):
+        _project(description="mudou").save(destino)
+    assert destino.read_text(encoding="utf-8") == antes, "a versão anterior fica inteira"
+    assert [p.name for p in tmp_path.iterdir()] == ["Ensaio CO2.json"], "sem temporário largado"
 
 
 # ── um estado por arquivo ─────────────────────────────────────────────────────

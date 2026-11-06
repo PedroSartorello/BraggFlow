@@ -10,6 +10,7 @@ The data folder is resolved in this order:
 """
 
 import os
+import uuid
 from pathlib import Path
 from typing import Optional, Union
 
@@ -38,3 +39,19 @@ def resolve_data_dir(data_dir: Optional[Union[str, os.PathLike]] = None,
         for sub in SUBDIRS:
             (base / sub).mkdir(parents=True, exist_ok=True)
     return base
+
+
+def write_text_atomic(path: Union[str, os.PathLike], text: str) -> None:
+    """
+    Writes ``text`` (UTF-8) to a temporary file next to ``path`` and then
+    replaces ``path`` with it, so an interrupted save (Ctrl+C, a file locked
+    by a sync client) leaves the previous version intact instead of half a file.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)

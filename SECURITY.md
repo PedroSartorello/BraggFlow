@@ -19,6 +19,9 @@ experimental data.
 BraggFlow is meant to run on your own computer:
 
 - the web app listens only on `127.0.0.1`;
+- it answers only its own page: a request with another `Host` (a domain
+  pointed at 127.0.0.1) or, for uploads and changes, from another site's
+  page (`Origin`) is refused;
 - it has no login;
 - it reads and writes only its data folder.
 

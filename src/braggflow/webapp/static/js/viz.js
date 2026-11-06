@@ -162,10 +162,11 @@ export async function loadVizSources(pending) {
     const data = await resp.json();
     const checked = marked("viz-series-source");
     if (pending) checked.add(pending);
-    // Só os CSVs dos arquivos que estão no projeto, inclusive o de uma junção
+    // Só os CSVs dos arquivos que estão no projeto, inclusive o de uma junção;
+    // o nome leva a subpasta, como em _processed_name (app.py): dia1__ensaio
     const doProjeto = new Set();
     projectSeriesPaths().forEach((path) => {
-      const stem = shortName(path).split("/").pop().replace(/\.[^.]+$/, "");
+      const stem = shortName(path).split("/").slice(1).join("__").replace(/\.[^.]+$/, "");
       doProjeto.add(`${data.folder}/${stem}_processado.csv`);
       doProjeto.add(`${data.folder}/${stem}_juntos_processado.csv`);
     });

@@ -189,3 +189,13 @@ def test_selection_statistics_rejects_an_empty_range():
 
     with pytest.raises(ValueError, match="maior que o início"):
         selection_statistics(np.arange(5.0), np.arange(5.0), 3.0, 3.0)
+
+
+def test_the_last_interval_keeps_the_last_sample():
+    t = np.arange(0, 10.5, 0.5)                  # 21 amostras, a última em 10 s
+    y = np.where(t >= 9.5, 5.0, 0.0)
+    final = analyse_curve(t, y, [{"time": 9.5, "label": "B"}])["intervals"][-1]
+    assert final["label"] == "B" and final["n"] == 2 and final["mean"] == 5.0
+    assert analyse_curve(t, y, [])["intervals"][0]["n"] == 21
+    regime = analyse_curve(t, y, [{"time": 9.5}], settle_window=0.5)["intervals"][-1]
+    assert regime["settle_n"] == 2, "a média de regime do último intervalo também chega ao fim"
