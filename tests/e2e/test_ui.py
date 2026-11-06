@@ -146,6 +146,29 @@ def test_unsaved_changes_ask_before_leaving_the_project(app):
     expect(app.locator("#gate-projects .gate-row", has_text="Rascunho")).to_be_visible()
 
 
+def test_savgol_window_and_order_are_chosen_from_the_data(app):
+    novo_projeto(app, "Auto")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator('.step[data-step="savgol"] .step-name').click()          # abre os parâmetros
+    expect(app.locator("#savgol-window")).to_have_value("11")
+    app.click("#btn-savgol-auto")
+    expect(app.locator("#savgol-auto-note")).to_contain_text("Pelos dados: janela")
+    janela = int(app.input_value("#savgol-window"))
+    assert janela != 11 and janela % 2 == 1
+    expect(app.locator("#savgol-auto-note")).to_contain_text(f"janela {janela}")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")     # mudou o projeto, como digitar
+
+
+def test_spectrum_smoothing_window_is_chosen_from_the_data(app):
+    novo_projeto(app, "Auto espectro")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text="espectro.txt").click()
+    expect(app.locator("#spectra-status")).not_to_contain_text("Adicione")
+    app.click("#btn-spec-smooth-auto")
+    expect(app.locator("#spec-smooth-auto-note")).to_contain_text("Pelos dados: janela")
+    assert int(app.input_value('[data-spec="smooth_window"]')) % 2 == 1
+
+
 def test_spectrum_peaks_are_detected(app):
     novo_projeto(app, "Espectros")
     app.click('#tabs .tab[data-tab="spectra"]')

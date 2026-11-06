@@ -952,8 +952,42 @@ export async function addFilesAndShow(paths) {
   }
 }
 
+// ── Savitzky-Golay pelos dados ───────────────────────────────────────────────
+// O servidor testa janelas e ordens por validação cruzada no sinal como chega
+// ao filtro e devolve a melhor; aqui ela vai para os campos, que reprocessam
+async function chooseSavgolFromData() {
+  const opts = collectOptions();
+  if (!opts.file) { showError(t("series.pickFileFirst")); return; }
+  if (lastProcess?.opts.files) opts.files = lastProcess.opts.files;     // a junção que está na tela
+  const botao = $("btn-savgol-auto");
+  const nota = $("savgol-auto-note");
+  botao.disabled = true;
+  nota.classList.remove("hidden");
+  setText(nota, "savgol.autoBusy");
+  try {
+    const resp = await fetch("/api/savgol/auto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || t("savgol.autoError"));
+    $("savgol-window").value = data.window;
+    $("savgol-poly").value = data.order;
+    $("savgol-enabled").checked = true;
+    setText(nota, "savgol.autoResult", { window: data.window, order: data.order, cutoff: fmtNum(data.cutoff_hz, 3) });
+    if (data.warnings.length) nota.append(` ${data.warnings.join(" ")}`);
+    ["input", "change"].forEach((tipo) => $("savgol-window").dispatchEvent(new Event(tipo, { bubbles: true })));
+  } catch (err) {
+    setPlain(nota, err.message);
+  } finally {
+    botao.disabled = false;
+  }
+}
+
 // ── Wiring ───────────────────────────────────────────────────────────────────
 $("btn-process").addEventListener("click", () => processData());
+$("btn-savgol-auto").addEventListener("click", () => chooseSavgolFromData().catch((err) => showError(err.message)));
 $("btn-download").addEventListener("click", downloadCsv);
 $("btn-setup-save").addEventListener("click", saveSetup);
 $("btn-suggest-bands").addEventListener("click", () => { suggestBands(); markProjectDirty(); });

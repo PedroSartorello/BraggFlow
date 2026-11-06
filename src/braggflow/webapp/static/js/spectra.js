@@ -622,6 +622,38 @@ $("tab-spectra-sidebar").addEventListener("change", (e) => {
   scheduleEvolution();     // o preparo mudou: a evolução também
 });
 $("btn-copy-spectrum").addEventListener("click", copySpectrumSettings);
+
+// Janela da suavização pelos dados: validação cruzada no espectro aberto
+async function chooseSmoothingFromData() {
+  const file = shared.currentSpectrumFile;
+  const nota = $("spec-smooth-auto-note");
+  nota.classList.remove("hidden");
+  if (!file) { setText(nota, "spectra.smoothAutoNoFile"); return; }
+  saveCurrentSpectrumState();          // o que está no formulário vale, mesmo antes de virar prévia
+  const botao = $("btn-spec-smooth-auto");
+  botao.disabled = true;
+  setText(nota, "savgol.autoBusy");
+  try {
+    const resp = await fetch("/api/spectra/smoothing-auto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file, settings: spectrumSettingsFor(file) }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || t("savgol.autoError"));
+    const campo = (nome) => document.querySelector(`#tab-spectra-sidebar [data-spec="${nome}"]`);
+    campo("smooth_window").value = data.window;
+    if (data.method === "savgol") campo("smooth_order").value = data.order;
+    setText(nota, data.method === "savgol" ? "spectra.smoothAutoResultSg" : "spectra.smoothAutoResultMa",
+            { window: data.window, order: data.order, nm: fmtNum(data.window_nm, 3) });
+    ["input", "change"].forEach((tipo) => campo("smooth_window").dispatchEvent(new Event(tipo, { bubbles: true })));
+  } catch (err) {
+    setPlain(nota, err.message);
+  } finally {
+    botao.disabled = false;
+  }
+}
+$("btn-spec-smooth-auto").addEventListener("click", () => chooseSmoothingFromData().catch((err) => showError(err.message)));
 $("spectra-filter").addEventListener("input", renderSpectraFiles);
 $("spectrum-picker-filter").addEventListener("input", () => renderFilePicker("spectrum"));
 ["spectra-upload", "spectra-upload-dir"].forEach((id) => $(id).addEventListener("change", (e) =>

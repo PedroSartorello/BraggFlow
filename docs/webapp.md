@@ -96,7 +96,13 @@ them by default.
 the work: *1 · Arquivos*, *2 · Sensores* (names, allowed bands and K_T,
 reusable as setups) and *3 · Etapas* (cleaning and sampling, filters and
 conversion, each with its parameters). The plot shows the processed signal
-over the raw one. Several files of one run can be joined in the "Concatenação"
+over the raw one. "Escolher janela e ordem pelos dados", under the
+Savitzky-Golay fields, fills them from the signal itself: leave-one-out
+cross-validation on the signal as it reaches the filter (after cleaning,
+nulls, outliers and resampling) picks the window and order (2 or 4) that best
+predict each sample from its neighbours, and the note gives the resulting
+−3 dB cut-off in Hz. With resampling on, neighbouring samples are correlated
+and the window tends to come out short; the note says so. Several files of one run can be joined in the "Concatenação"
 card, which appears once the project has two or more files. Shortcuts:
 Ctrl+Enter processes, Ctrl+S saves the project.
 
@@ -171,6 +177,9 @@ converted with themselves. The preparation is applied in this order:
    dark, or `S − D` without source. Left empty, the spectrum is analysed as
    it is — raw counts, or transmission already computed by the spectrometer.
 2. Wavelength window, smoothing (Savitzky-Golay or moving average).
+   "Escolher a janela pelos dados" picks the window (and the order, for
+   Savitzky-Golay) the same way, on the open spectrum cropped and not yet
+   smoothed, and gives it in points and in nm.
 3. *Remove trend*: subtracts a polynomial (degree 0–4) fitted to the window,
    so shallow valleys on a sloping baseline (LMR, SPR, fringes) stand out.
 4. Normalisation and vertical offset.

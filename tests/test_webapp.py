@@ -138,6 +138,30 @@ def test_download_csv_has_units(webapp):
     assert resp.data.decode().splitlines()[0] == "Time [s],S1 [nm],S2 [nm]"
 
 
+def test_savgol_window_and_order_come_from_the_data(webapp):
+    _, client = webapp
+    resp = client.post("/api/savgol/auto", json=_process_options())
+    data = resp.get_json()
+    assert resp.status_code == 200, data
+    assert data["window"] % 2 == 1 and data["window"] > data["order"] and data["order"] in (2, 4)
+    assert data["fs"] == pytest.approx(50.0, rel=0.01) and 0 < data["cutoff_hz"] < 25   # fixture a 50 Hz
+    assert "reamostragem" in data["warnings"][0], "o fixture reamostra: o aviso explica o viés"
+    sem = client.post("/api/savgol/auto", json=_process_options(
+        timebase={"enabled": True, "duplicates": "mean"})).get_json()
+    assert sem["warnings"] == []
+
+
+def test_spectrum_smoothing_window_comes_from_the_data(webapp, spectrum_file):
+    _, client = webapp
+    sg = client.post("/api/spectra/smoothing-auto", json={
+        "file": spectrum_file, "settings": {"smooth_method": "savgol", "smooth_window": "99"}}).get_json()
+    assert sg["method"] == "savgol" and sg["window"] % 2 == 1 and sg["order"] in (2, 4)
+    assert sg["window_nm"] == pytest.approx(sg["window"] * 0.02, rel=0.01)   # passo de 0,02 nm do fixture
+    media = client.post("/api/spectra/smoothing-auto", json={
+        "file": spectrum_file, "settings": {"smooth_method": "moving_average"}}).get_json()
+    assert media["method"] == "moving_average" and media["order"] == 0
+
+
 def test_download_reuses_the_last_processing(webapp, monkeypatch):
     import braggflow.webapp.app as app_module
 

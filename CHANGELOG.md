@@ -142,6 +142,14 @@ itself did not change: the same input gives the same output as before.
 
   `braggflow.io.reader.read_catman_binary` reads the channels. Tests use
   synthetic `.BIN` files (`tests/catman_synthetic.py`).
+- Savitzky-Golay window and order chosen from the data: a button under the
+  filter fields in Séries temporais, and under the smoothing in Espectros,
+  fills them by leave-one-out cross-validation
+  (`braggflow.processing.filters.choose_savgol`; the filter is linear, so
+  the error of leaving each sample out comes from one filtering per
+  candidate). In Séries the note gives the −3 dB cut-off in Hz
+  (`savgol_cutoff`). On synthetic signals the choice lands within 10% of the
+  smallest error possible with the clean signal known.
 
 ### Changed
 
