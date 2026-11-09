@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "braggflow-web",
-      "runtimeExecutable": "braggflow-web",
-      "runtimeArgs": ["--port", "5000"],
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "braggflow.webapp", "--port", "5000"],
       "port": 5000
     },
     {
       "name": "braggflow-web-5001",
-      "runtimeExecutable": "braggflow-web",
-      "runtimeArgs": ["--port", "5001"],
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "braggflow.webapp", "--port", "5001"],
       "port": 5001
     }
   ]

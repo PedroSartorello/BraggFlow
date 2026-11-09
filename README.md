@@ -57,6 +57,10 @@ braggflow-web                            # opens on http://127.0.0.1:5000
 You need Python 3.10 or newer. Use a virtual environment if you
 prefer (`python -m venv .venv`, then activate it before `pip install`).
 
+On Windows, if Smart App Control blocks `braggflow-web.exe` ("An Application
+Control policy has blocked this file"), run `python -m braggflow.webapp`
+instead; it takes the same options.
+
 ## The library
 
 The web app runs on `braggflow`, a Python package you can also use on its

@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +40,19 @@ def test_cli_matches_the_fluent_recipe_of_the_example(tmp_path):
 
     cli = process_file(EXAMPLE, out=tmp_path / "cli.csv", plot=False)
     assert cli.read_bytes() == fluente.read_bytes()
+
+
+@pytest.mark.parametrize("modulo, comando", [("braggflow", "braggflow"),
+                                             ("braggflow.webapp", "braggflow-web")])
+def test_commands_also_run_with_python_m(modulo, comando):
+    """
+    ``python -m`` roda os dois comandos pelo python.exe, que é assinado: no
+    Windows, o Smart App Control bloqueia os .exe que o pip escreve.
+    """
+    saida = subprocess.run([sys.executable, "-m", modulo, "--help"],
+                           capture_output=True, text=True, timeout=120)
+    assert saida.returncode == 0, saida.stderr
+    assert saida.stdout.startswith(f"usage: {comando}")
 
 
 def test_steps_follow_the_options():

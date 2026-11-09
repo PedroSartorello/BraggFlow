@@ -18,6 +18,19 @@ the directory you start it from; the subfolders are created on start (see
 and has no login, so it is meant for your own machine. The page loads Plotly
 from a CDN, so the first load needs internet access.
 
+On Windows, Smart App Control (or another application control policy) can
+block `braggflow-web.exe`, the launcher pip writes, because it is not signed;
+PowerShell then says "An Application Control policy has blocked this file".
+`python.exe` is signed, so start the same app through it, with the same
+options:
+
+```bash
+python -m braggflow.webapp --port 5001        # in a venv: .venv\Scripts\python.exe -m braggflow.webapp
+```
+
+`pip.exe` is blocked for the same reason: install with `python -m pip install -e .`,
+and run the other command as `python -m braggflow process <file>`.
+
 Quick try with the example data:
 
 ```bash

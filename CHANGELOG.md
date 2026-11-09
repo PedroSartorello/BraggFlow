@@ -25,6 +25,9 @@ itself did not change: the same input gives the same output as before.
 - `pyproject.toml`: installable with `pip install -e .`, Python ≥ 3.10,
   runtime dependencies with minimum versions, `dev` extra with pytest.
 - Commands `braggflow process <file>` and `braggflow-web`.
+- `python -m braggflow` and `python -m braggflow.webapp` run the same two
+  commands through `python.exe`. On Windows with Smart App Control, which
+  blocks the unsigned `.exe` launchers pip writes, this is how to start them.
 - `braggflow.paths.resolve_data_dir` and the configurable data folder.
 - Synthetic example data (`examples/make_synthetic_data.py`) and the examples
   `01_process_file.py` and `02_publication_figure.py`.
