@@ -623,6 +623,22 @@ function resetStyle() {
 }
 
 // ── Marcações ────────────────────────────────────────────────────────────────
+// A lista é uma só: fica embaixo do gráfico das Séries ou no cartão
+// "Marcações e eixos" da Figura, conforme a aba aberta
+const MARKER_PARTS = ["marker-hint", "marker-list", "btn-add-marker"];
+export function placeMarkerList(aba) {
+  const destino = aba === "viz" ? $("viz-markers-slot") : $("card-markers");
+  MARKER_PARTS.forEach((id) => destino.appendChild($(id)));
+  showMarkerCount();
+}
+
+function showMarkerCount() {
+  const n = collectMarkers().length;
+  $("marker-count").textContent = n ? `(${n})` : "";
+  if (n) setText($("viz-marker-count"), "viz.markerCountSome", { n });
+  else setText($("viz-marker-count"), "viz.markerCountNone");
+}
+
 // Cada marcação nova pega a próxima cor: intervalos vizinhos não se confundem
 const MARKER_COLORS = ["#4682B4", "#2E8B57", "#8B008B", "#C0392B", "#D35400", "#7F8C8D"];
 
@@ -709,10 +725,7 @@ export function moveMarker(indice, x) {
 
 export function drawPlotMarkers() {
   scheduleAnalysis();
-  const n = collectMarkers().length;
-  $("marker-count").textContent = n ? `(${n})` : "";
-  if (n) setText($("viz-marker-count"), "viz.markerCountSome", { n });
-  else setText($("viz-marker-count"), "viz.markerCountNone");
+  showMarkerCount();
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
   refreshStyleState();
 }

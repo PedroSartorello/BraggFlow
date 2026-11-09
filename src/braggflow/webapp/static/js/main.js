@@ -8,8 +8,9 @@ import { previewSpectrum } from "./spectra.js";
 import { drawPlotMarkers, generateFigure, loadFigureOptions, onVizChange, scheduleFigure, sortMarkerRows } from "./viz.js";
 import { markProjectDirty, openProjectGate, redo, saveProject, undo } from "./projects.js";
 
-// Marcações (abaixo do gráfico): não mudam o processamento, só a figura
-$("card-markers").addEventListener("change", (e) => {
+// Marcações (abaixo do gráfico das Séries ou no cartão da Figura): não mudam
+// o processamento, só a figura e as estatísticas
+document.addEventListener("change", (e) => {
   if (!e.target.closest("#marker-list")) return;
   markProjectDirty();
   sortMarkerRows();
@@ -19,6 +20,7 @@ $("card-markers").addEventListener("change", (e) => {
 
 $("sidebar").addEventListener("change", async (e) => {
   const el = e.target;
+  if (el.closest("#marker-list")) return;     // na aba Figura: o tratamento das marcações (acima) cuida
   if (el.matches(".pick-series, .pick-spectrum, .list-filter, #auto-process, #file-upload, #spectra-upload, #spectra-upload-dir")) return;
   markProjectDirty();
   if (el.closest("#tab-spectra-sidebar")) return;   // espectros: spectra.js cuida (não reprocessa as séries)

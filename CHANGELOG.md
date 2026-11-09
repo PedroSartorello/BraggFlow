@@ -236,6 +236,12 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- Markers could only be added in the Séries temporais tab. The marker list now
+  also appears in the "Marcações e eixos" card of the Figura tab, for series
+  and spectra figures: add, change or remove a marker there and the figure,
+  the Séries plot, the statistics and the project follow. It is the same list,
+  moved to the open tab.
+
 - Joined files only worked as one signal for the "Processar juntos" click:
   any later change (a filter, a sensor) reprocessed the first file alone and
   was saved only in it. While the "Concatenação" card is open, the checked

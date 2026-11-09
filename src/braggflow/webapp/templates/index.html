@@ -721,7 +721,9 @@
   <details class="card enabled collapsible" data-card="marcacoes">
     <summary class="card-header"><span data-i18n="viz.markersCard">Marcações e eixos</span><span class="card-state" data-summary="marcacoes"></span></summary>
     <div class="card-body">
-      <span class="hint span2" id="viz-marker-count" data-i18n="viz.markerCountHint">As marcações são feitas na aba Séries temporais (ferramenta Marcar).</span>
+      <span class="hint span2" id="viz-marker-count" data-i18n="viz.markerCountHint">As marcações valem para a figura e para as estatísticas; também dá para criá-las clicando no gráfico da aba Séries temporais (ferramenta Marcar).</span>
+      <!-- A lista de marcações vem para cá quando a aba Figura abre (placeMarkerList, viz.js) -->
+      <div class="span2 viz-markers" id="viz-markers-slot" data-for="series spectra"></div>
       <label class="check-row span2" data-i18n="viz.t0FirstMarker"><input type="checkbox" data-style="data.t0_first_marker"> t = 0 na primeira marcação</label>
       <label class="check-row span2" data-i18n="viz.shade"><input type="checkbox" data-style="markers.shade"> Faixas alternadas entre marcações</label>
       <label class="check-row span2" title="Ignora a cor de cada marcação; útil para impressão sem cor" data-i18n="viz.monochrome" data-i18n-title="viz.monochromeTitle">

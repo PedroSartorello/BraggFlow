@@ -486,6 +486,7 @@ body.no-series #status-details { display: none !important; }
 }
 .marker-row .marker-del:hover, .event-row .marker-del:hover { background: var(--danger-bg); color: var(--danger); }
 #marker-list { display: flex; flex-direction: column; gap: 5px; }
+.viz-markers { display: flex; flex-direction: column; gap: 6px; }
 #marker-list:empty::after {
   content: "Nenhuma marcação ainda."; font-size: 12px; color: var(--muted);
 }

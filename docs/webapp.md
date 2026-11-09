@@ -137,7 +137,10 @@ statistics) are made on the plot with the *Marcar* tool: a click adds one, and
 dragging a marker line changes its instant. With the other tools a click adds
 nothing, so zooming never leaves stray markers. They are listed, with label
 and colour, in the "Marcações" panel under the plot, where they can also be
-typed in.
+typed in. The same list moves to the "Marcações e eixos" card of the Figura
+tab while that tab is open (for figures of series, in s, and of spectra, in
+nm), so markers can be added, changed and removed there too; it is one list,
+and a change in either tab shows in the other.
 
 The toolbar above the plot chooses how to look at it (display only, the
 processing does not change; the choice is remembered in this browser):

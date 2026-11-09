@@ -788,6 +788,29 @@ def abrir_figura(page: Page) -> None:
     expect(page.locator("#viz-img")).to_be_visible()
 
 
+def test_markers_are_added_in_the_figure_tab_too(app, data_dir):
+    novo_projeto(app, "Marcas na figura")
+    abrir_figura(app)
+    app.locator('#tab-viz-sidebar details[data-card="marcacoes"] > summary').click()
+    expect(app.locator("#viz-marker-count")).to_contain_text("Nenhuma marcação: adicione aqui")
+    app.click("#btn-add-marker")                         # o mesmo botão, agora no cartão da Figura
+    linha = app.locator("#tab-viz-sidebar .marker-row")
+    expect(linha).to_have_count(1)
+    linha.locator(".marker-time").fill("300")
+    linha.locator(".marker-label").fill("CO₂")
+    linha.locator(".marker-label").press("Tab")
+    expect(app.locator("#viz-status")).to_contain_text("1 marcação")
+    expect(app.locator("#viz-marker-count")).to_contain_text("1 marcação(ões)")
+
+    # A mesma marcação na aba Séries, no gráfico e no projeto salvo
+    app.click('#tabs .tab[data-tab="series"]')
+    expect(app.locator("#card-markers .marker-row")).to_have_count(1)
+    expect(app.locator("#card-markers .marker-time")).to_have_value("300")
+    assert app.evaluate("document.getElementById('plot').layout.shapes.some(s => s.x0 === 300)")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert [m["label"] for m in projeto_no_disco(data_dir, "Marcas na figura")["markers"]] == ["CO₂"]
+
+
 def test_figure_tab_fits_summarizes_and_finds_options(app):
     novo_projeto(app, "Figura")
     abrir_figura(app)

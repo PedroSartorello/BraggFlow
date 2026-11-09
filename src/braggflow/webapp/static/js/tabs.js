@@ -2,7 +2,7 @@
 
 import { $, showError } from "./core.js";
 import { openSpectraTab } from "./spectra.js";
-import { openVizTab } from "./viz.js";
+import { openVizTab, placeMarkerList } from "./viz.js";
 
 export function switchTab(name) {
   document.querySelectorAll("#tabs .tab").forEach((b) => {
@@ -16,6 +16,7 @@ export function switchTab(name) {
     $(`tab-${tab}-main`).classList.toggle("hidden", tab !== name);
   });
   showError("");
+  if (name !== "spectra") placeMarkerList(name);
   if (name === "viz") openVizTab();
   if (name === "spectra") openSpectraTab();
 }
