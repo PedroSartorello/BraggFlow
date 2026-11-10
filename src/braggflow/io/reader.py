@@ -23,6 +23,7 @@ pelo identificador no começo do arquivo (:func:`read_catman_binary`).
 
 import codecs
 import hashlib
+import io
 import re
 import struct
 import warnings
@@ -251,12 +252,17 @@ def _looks_like_data(fields: List[str]) -> bool:
     return numeric >= max(1, len(filled) // 2)
 
 
-def detect_text_format(path, max_lines: int = 60) -> TextFormat:
-    """Descobre codificação, separador, decimal e cabeçalho de um arquivo."""
+def detect_text_format(path, max_lines: int = 60, raw: Optional[bytes] = None) -> TextFormat:
+    """
+    Descobre codificação, separador, decimal e cabeçalho de um arquivo.
+    ``raw``: o conteúdo já lido, para não abrir o arquivo de novo.
+    """
     if Path(path).suffix.lower() == ".bin":
         raise ValueError(tr("reader.notCatman", name=Path(path).name))   # binário que não é do catman
-    with open(path, "rb") as f:
-        raw = f.read(_HEAD_BYTES)
+    if raw is None:
+        with open(path, "rb") as f:
+            raw = f.read(_HEAD_BYTES)
+    raw = raw[:_HEAD_BYTES]
     if not raw.strip():
         raise ValueError(tr("reader.emptyFile"))
 
@@ -293,6 +299,8 @@ def detect_text_format(path, max_lines: int = 60) -> TextFormat:
         consistency = sum(abs(c - median) <= 1 for c in counts) / len(counts)
         if consistency >= 0.7:
             candidates.append((candidate, consistency, median))
+            if consistency >= 0.9:
+                break       # o primeiro assim, na ordem de prioridade, é o escolhido
 
     if not candidates:
         raise ValueError(tr("reader.noSeparator"))
@@ -328,16 +336,17 @@ def sniff_format(path, n_lines: int = 60) -> Tuple[str, str]:
     return fmt.sep, fmt.decimal
 
 
-def read_table(path, fmt: Optional[TextFormat] = None,
-               nrows: Optional[int] = None) -> Tuple[pd.DataFrame, TextFormat]:
+def read_table(path, fmt: Optional[TextFormat] = None, nrows: Optional[int] = None,
+               raw: Optional[bytes] = None) -> Tuple[pd.DataFrame, TextFormat]:
     """
     Lê o arquivo como tabela, detectando o formato quando não informado.
-    ``nrows`` limita a leitura, para espiar um arquivo grande.
+    ``nrows`` limita a leitura, para espiar um arquivo grande. ``raw``: o
+    conteúdo já lido, para não abrir o arquivo de novo.
     """
-    fmt = fmt or detect_text_format(path)
+    fmt = fmt or detect_text_format(path, raw=raw)
     try:
         df = pd.read_csv(
-            path,
+            path if raw is None else io.BytesIO(raw),
             sep=fmt.sep,
             decimal=fmt.decimal,
             engine="python" if fmt.is_regex_sep else "c",
@@ -351,7 +360,9 @@ def read_table(path, fmt: Optional[TextFormat] = None,
     except Exception as e:
         raise IOError(f"Erro ao ler o arquivo: {e}") from e
 
-    df = df.dropna(axis=1, how="all")
+    preenchidas = df.notna().to_numpy().any(axis=0)
+    if not preenchidas.all():
+        df = df.loc[:, preenchidas]        # colunas vazias (separador sobrando no fim da linha)
     if fmt.has_header:
         df.columns = [str(c).strip() for c in df.columns]
     else:
@@ -383,11 +394,13 @@ def _numeric_columns(df: pd.DataFrame, decimal: str) -> Dict[str, np.ndarray]:
     """
     numeric = {}
     for name in df.columns:
-        values = _to_float(df[name], decimal)
-        if pd.api.types.is_numeric_dtype(df[name]):
-            filled = df[name].notna().to_numpy()
+        column = df[name]
+        if pd.api.types.is_numeric_dtype(column):
+            values = column.to_numpy(dtype=float)
+            filled = ~np.isnan(values)
         else:
-            filled = (df[name].astype(str).str.strip() != "").to_numpy()
+            values = _to_float(column, decimal)
+            filled = (column.astype(str).str.strip() != "").to_numpy()
         if filled.sum() < 2:
             continue
         if np.isfinite(values[filled]).mean() > 0.8:
@@ -657,12 +670,14 @@ _HEADER_DATE = re.compile(
 _FILENAME_TIME = re.compile(r"(?:^|[_\s-])(\d{2})-(\d{2})-(\d{2})(?:-(\d{1,3}))?$")
 
 
-def read_preamble(path, fmt: Optional[TextFormat] = None) -> Dict[str, str]:
+def read_preamble(path, fmt: Optional[TextFormat] = None, raw: Optional[bytes] = None) -> Dict[str, str]:
     """Linhas ``chave: valor`` antes da tabela (cabeçalho do equipamento)."""
-    fmt = fmt or detect_text_format(path)
+    fmt = fmt or detect_text_format(path, raw=raw)
     if not fmt.skiprows:
         return {}
-    with open(path, "r", encoding=fmt.encoding, errors="replace") as f:
+    aberto = (open(path, "r", encoding=fmt.encoding, errors="replace") if raw is None
+              else io.TextIOWrapper(io.BytesIO(raw), encoding=fmt.encoding, errors="replace"))
+    with aberto as f:
         lines = [next(f, "") for _ in range(fmt.skiprows)]
     meta = {}
     for line in lines:
@@ -734,12 +749,16 @@ def load_spectra(path) -> SpectrumSet:
     que os traços vêm empilhados com uma coluna de rótulo (``CH 1``,
     ``Subset 2``…); traços sem dados são descartados. Também lê o binário do
     catman (:func:`read_catman_binary`).
+
+    O arquivo é aberto uma vez só: numa pasta sincronizada ou vigiada pelo
+    antivírus, abrir custa mais que ler, e uma evolução abre milhares deles.
     """
-    if is_catman_binary(path):
-        return _load_catman_spectra(path)
-    df, fmt = read_table(path)
+    raw = Path(path).read_bytes()
+    if _is_catman(raw):
+        return _load_catman_spectra(path, raw)
+    df, fmt = read_table(path, raw=raw)
     spectra = _spectra_from_table(df, fmt, Path(path).name)
-    spectra.metadata = read_preamble(path, fmt)
+    spectra.metadata = read_preamble(path, fmt, raw)
     spectra.acquired, spectra.acquired_from = acquisition_time(path, spectra.metadata)
     if "transmission" in Path(path).stem.lower():
         spectra.intensity_unit = "%"
@@ -770,11 +789,14 @@ class CatmanChannel:
     recorded: Optional[datetime] = None
 
 
+def _is_catman(head: bytes) -> bool:
+    return len(head) >= 2 and struct.unpack("<h", head[:2])[0] in CATMAN_FILE_IDS
+
+
 def is_catman_binary(path) -> bool:
     """O arquivo começa com o identificador de um binário do catman?"""
     with open(path, "rb") as f:
-        head = f.read(2)
-    return len(head) == 2 and struct.unpack("<h", head)[0] in CATMAN_FILE_IDS
+        return _is_catman(f.read(2))
 
 
 def _ole_date(dias: float) -> Optional[datetime]:
@@ -783,7 +805,7 @@ def _ole_date(dias: float) -> Optional[datetime]:
     return _OLE_EPOCH + timedelta(milliseconds=round(dias * 86_400_000))
 
 
-def read_catman_binary(path) -> Tuple[List[CatmanChannel], int]:
+def read_catman_binary(path, raw: Optional[bytes] = None) -> Tuple[List[CatmanChannel], int]:
     """
     Lê os canais de um binário do catman (HBM); devolve ``(canais, versão)``.
 
@@ -793,7 +815,7 @@ def read_catman_binary(path) -> Tuple[List[CatmanChannel], int]:
     valores vêm depois, um canal após o outro. O resto do cabeçalho de cada
     canal (escala, sensor, fórmula) não muda os valores gravados.
     """
-    raw = Path(path).read_bytes()
+    raw = Path(path).read_bytes() if raw is None else raw
     nome = Path(path).name
     pos = 0
 
@@ -876,8 +898,8 @@ def _classify_catman(channels: List[CatmanChannel]) -> str:
     return "spectrum" if _catman_pairs(channels) else "timeseries"
 
 
-def _load_catman_spectra(path) -> SpectrumSet:
-    channels, _ = read_catman_binary(path)
+def _load_catman_spectra(path, raw: Optional[bytes] = None) -> SpectrumSet:
+    channels, _ = read_catman_binary(path, raw)
     lidos = [(s, traco) for eixo, traco in _catman_pairs(channels)
              if (s := _make_spectrum(traco.name, eixo.values, traco.values))]
     if not lidos:

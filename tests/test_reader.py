@@ -265,3 +265,31 @@ def test_catman_binary_problems_are_explained(tmp_path):
 	outro.write_bytes(bytes(range(256)) * 8)
 	with pytest.raises(ValueError, match="não é um binário do catman"):
 		load_spectra(outro)
+
+
+def test_a_spectrum_file_is_opened_once(tmp_path, monkeypatch):
+    """Numa pasta sincronizada, abrir custa mais que ler: o espectro é lido de uma vez só."""
+    import builtins
+    import io
+
+    from braggflow.io.reader import load_spectra
+
+    arquivo = tmp_path / "amostra_09-30-15-250.txt"
+    linhas = ["Data from amostra", "Date: Mon Mar 02 09:30:15 BRT 2026", ">>>>>Begin Spectral Data<<<<<"]
+    linhas += [f"{400 + i * 0.5:.3f}\t{10 + (i % 7):.4f}".replace(".", ",") for i in range(300)]
+    arquivo.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    esperado = load_spectra(arquivo)
+
+    aberturas = []
+    original = builtins.open
+
+    def conta(alvo, *args, **kwargs):
+        aberturas.append(str(alvo))
+        return original(alvo, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", conta)
+    monkeypatch.setattr(io, "open", conta)
+    lido = load_spectra(arquivo)
+    assert aberturas.count(str(arquivo)) == 1
+    assert lido.acquired == esperado.acquired and lido.metadata == esperado.metadata
+    np.testing.assert_array_equal(lido.spectra[0].intensity, esperado.spectra[0].intensity)

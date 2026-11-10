@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Sequence
 
 import numpy as np
@@ -30,6 +31,54 @@ def apply_savgol_filter(signals: np.ndarray, window_length: int, polyorder: int)
         filtered_signals[:, i] = savgol_filter(signals[:, i].astype(float), window_length, polyorder)
 
     return filtered_signals
+
+@lru_cache(maxsize=64)
+def _savgol_kernel(window_length: int, polyorder: int):
+    """
+    Coeficientes do Savitzky-Golay e as matrizes das pontas. Nas pontas, onde
+    a janela não cabe, vale o polinômio de grau ``polyorder`` ajustado aos
+    ``window_length`` primeiros (ou últimos) pontos, como no
+    ``savgol_filter(mode="interp")``: cada matriz leva esses pontos direto aos
+    ``window_length // 2`` valores da ponta.
+    """
+    from scipy.signal import savgol_coeffs
+
+    metade = window_length // 2
+    posicao = np.arange(window_length, dtype=float) / window_length     # em [0, 1): ajuste bem condicionado
+    base = np.linalg.pinv(np.vander(posicao, polyorder + 1))
+    inicio = np.vander(posicao[:metade], polyorder + 1) @ base
+    fim = np.vander(posicao[window_length - metade:], polyorder + 1) @ base
+    return savgol_coeffs(window_length, polyorder), inicio, fim
+
+
+def savgol_smooth(values: np.ndarray, window_length: int, polyorder: int) -> np.ndarray:
+    """
+    Savitzky-Golay filter of one 1-D signal, with the result of
+    ``scipy.signal.savgol_filter(values, window_length, polyorder)``.
+
+    The coefficients and the edge fits are computed once per
+    ``(window_length, polyorder)`` and kept, so filtering thousands of short
+    signals (one spectrum per file) costs one convolution each instead of
+    three least-squares fits. ``window_length`` must be odd, greater than
+    ``polyorder`` and no longer than the signal.
+    """
+    from scipy.ndimage import convolve1d
+
+    values = np.asarray(values, dtype=float)
+    if window_length % 2 == 0 or window_length <= 0:
+        raise ValueError("window_length must be a positive odd integer.")
+    if polyorder >= window_length:
+        raise ValueError("polyorder must be less than window_length.")
+    if window_length > len(values):
+        raise ValueError("window_length must not be greater than the number of samples.")
+    coeficientes, inicio, fim = _savgol_kernel(int(window_length), int(polyorder))
+    filtrado = convolve1d(values, coeficientes, mode="constant")
+    metade = window_length // 2
+    if metade:
+        filtrado[:metade] = inicio @ values[:window_length]
+        filtrado[-metade:] = fim @ values[-window_length:]
+    return filtrado
+
 
 def apply_moving_average_filter(signals: np.ndarray, window_size: int) -> np.ndarray:
     """

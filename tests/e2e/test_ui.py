@@ -333,6 +333,7 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
             app.click("#btn-add-spectra")
         expect(app.locator("#spectra-files .file-name")).to_have_count(len(nomes))
         preparar_lmr(app)
+        app.evaluate("document.getElementById('evolution-table-box').open = true")   # a tabela só existe aberta
 
     def arquivos_da_evolucao():
         return app.locator("#evolution-table tbody tr td:nth-child(1)").all_text_contents()
@@ -549,7 +550,64 @@ def test_events_are_marked_on_the_evolution_and_go_to_the_figure(pasta_lmr, app)
     app.click('#tabs .tab[data-tab="spectra"]')
     expect(app.locator("#evolution-events .event-row")).to_have_count(2)
     expect(app.locator("#evolution-events .event-label").nth(1)).to_have_value("Glicerina")
-    app.wait_for_function("(document.getElementById('evolution-plot').layout?.shapes || []).length === 2")
+    app.wait_for_function("""(document.getElementById('evolution-plot').layout?.shapes || [])
+        .filter((s) => s.type === 'line').length === 2""")
+
+
+def test_evolution_help_positions_and_the_spectrum_in_focus(pasta_lmr, app):
+    """O "?" explica os campos, as técnicas novas de posição valem e o foco muda sem redesenhar a curva."""
+    novo_projeto(app, "Ajuda")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    expect(app.locator("#evolution-help")).to_be_hidden()
+    app.click("#btn-evolution-help")
+    expect(app.locator("#evolution-help")).to_be_visible()
+    expect(app.locator("#spectra-evolution")).to_have_attribute("open", "")      # o "?" não fecha o cartão
+    for termo in ("Janela ± (nm)", "Salto máximo (nm)", "ajuste lorentziano", "centro da largura", "Eixo x"):
+        expect(app.locator("#evolution-help dt", has_text=termo)).to_have_count(1)
+    assert app.locator("#evolution-help dd").count() == app.locator("#evolution-help dt").count() >= 22
+    app.click("#btn-evolution-help")
+    expect(app.locator("#evolution-help")).to_be_hidden()
+
+    # A tabela só é montada quando aberta
+    expect(app.locator("#evolution-table-summary")).to_have_text("Tabela (3 linhas)")
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(0)
+    app.locator("#evolution-table-box > summary").click()
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+    ajuste = lambdas_da_evolucao(app)
+
+    for tecnica in ("lorentzian", "gaussian", "midpoint"):
+        with app.expect_response("**/api/spectra/evolution") as resposta:
+            app.select_option("#evo-locate", tecnica)
+        assert resposta.value.ok
+        expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+        app.wait_for_function("(v) => !document.querySelector('#evolution-table tbody td:nth-child(4)')"
+                              ".textContent.startsWith(v)", arg=f"{ajuste[0]:.4f}".replace(".", ","))
+        assert lambdas_da_evolucao(app) == pytest.approx([870, 866, 862], abs=1.5)
+        assert lambdas_da_evolucao(app) != ajuste, tecnica
+
+    # O espectro em foco é um anel no gráfico; passar para o seguinte move o anel, não refaz a curva
+    def anel():
+        return app.evaluate("""() => {
+            const gd = document.getElementById('evolution-plot');
+            const aneis = gd.layout.shapes.filter((s) => s.type === 'circle');
+            return [gd.data.length, aneis.length, aneis[0]?.xanchor];
+        }""")
+    curvas_antes, aneis, x0 = anel()
+    assert (curvas_antes, aneis) == (1, 1)
+    app.evaluate("window.__curva = document.getElementById('evolution-plot').data[0]")
+    app.click("#btn-evo-next")
+    app.wait_for_function("(x) => document.getElementById('evolution-plot').layout.shapes"
+                          ".find((s) => s.type === 'circle')?.xanchor > x", arg=x0)
+    assert anel()[:2] == [1, 1]
+    assert app.evaluate("window.__curva === document.getElementById('evolution-plot').data[0]")
+    salvar_projeto(app)
+    app.reload()
+    app.locator("#gate-projects .gate-row", has_text="Ajuda").click()
+    expect(app.locator("#evo-locate")).to_have_value("midpoint")
 
 
 def test_a_folder_of_spectra_is_imported_at_once(data_dir, tmp_path, app):

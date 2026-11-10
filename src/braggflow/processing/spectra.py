@@ -6,9 +6,10 @@ demais: conversão opcional de dados brutos em transmissão (fonte e ruído de
 fundo, :func:`apply_transmission`), recorte de comprimento de onda, suavização
 (Savitzky-Golay ou média móvel), remoção de tendência, normalização e
 deslocamento vertical. :func:`analyse_spectrum` encontra os máximos e mínimos
-e mede, para cada um, a posição refinada (vértice de 3 pontos e parábola
-ajustada ao fundo), a proeminência, a largura (FWHM ou banda de 3 dB), o fator
-Q, o centroide e o espaçamento ao vizinho (FSR local).
+e mede, para cada um, a posição por seis técnicas (vértice de 3 pontos,
+parábola ajustada ao fundo, centroide, ajuste gaussiano, ajuste lorentziano e
+centro da largura), a proeminência, a largura (FWHM ou banda de 3 dB), o
+fator Q e o espaçamento ao vizinho (FSR local).
 :func:`spectra_evolution` acompanha esses extremos de arquivo para arquivo: o
 mais proeminente, todos os do primeiro arquivo ou o que está perto de um λ de
 referência.
@@ -25,7 +26,7 @@ import numpy as np
 
 from ..i18n import num, tr
 from ..options import resolve_section
-from .filters import apply_moving_average_filter, apply_savgol_filter
+from .filters import apply_moving_average_filter, savgol_smooth
 
 NORMALIZATIONS = ("none", "max", "minmax", "baseline")
 SMOOTH_METHODS = ("savgol", "moving_average")
@@ -37,8 +38,9 @@ AUTO_PROMINENCE = 0.05      # fração da faixa de intensidade quando não infor
 MIN_REFERENCE_FRACTION = 0.01
 EVOLUTION_MODES = ("reference", "prominent", "follow")
 # Onde fica o extremo em cada arquivo: vértice da parábola de 3 pontos,
-# parábola ajustada ao fundo (ou ao topo) ou centroide
-LOCATE_METHODS = ("vertex", "fit", "centroid")
+# parábola ajustada ao fundo (ou ao topo), centroide, centro de uma gaussiana
+# ou de uma lorentziana ajustada, ou o meio entre os dois cruzamentos da largura
+LOCATE_METHODS = ("vertex", "fit", "centroid", "gaussian", "lorentzian", "midpoint")
 EVOLUTION_QUANTITIES = ("wavelength", "delta", "intensity", "prominence", "fwhm")
 # O ajuste usa os pontos até FIT_HALF_WIDTH × largura de cada lado do
 # extremo (num vale lorentziano, os ~30% mais fundos); sem largura medida, os
@@ -165,7 +167,7 @@ def smooth_spectrum(intensity: np.ndarray, window: Optional[int], order: int,
         window += 1
     if window <= order or window > len(intensity):
         return intensity
-    return apply_savgol_filter(intensity.reshape(-1, 1), window, order)[:, 0]
+    return savgol_smooth(intensity, window, order)
 
 
 def normalize_spectrum(intensity: np.ndarray, mode: str) -> np.ndarray:
@@ -231,6 +233,8 @@ def to_transmission(wavelength: np.ndarray, sample: np.ndarray,
 
     def na_grade(par):
         x, y = (np.asarray(v, dtype=float) for v in par)
+        if x is wl:                 # o mesmo eixo (arquivos do mesmo equipamento): já está na grade
+            return y
         ordem = np.argsort(x)
         return np.interp(wl, x[ordem], y[ordem], left=np.nan, right=np.nan)
 
@@ -335,18 +339,86 @@ def _refine_vertex(wl: np.ndarray, z: np.ndarray, i: int) -> Tuple[float, float]
     return float(wl[i] + delta * passo), float(b - 0.25 * (a - c) * delta)
 
 
+def _quadratic_fit(u: np.ndarray, y: np.ndarray,
+                   weights: Optional[np.ndarray] = None) -> Optional[Tuple[float, float]]:
+    """
+    ``(c2, c1)`` da parábola ``c2·u² + c1·u + c0`` de mínimos quadrados por
+    ``(u, y)``, pelas equações normais resolvidas na mão. Com ``u`` em torno
+    de [-1, 1] elas são bem condicionadas, e isto custa uma fração do
+    ``np.polyfit`` — a evolução ajusta dezenas de milhares de fundos de vale.
+    ``weights`` dá o peso de cada ponto. ``None`` quando os pontos não
+    definem uma parábola.
+    """
+    u2 = u * u
+    if weights is None:
+        s0, s1, s2, s3, s4 = float(len(u)), float(u.sum()), float(u2.sum()), float(u2 @ u), float(u2 @ u2)
+        t0, t1, t2 = float(y.sum()), float(u @ y), float(u2 @ y)
+    else:
+        wu, wu2 = weights * u, weights * u2
+        s0, s1, s2, s3, s4 = (float(weights.sum()), float(wu.sum()), float(wu2.sum()),
+                              float(wu2 @ u), float(wu2 @ u2))
+        t0, t1, t2 = float(weights @ y), float(wu @ y), float(wu2 @ y)
+    # | s4 s3 s2 |   | c2 |   | t2 |
+    # | s3 s2 s1 | · | c1 | = | t1 |
+    # | s2 s1 s0 |   | c0 |   | t0 |
+    a, b, c = s2 * s0 - s1 * s1, s3 * s0 - s1 * s2, s3 * s1 - s2 * s2
+    det = s4 * a - s3 * b + s2 * c
+    if det == 0 or not np.isfinite(det):
+        return None
+    c2 = (t2 * a - s3 * (t1 * s0 - s1 * t0) + s2 * (t1 * s1 - s2 * t0)) / det
+    c1 = (s4 * (t1 * s0 - s1 * t0) - t2 * b + s2 * (s3 * t0 - s2 * t1)) / det
+    return c2, c1
+
+
 def _parabola_vertex(x: np.ndarray, y: np.ndarray, centro: float) -> Optional[float]:
     """Vértice da parábola de mínimos quadrados por ``(x, y)``, se for um máximo dentro de ``x``."""
     escala = (x.max() - x.min()) / 2.0 or 1.0        # x em [-1, 1]: ajuste bem condicionado
-    c2, c1, _ = np.polyfit((x - centro) / escala, y, 2)
+    ajuste = _quadratic_fit((x - centro) / escala, y)
+    if ajuste is None:
+        return None
+    c2, c1 = ajuste
     if not c2 < 0:
         return None
     vertice = float(centro - c1 / (2.0 * c2) * escala)
     return vertice if x.min() <= vertice <= x.max() else None
 
 
+def _shape_centres(x: np.ndarray, height: np.ndarray, centro: float) -> Tuple[Optional[float], Optional[float]]:
+    """
+    λ do centro de uma gaussiana e de uma lorentziana ajustadas aos pontos
+    ``(x, height)`` do topo de um pico (o fundo do vale chega invertido), com
+    ``height`` medida a partir da base do pico: ``(gaussiana, lorentziana)``.
+
+    Os dois ajustes são parábolas de mínimos quadrados, sem iteração: o
+    logaritmo de uma gaussiana e o inverso de uma lorentziana são parábolas
+    em λ. Os pesos (altura² e altura⁴) devolvem a cada ponto a importância
+    que ele teria no ajuste direto da curva — para a gaussiana, é o algoritmo
+    de Guo (IEEE Signal Processing Magazine, 2011): sem eles, o ruído das
+    abas, ampliado pelo logaritmo ou pelo inverso, pesaria mais que o do
+    topo. ``None`` com menos de três pontos, altura que não é positiva,
+    concavidade errada ou centro fora dos pontos usados.
+    """
+    if len(x) < 3 or not np.all(height > 0):
+        return None, None
+    baixo, alto = float(x.min()), float(x.max())
+    escala = (alto - baixo) / 2.0 or 1.0
+    u = (x - centro) / escala
+    g = height / float(height.max())
+    g2 = g * g
+    centros = []
+    for y, pesos, concavidade in ((np.log(g), g2, -1.0), (1.0 / g, g2 * g2, 1.0)):
+        ajuste = _quadratic_fit(u, y, pesos)
+        if ajuste is None or not concavidade * ajuste[0] > 0:
+            centros.append(None)
+            continue
+        vertice = float(centro - ajuste[1] / (2.0 * ajuste[0]) * escala)
+        centros.append(vertice if baixo <= vertice <= alto else None)
+    return centros[0], centros[1]
+
+
 def _fit_vertex(wl: np.ndarray, z: np.ndarray, i: int, prominence: float,
-                low: int, high: int, width: Optional[float] = None) -> Optional[float]:
+                low: int, high: int, width: Optional[float] = None,
+                ascending: bool = False) -> Optional[float]:
     """
     λ do vértice de uma parábola ajustada por mínimos quadrados ao topo de
     ``z`` em torno do índice ``i`` — o fundo do vale, que chega invertido.
@@ -359,16 +431,24 @@ def _fit_vertex(wl: np.ndarray, z: np.ndarray, i: int, prominence: float,
     ruído pesa bem menos que no vértice de 3 pontos. ``None`` quando a
     parábola não tem a concavidade do extremo ou o vértice cai fora dos
     pontos usados.
+
+    ``ascending`` avisa que ``wl`` é crescente: aí só a vizinhança do extremo
+    entra na conta, em vez do trecho inteiro entre as bases.
     """
     if width:
         meia, centro = FIT_HALF_WIDTH * width, float(wl[i])
-        indices = np.arange(len(wl))
-        dentro_das_bases = (indices >= low) & (indices <= high)
+        a, b = low, high + 1
         for _ in range(5):
-            dentro = dentro_das_bases & (np.abs(wl - centro) <= meia)
-            if dentro.sum() < FIT_MIN_POINTS:
+            if ascending:
+                # Uma amostra de folga de cada lado; quem decide é o critério logo abaixo
+                a = max(low, int(np.searchsorted(wl, centro - meia)) - 1)
+                b = min(high + 1, int(np.searchsorted(wl, centro + meia, side="right")) + 1)
+            x = wl[a:b]
+            dentro = np.abs(x - centro) <= meia
+            usados = int(np.count_nonzero(dentro))
+            if usados < FIT_MIN_POINTS:
                 break
-            novo = _parabola_vertex(wl[dentro], z[dentro], centro)
+            novo = _parabola_vertex(x[dentro], z[a:b][dentro], centro)
             if novo is None:
                 return None
             andou, centro = abs(novo - centro), novo
@@ -376,7 +456,7 @@ def _fit_vertex(wl: np.ndarray, z: np.ndarray, i: int, prominence: float,
                 break
         else:
             return centro
-        if dentro.sum() >= FIT_MIN_POINTS:
+        if usados >= FIT_MIN_POINTS:
             return centro
 
     nivel = z[i] - FIT_DEPTH * prominence
@@ -418,6 +498,10 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
     proeminência (altura do pico ou profundidade do vale em relação à
     vizinhança), largura, Q = λ/largura, centroide da região acima do nível
     da largura e espaçamento ao extremo anterior do mesmo tipo (FSR local).
+    Com a largura medida, vêm também ``gaussian`` e ``lorentzian`` (centro da
+    gaussiana e da lorentziana ajustadas a essa mesma região,
+    :func:`_shape_centres`) e ``midpoint`` (o meio entre os dois cruzamentos
+    do nível da largura).
 
     A largura é a FWHM (metade da proeminência) na escala linear; na escala
     em dB é a banda de 3 dB: 3 dB abaixo do pico ou acima do fundo do vale
@@ -460,6 +544,7 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
         distancia = max(1, int(round(settings["min_distance"] / abs(summary["resolution"]))))
 
     db = settings["intensity_scale"] == "db"
+    crescente = bool(np.all(wl[1:] > wl[:-1]))      # o caso de sempre: dá para buscar em vez de varrer
     extremos: List[dict] = []
     for tipo in tipos:
         sinal = 1.0 if tipo == "max" else -1.0
@@ -484,12 +569,16 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
                 dir_ = _crossing(wl, z, i, nivel, dir_lim, +1)
             largura = (dir_ - esquerda) if esquerda is not None and dir_ is not None else None
 
-            centroide = None
+            centroide = gaussiana = lorentziana = meio = None
             if largura:
-                dentro = (wl >= esquerda) & (wl <= dir_)
+                dentro = (slice(int(np.searchsorted(wl, esquerda)), int(np.searchsorted(wl, dir_, side="right")))
+                          if crescente else (wl >= esquerda) & (wl <= dir_))
                 pesos = np.clip(z[dentro] - nivel, 0.0, None)
                 if pesos.sum() > 0:
                     centroide = float(np.sum(wl[dentro] * pesos) / pesos.sum())
+                # A altura conta da base do extremo (a que a proeminência usa)
+                gaussiana, lorentziana = _shape_centres(wl[dentro], z[dentro] - (z[i] - prom), lam)
+                meio = (esquerda + dir_) / 2.0
 
             do_tipo.append({
                 "type": tipo,
@@ -502,7 +591,10 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
                 "level": sinal * nivel,
                 "q": abs(lam / largura) if largura else None,
                 "centroid": centroide,
-                "fit": _fit_vertex(wl, z, i, prom, esq_lim, dir_lim, largura),
+                "fit": _fit_vertex(wl, z, i, prom, esq_lim, dir_lim, largura, crescente),
+                "gaussian": gaussiana,
+                "lorentzian": lorentziana,
+                "midpoint": meio,
                 "spacing": None,
             })
         for anterior, atual in zip(do_tipo, do_tipo[1:]):
@@ -526,6 +618,28 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
 def _nm(valor: float) -> str:
     """λ com uma casa, no separador decimal do idioma, para os nomes das trilhas."""
     return num(valor, ".1f")
+
+
+def _match_nearest(tracks: Sequence[float], found: Sequence[float], tolerance: float) -> dict:
+    """
+    Casa cada trilha (o λ da sua última posição) com um extremo do arquivo,
+    do par mais próximo para o mais distante, até ``tolerance`` nm; cada
+    trilha e cada extremo entram uma vez só. Devolve ``{trilha: extremo}``,
+    em índices.
+    """
+    if not len(tracks) or not len(found):
+        return {}
+    distancia = np.abs(np.asarray(found, dtype=float)[None, :] - np.asarray(tracks, dtype=float)[:, None])
+    trilha, extremo = np.nonzero(distancia <= tolerance)
+    ordem = np.argsort(distancia[trilha, extremo], kind="stable")
+    escolhido, usados, todos = {}, set(), min(len(tracks), len(found))
+    for j, i in zip(trilha[ordem].tolist(), extremo[ordem].tolist()):
+        if j not in escolhido and i not in usados:
+            escolhido[j] = i
+            usados.add(i)
+            if len(escolhido) == todos:
+                break
+    return escolhido
 
 
 def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "prominent",
@@ -558,9 +672,11 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
       fica vazio.
 
     ``locate`` escolhe o λ de cada ponto: ``'vertex'`` (parábola de 3 pontos),
-    ``'fit'`` (parábola ajustada ao fundo) ou ``'centroid'``; onde o ajuste ou
-    o centroide não existe, fica o vértice, e ``located`` diz o que foi usado.
-    A busca e o casamento entre arquivos sempre usam o vértice.
+    ``'fit'`` (parábola ajustada ao fundo), ``'centroid'``, ``'gaussian'``,
+    ``'lorentzian'`` (centro da curva ajustada) ou ``'midpoint'`` (meio entre
+    os cruzamentos da largura); onde a técnica escolhida não dá resultado,
+    fica o vértice, e ``located`` diz o que foi usado. A busca e o casamento
+    entre arquivos sempre usam o vértice.
 
     Cada ponto traz λ, intensidade, proeminência, largura e ``delta`` (λ menos
     o λ do primeiro ponto da trilha). Cada trilha tem ``key`` (estável, para o
@@ -634,16 +750,9 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
                     "name": tr("spectra.trackFollow", kind=exibido, i=i + 1, lam=_nm(x["wavelength"])),
                     "points": [ponto(x)]} for i, x in enumerate(iniciais)]
         for xs in extremos[1:]:
-            livres = list(xs)
-            pares = sorted(((abs(x["wavelength"] - posicoes[j]), j, i)
-                            for j in range(len(trilhas)) for i, x in enumerate(livres)),
-                           key=lambda par: par[0])
-            escolhido, usados = {}, set()
-            for dist, j, i in pares:
-                if dist <= tolerance and j not in escolhido and i not in usados:
-                    escolhido[j], _ = i, usados.add(i)
+            escolhido = _match_nearest(posicoes, [x["wavelength"] for x in xs], tolerance)
             for j, trilha in enumerate(trilhas):
-                x = livres[escolhido[j]] if j in escolhido else None
+                x = xs[escolhido[j]] if j in escolhido else None
                 trilha["points"].append(ponto(x))
                 if x is not None:
                     posicoes[j] = x["wavelength"]

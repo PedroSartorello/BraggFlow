@@ -979,7 +979,9 @@
     <div id="spectra-plot"></div>
     <details class="card enabled collapsible" id="spectra-evolution" open>
       <summary class="card-header"><span data-i18n="evo.title">Evolução entre arquivos</span>
-        <span class="card-state" id="evolution-state"></span></summary>
+        <span class="card-state" id="evolution-state"></span>
+        <button type="button" class="help-toggle" id="btn-evolution-help"
+                title="O que significa cada campo" aria-label="Ajuda" data-i18n-title="common.helpTitle" data-i18n-aria-label="common.help">?</button></summary>
       <div class="card-body" style="grid-template-columns: minmax(0, 1fr);">
         <div class="analysis-options evolution-options evo-group" role="group" aria-labelledby="evo-g-track">
           <span class="evo-group-title" id="evo-g-track" data-i18n="evo.track">Acompanhar</span>
@@ -1005,11 +1007,14 @@
           <label class="field only-follow" title="Maior salto (nm) entre arquivos para uma trilha. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo." data-i18n="evo.tolerance" data-i18n-title="evo.toleranceTitle">Salto máximo (nm)
             <input type="number" id="evo-tolerance" data-evo="tolerance" step="any" min="0" placeholder="auto" data-i18n-placeholder="common.auto">
           </label>
-          <label class="field" title="Ajuste no fundo: parábola de mínimos quadrados pelos pontos do fundo do vale (±⅓ da largura), a mais precisa para vales largos e ruidosos. Vértice: parábola pelos 3 pontos do extremo. Centroide: centro de massa da região acima da meia altura." data-i18n="evo.locate" data-i18n-title="evo.locateTitle">Posição
+          <label class="field" title="Como o λ de cada ponto é medido: ajuste no fundo (padrão), vértice de 3 pontos, centroide, ajuste gaussiano, ajuste lorentziano ou centro da largura. O “?” no título do cartão explica cada técnica." data-i18n="evo.locate" data-i18n-title="evo.locateTitle">Posição
             <select id="evo-locate" data-evo="locate">
               <option value="fit" data-i18n="evo.locateFit">ajuste no fundo</option>
               <option value="vertex" data-i18n="evo.locateVertex">vértice (3 pontos)</option>
               <option value="centroid" data-i18n="evo.locateCentroid">centroide</option>
+              <option value="gaussian" data-i18n="evo.locateGaussian">ajuste gaussiano</option>
+              <option value="lorentzian" data-i18n="evo.locateLorentzian">ajuste lorentziano</option>
+              <option value="midpoint" data-i18n="evo.locateMidpoint">centro da largura</option>
             </select>
           </label>
         </div>
@@ -1037,6 +1042,69 @@
                   title="Com este botão ligado, clicar no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Esc termina." data-i18n="evo.markEvent" data-i18n-title="evo.markEventTitle">Marcar evento</button>
           <button type="button" id="btn-evolution-figure" class="btn-primary btn-sm" data-i18n="evo.makeFigure">Fazer figura<svg class="icon" aria-hidden="true"><use href="#i-arrow-right"/></svg></button>
           </div>
+        </div>
+        <div id="evolution-help" class="help-box hidden">
+          <strong data-i18n="evo.track">Acompanhar</strong>
+          <dl>
+            <dt data-i18n="evo.kind">Extremo</dt>
+            <dd data-i18n="evo.help.kind">O que acompanhar em cada espectro: vales (mínimos, como as ressonâncias em transmissão de LMR, SPR, LPG e TFBG) ou picos (máximos, como a reflexão de uma FBG).</dd>
+            <dt data-i18n="evo.mode">Modo</dt>
+            <dd data-i18n-html="evo.help.mode"><em>Perto do λ de referência</em>: uma trilha, com o extremo mais próximo do λ marcado em cada arquivo. <em>O mais proeminente</em>: uma trilha, com o extremo que mais se destaca em cada arquivo (a ressonância principal). <em>Todos os do 1º arquivo</em>: uma trilha para cada extremo do 1º arquivo, seguida pelo extremo mais próximo nos arquivos seguintes.</dd>
+            <dt data-i18n="evo.reference">λ de referência (nm)</dt>
+            <dd data-i18n="evo.help.reference">O λ do vale (ou pico) a acompanhar no modo “perto do λ de referência”. Digitar um valor aqui já passa para esse modo.</dd>
+            <dt data-i18n="evo.pick">Marcar no gráfico</dt>
+            <dd data-i18n="evo.help.pick">Escolhe o λ de referência com o mouse: ligue o botão e clique no gráfico do espectro, em cima do vale. Esc cancela.</dd>
+            <dt data-i18n="evo.window">Janela ± (nm)</dt>
+            <dd data-i18n="evo.help.window">Até que distância do centro da busca, para cada lado, o extremo é procurado. Vazio: sem limite, fica o mais próximo. Arquivo sem extremo dentro da janela fica com o ponto vazio.</dd>
+            <dt data-i18n="evo.help.followName">Seguir a deriva</dt>
+            <dd data-i18n="evo.help.follow">Ligado: o centro da busca passa a ser o extremo encontrado no arquivo anterior, para acompanhar um deslocamento que, somado ao longo do ensaio, passa da janela. Desligado: a busca fica sempre em torno do λ de referência.</dd>
+            <dt data-i18n="evo.tolerance">Salto máximo (nm)</dt>
+            <dd data-i18n="evo.help.tolerance">No modo “todos os do 1º arquivo”: o maior deslocamento, de um arquivo para o seguinte, para um extremo continuar na mesma trilha. Vazio: metade do menor espaçamento entre os extremos do 1º arquivo.</dd>
+          </dl>
+
+          <strong data-i18n="evo.help.position">Posição: como o λ de cada ponto é medido</strong>
+          <dl>
+            <dt class="from-option" data-i18n="evo.locateFit">ajuste no fundo</dt>
+            <dd data-i18n="evo.help.locateFit">Vértice de uma parábola ajustada por mínimos quadrados aos pontos do fundo do vale (ou do topo do pico), até ⅓ da largura para cada lado. Usa dezenas de pontos em vez de três, então o ruído pesa pouco. É o padrão, e vai bem em vales largos e ruidosos (LMR, SPR).</dd>
+            <dt class="from-option" data-i18n="evo.locateVertex">vértice (3 pontos)</dt>
+            <dd data-i18n="evo.help.locateVertex">Vértice da parábola que passa pelos 3 pontos em torno do extremo. É a interpolação mais simples: basta para picos estreitos e limpos, mas é a mais sensível ao ruído.</dd>
+            <dt class="from-option" data-i18n="evo.locateCentroid">centroide</dt>
+            <dd data-i18n="evo.help.locateCentroid">Centro de massa da região acima da meia altura (ou da banda de 3 dB). Pouco sensível ao ruído; num extremo assimétrico, puxa para o lado mais largo. É como muitos interrogadores medem FBGs.</dd>
+            <dt class="from-option" data-i18n="evo.locateGaussian">ajuste gaussiano</dt>
+            <dd data-i18n="evo.help.locateGaussian">Centro de uma gaussiana ajustada aos pontos acima da meia altura (ou da banda de 3 dB). Boa escolha para picos de FBG e outros extremos em forma de sino.</dd>
+            <dt class="from-option" data-i18n="evo.locateLorentzian">ajuste lorentziano</dt>
+            <dd data-i18n="evo.help.locateLorentzian">Centro de uma lorentziana ajustada aos mesmos pontos. Boa escolha para ressonâncias, que costumam ter essa forma: LMR, SPR, anéis e cavidades.</dd>
+            <dt class="from-option" data-i18n="evo.locateMidpoint">centro da largura</dt>
+            <dd data-i18n="evo.help.locateMidpoint">Meio entre os dois pontos onde o espectro cruza a meia altura (ou a banda de 3 dB). Não depende do fundo do vale, então serve quando ele é plano, saturado ou ruidoso; em troca, usa só dois pontos e sente a assimetria.</dd>
+          </dl>
+          <span class="hint" data-i18n="evo.help.locateNote">Centroide, gaussiana, lorentziana e centro da largura precisam da largura do extremo. Onde ela não pôde ser medida (extremo raso demais ou cortado pela borda do espectro), o ponto fica com o vértice de 3 pontos, e o texto acima do gráfico diz em quantos. A busca do extremo em cada arquivo usa sempre o vértice.</span>
+          <span class="hint" data-i18n="evo.help.detectNote">Os extremos de cada espectro são procurados com o preparo da barra lateral: a suavização, a “Proeminência mínima” e a “Distância mínima” valem aqui. O “Máximo por tipo” não vale: todos os extremos entram na busca.</span>
+
+          <strong data-i18n="evo.show">Mostrar</strong>
+          <dl>
+            <dt data-i18n="evo.yAxis">Eixo y</dt>
+            <dd data-i18n-html="evo.help.yAxis"><em>λ</em>: a posição do extremo. <em>Δλ em relação ao 1º</em>: o deslocamento desde o primeiro ponto da trilha. <em>Intensidade no extremo</em>: o valor do espectro no fundo do vale (ou no topo do pico). <em>Profundidade / altura</em>: quanto o extremo se destaca da vizinhança (a proeminência). <em>Largura</em>: FWHM ou banda de 3 dB, conforme a escala da intensidade.</dd>
+            <dt data-i18n="evo.xAxis">Eixo x</dt>
+            <dd data-i18n-html="evo.help.xAxis"><em>Tempo decorrido</em>: minutos desde o primeiro espectro, pelo instante da aquisição de cada arquivo (cabeçalho <code>Date:</code> ou hora no nome). <em>Ordem dos arquivos</em>: 1, 2, 3… Sem o instante em todos os arquivos, só a ordem está disponível.</dd>
+            <dt data-i18n="evo.recalculate">Recalcular</dt>
+            <dd data-i18n="evo.help.recalculate">Refaz o cálculo agora. Normalmente não é preciso: ele é refeito sozinho quando um campo, o preparo ou a lista de arquivos muda.</dd>
+            <dt data-i18n="common.downloadCsv">Baixar CSV</dt>
+            <dd data-i18n="evo.help.csv">Baixa a tabela da evolução: um espectro por linha, com o que foi medido em cada trilha.</dd>
+            <dt data-i18n="evo.markEvent">Marcar evento</dt>
+            <dd data-i18n="evo.help.markEvent">Com o botão ligado, um clique no gráfico da evolução marca um evento (troca de meio, injeção…) e arrastar uma linha a move. Precisa do instante da aquisição dos arquivos. Esc termina.</dd>
+            <dt data-i18n="evo.makeFigure">Fazer figura</dt>
+            <dd data-i18n="evo.help.makeFigure">Leva esta evolução para a aba Figura, com os eventos como linhas verticais.</dd>
+          </dl>
+
+          <strong data-i18n="evo.help.below">Abaixo do gráfico</strong>
+          <dl>
+            <dt data-i18n="evo.events">Eventos</dt>
+            <dd data-i18n="evo.help.events">A lista dos eventos marcados: hora, legenda e cor de cada um. Aparecem como linhas verticais aqui e na figura, e a tabela diz em que evento cada espectro foi gravado.</dd>
+            <dt data-i18n="evo.help.focusName">Espectro em foco</dt>
+            <dd data-i18n="evo.help.focus">O espectro do gráfico de cima, destacado com um anel. As setas (ou ← → no teclado) passam para o anterior e o seguinte; clicar num ponto abre aquele espectro. “Tirar da evolução” deixa um espectro ruim fora do cálculo, sem tirá-lo do projeto.</dd>
+            <dt data-i18n="evo.table">Tabela</dt>
+            <dd data-i18n="evo.help.table">Um espectro por linha: arquivo, instante, e λ, Δλ, intensidade, proeminência e largura de cada trilha.</dd>
+          </dl>
         </div>
         <span class="hint" id="evolution-status" data-i18n-html="evo.intro">Usa os espectros do projeto em ordem de aquisição
           (cabeçalho <code>Date:</code> ou hora no nome do arquivo, <code>..._09-30-15-250</code>).
@@ -1116,6 +1184,12 @@
             <dt data-i18n="peaks.col.centroid">Centroide (nm)</dt>
             <dd data-i18n="peaks.help.centroid">Centro de massa da região acima do nível da largura. Menos sensível a ruído e a
                 assimetrias que o ponto de máximo; é como muitos interrogadores demodulam FBGs.</dd>
+            <dt data-i18n="peaks.col.gaussian">λ gaussiana (nm)</dt>
+            <dd data-i18n="evo.help.locateGaussian">Centro de uma gaussiana ajustada aos pontos acima da meia altura (ou da banda de 3 dB). Boa escolha para picos de FBG e outros extremos em forma de sino.</dd>
+            <dt data-i18n="peaks.col.lorentzian">λ lorentziana (nm)</dt>
+            <dd data-i18n="evo.help.locateLorentzian">Centro de uma lorentziana ajustada aos mesmos pontos. Boa escolha para ressonâncias, que costumam ter essa forma: LMR, SPR, anéis e cavidades.</dd>
+            <dt data-i18n="peaks.col.midpoint">Centro da largura (nm)</dt>
+            <dd data-i18n="evo.help.locateMidpoint">Meio entre os dois pontos onde o espectro cruza a meia altura (ou a banda de 3 dB). Não depende do fundo do vale, então serve quando ele é plano, saturado ou ruidoso; em troca, usa só dois pontos e sente a assimetria.</dd>
             <dt data-i18n="peaks.col.spacing">Δλ anterior (nm)</dt>
             <dd data-i18n="peaks.help.spacing">Distância ao extremo anterior do mesmo tipo: FSR local de interferômetros e
                 espaçamento entre modos de casca em TFBG/LPG.</dd>

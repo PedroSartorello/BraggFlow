@@ -12,6 +12,9 @@ from braggflow.io.reader import (
     load_spectra,
 )
 from braggflow.processing.spectra import (
+    LOCATE_METHODS,
+    _match_nearest,
+    _quadratic_fit,
     analyse_spectrum,
     apply_transmission,
     prepare_spectrum,
@@ -319,3 +322,105 @@ def test_fit_of_a_narrow_peak_uses_at_least_five_points():
     y = np.exp(-0.5 * ((wl - 1550.0123) / 0.08) ** 2)       # FBG: FWHM ≈ 0,19 nm
     pico = analyse_spectrum(wl, y, resolve_spectrum_settings({"find_max": True}))["extrema"][0]
     assert pico["fit"] == pytest.approx(1550.0123, abs=0.002)
+
+
+# ── outras técnicas de posição ───────────────────────────────────────────────
+
+def _vale_plano(centro, ruido, semente):
+    """Vale lorentziano de LMR (40 nm de largura) sobre uma base plana."""
+    return transmission(centro, noise=ruido, seed=semente) - 0.0175 * (WAVELENGTH - 200.0)
+
+
+def test_shape_fits_and_midpoint_locate_a_noisy_valley():
+    """
+    Num vale largo e ruidoso, o centro da lorentziana e da gaussiana ajustadas
+    acerta sem viés e com uma fração do espalhamento do vértice de 3 pontos;
+    o centro da largura fica no meio, porque usa só os dois cruzamentos.
+    """
+    preparo = resolve_spectrum_settings({"find_min": True})
+    erros = {campo: [] for campo in ("wavelength", "gaussian", "lorentzian", "midpoint")}
+    for semente in range(60):
+        verdadeiro = 700 + 0.61 * semente
+        vales = analyse_spectrum(WAVELENGTH, _vale_plano(verdadeiro, 0.05, semente), preparo)["extrema"]
+        vale = max(vales, key=lambda e: e["prominence"])
+        for campo in erros:
+            erros[campo].append(vale[campo] - verdadeiro)
+    vertice = np.std(erros["wavelength"])
+    for campo in ("gaussian", "lorentzian"):
+        assert np.std(erros[campo]) < 0.15 * vertice, campo
+        assert abs(np.mean(erros[campo])) < 0.05, campo
+    assert np.std(erros["midpoint"]) < 0.5 * vertice
+    assert abs(np.mean(erros["midpoint"])) < 0.1
+
+
+@pytest.mark.parametrize("forma", ["gaussiana", "lorentziana"])
+def test_shape_fits_find_the_centre_of_a_narrow_peak(forma):
+    wl = np.arange(1549.0, 1551.0, 0.005)
+    u = (wl - 1550.0123) / 0.1
+    y = np.exp(-4 * np.log(2) * u * u) if forma == "gaussiana" else 1 / (1 + 4 * u * u)
+    pico = analyse_spectrum(wl, y + 0.05, resolve_spectrum_settings({"find_max": True}))["extrema"][0]
+    assert pico["gaussian"] == pytest.approx(1550.0123, abs=2e-4)
+    assert pico["lorentzian"] == pytest.approx(1550.0123, abs=2e-4)
+    assert pico["midpoint"] == pytest.approx(1550.0123, abs=2e-4)
+    assert pico["midpoint"] == pytest.approx((pico["left"] + pico["right"]) / 2)
+
+
+def test_positions_that_need_the_width_are_empty_without_it():
+    """Vale em dB com menos de 3 dB de profundidade: sem banda de 3 dB, sem ajuste de forma."""
+    wl = np.linspace(1540.0, 1560.0, 801)
+    y = -2.0 * np.exp(-0.5 * ((wl - 1550.0) / 0.5) ** 2)
+    vale = analyse_spectrum(wl, y, resolve_spectrum_settings({"find_min": True, "intensity_scale": "db"}))["extrema"][0]
+    assert vale["fwhm"] is None
+    assert [vale[campo] for campo in ("centroid", "gaussian", "lorentzian", "midpoint")] == [None] * 4
+    assert vale["fit"] == pytest.approx(1550.0, abs=0.01), "o ajuste no fundo não precisa da largura"
+
+    entradas = [{"key": nome, "acquired": None, "extrema": [vale]} for nome in "ab"]
+    for tecnica in ("gaussian", "lorentzian", "midpoint"):
+        pontos = spectra_evolution(entradas, locate=tecnica)["tracks"][0]["points"]
+        assert {p["located"] for p in pontos} == {"vertex"}
+
+
+def test_evolution_uses_the_chosen_position(tmp_path):
+    entradas = _entries(lmr_series(tmp_path, resonances=(870.0, 866.0, 862.0)))
+    for tecnica in LOCATE_METHODS:
+        pontos = spectra_evolution(entradas, mode="prominent", locate=tecnica)["tracks"][0]["points"]
+        assert {p["located"] for p in pontos} == {tecnica}
+        assert [p["wavelength"] for p in pontos] == pytest.approx([870, 866, 862], abs=2.5), tecnica
+        campo = "wavelength" if tecnica == "vertex" else tecnica
+        assert [p["wavelength"] for p in pontos] == [
+            max(e["extrema"], key=lambda x: x["prominence"])[campo] for e in entradas]
+
+
+def test_quadratic_fit_matches_polyfit():
+    rng = np.random.default_rng(5)
+    for _ in range(200):
+        u = np.sort(rng.uniform(-1, 1, rng.integers(5, 60)))
+        y = rng.normal(size=u.size) - 3 * u * u
+        pesos = rng.uniform(0.1, 2.0, u.size)
+        for w in (None, pesos):
+            c2, c1 = _quadratic_fit(u, y, w)
+            p2, p1, _ = np.polyfit(u, y, 2, w=None if w is None else np.sqrt(w))
+            assert (c2, c1) == pytest.approx((p2, p1), rel=1e-8, abs=1e-9)
+    assert _quadratic_fit(np.zeros(4), np.arange(4.0)) is None, "um ponto só não define uma parábola"
+
+
+def _pares_um_a_um(trilhas, achados, tolerancia):
+    """O casamento como era feito antes: todos os pares, em ordem de distância."""
+    pares = sorted(((abs(x - t), j, i) for j, t in enumerate(trilhas) for i, x in enumerate(achados)),
+                   key=lambda par: par[0])
+    escolhido, usados = {}, set()
+    for dist, j, i in pares:
+        if dist <= tolerancia and j not in escolhido and i not in usados:
+            escolhido[j] = i
+            usados.add(i)
+    return escolhido
+
+
+def test_tracks_are_matched_to_the_nearest_extrema_one_to_one():
+    rng = np.random.default_rng(11)
+    for _ in range(300):
+        trilhas = np.round(rng.uniform(600, 700, rng.integers(0, 12)), 1).tolist()     # arredondado: há empates
+        achados = np.round(rng.uniform(600, 700, rng.integers(0, 12)), 1).tolist()
+        tolerancia = float(rng.choice([0.5, 3.0, 20.0, np.inf]))
+        assert _match_nearest(trilhas, achados, tolerancia) == _pares_um_a_um(trilhas, achados, tolerancia)
+    assert _match_nearest([600.0, 610.0], [609.0], 5.0) == {1: 0}

@@ -121,7 +121,7 @@ MAX_UPLOAD_DEPTH = 3
 
 # Mude junto com o literal API_BUILD em static/js/core.js sempre que as
 # rotas mudarem: é assim que a página percebe um servidor ainda sem reiniciar.
-API_BUILD = "2026-11-03"
+API_BUILD = "2026-11-10"
 
 bp = Blueprint("braggflow", __name__)
 
@@ -194,8 +194,31 @@ def _rel(path: Path) -> str:
     return _data().rel(path)
 
 
+def _memo(nome: str) -> dict:
+    """
+    Anotações que valem só enquanto o pedido é atendido (caminhos resolvidos,
+    data e tamanho dos arquivos): uma evolução pede a mesma fonte e o mesmo
+    fundo milhares de vezes, e cada consulta ao disco custa.
+    """
+    if "_memo" not in g:
+        g._memo = {}
+    return g._memo.setdefault(nome, {})
+
+
 def _resolve_data_file(rel_path: str) -> Path:
-    return _data().resolve(rel_path)
+    vistos = _memo("paths")
+    if rel_path not in vistos:
+        vistos[rel_path] = _data().resolve(rel_path, _memo("folders"))
+    return vistos[rel_path]
+
+
+def _signature(path: Path) -> tuple:
+    """Caminho, data de modificação e tamanho: muda quando o arquivo muda."""
+    vistos = _memo("signatures")
+    if path not in vistos:
+        stat = path.stat()
+        vistos[path] = (str(path), stat.st_mtime_ns, stat.st_size)
+    return vistos[path]
 
 
 def _list_raw_files() -> list[dict]:
@@ -270,6 +293,15 @@ def _acquisition(spectra) -> dict:
     return {"acquired": texto, "acquired_from": spectra.acquired_from}
 
 
+def _settings_key(settings: dict) -> str:
+    """O preparo como texto, para as chaves do cache: montado uma vez por preparo e por pedido."""
+    vistos = _memo("settings")
+    achado = vistos.get(id(settings))
+    if achado is None or achado[0] is not settings:
+        achado = vistos[id(settings)] = (settings, json.dumps(settings, sort_keys=True, default=str))
+    return achado[1]
+
+
 def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
     """
     Extremos de um espectro já preparado, com a unidade e o instante da
@@ -280,7 +312,7 @@ def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
     deps = [path] + [_resolve_data_file(settings[k])
                      for k in ("reference_file", "dark_file") if settings.get(k)]
     cache = _state().analyses
-    chave = cache.key({"trace": trace, "settings": settings}, deps)
+    chave = (trace, _settings_key(settings), *(_signature(p) for p in deps))
     pronto = cache.get(chave)
     if pronto is None:
         spectra = _state().spectra.get(path)
@@ -318,6 +350,7 @@ def _compute_evolution(options: dict) -> dict:
     comum = options.get("settings") or {}
     kind = opts["kind"]
     entradas, unidades, ignorados, vistos = [], set(), [], set()
+    preparos = {}       # o preparo comum é validado uma vez, não uma por arquivo
     for item in options.get("items") or []:
         arquivo = str(item.get("file") or "")
         trace = str(item.get("trace") or "")
@@ -326,10 +359,12 @@ def _compute_evolution(options: dict) -> dict:
         vistos.add((arquivo, trace))
         try:
             path = _resolve_data_file(arquivo)
-            settings = resolve_spectrum_settings(
-                {**(item.get("settings") or comum), "find_min": kind == "min",
-                 "find_max": kind == "max", "max_peaks": EVOLUTION_MAX_PEAKS},
-                prefix=f"[{path.name}] ")
+            bruto = item.get("settings") or comum
+            settings = preparos.get(id(bruto))
+            if settings is None:
+                settings = preparos[id(bruto)] = resolve_spectrum_settings(
+                    {**bruto, "find_min": kind == "min", "find_max": kind == "max",
+                     "max_peaks": EVOLUTION_MAX_PEAKS}, prefix=f"[{path.name}] ")
             pronto = _spectrum_extrema(path, trace, settings)
         except Exception as e:
             ignorados.append({"file": arquivo, "error": str(e)})
@@ -380,7 +415,9 @@ def _compute_evolution(options: dict) -> dict:
         sem = sum(1 for t in resultado["tracks"] for p in t["points"]
                   if p is not None and p["located"] != opts["locate"])
         if sem:
-            metodo = tr("app.methodFit" if opts["locate"] == "fit" else "app.methodCentroid")
+            metodo = tr({"fit": "app.methodFit", "centroid": "app.methodCentroid",
+                         "gaussian": "app.methodGaussian", "lorentzian": "app.methodLorentzian",
+                         "midpoint": "app.methodMidpoint"}[opts["locate"]])
             avisos.append(tr("app.locateFallback", method=metodo, n=sem))
     inicio = datetime.fromisoformat(resultado["start"]) if resultado["start"] else None
     for evento in eventos:

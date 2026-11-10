@@ -8,7 +8,7 @@ export { fmtNum, fmtSig };
 export const $ = (id) => document.getElementById(id);
 
 // Precisa bater com API_BUILD em braggflow/webapp/app.py
-const API_BUILD = "2026-11-03";
+const API_BUILD = "2026-11-10";
 
 // Todo pedido leva o idioma da interface (Accept-Language): as mensagens do
 // servidor voltam nele. E quando o servidor responde com uma página de erro

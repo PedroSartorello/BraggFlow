@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from braggflow.processing.filters import (
-    apply_moving_average_filter, apply_savgol_filter, choose_savgol, savgol_cutoff,
+    apply_moving_average_filter, apply_savgol_filter, choose_savgol, savgol_cutoff, savgol_smooth,
 )
 
 def test_moving_average_filter_constant_signal():
@@ -118,3 +118,21 @@ def test_choose_savgol_refuses_a_curve_too_short():
 def test_savgol_cutoff_matches_the_frequency_response():
     assert savgol_cutoff(11, 2) * 10 == pytest.approx(0.985, abs=0.002)      # 10 Hz: o padrão do app
     assert savgol_cutoff(51, 3) == pytest.approx(savgol_cutoff(51, 2))        # ordem 3 = ordem 2
+
+
+@pytest.mark.parametrize("n, janela, ordem", [(2048, 5, 2), (300, 51, 3), (40, 39, 4), (11, 11, 2),
+                                             (2048, 101, 5), (9, 3, 1), (50, 1, 0)])
+def test_savgol_smooth_gives_what_scipy_gives(n, janela, ordem):
+    """Coeficientes e pontas guardados: o mesmo resultado do scipy, sem refazer os ajustes."""
+    from scipy.signal import savgol_filter
+
+    sinal = np.random.default_rng(n + janela).normal(size=n).cumsum()
+    np.testing.assert_allclose(savgol_smooth(sinal, janela, ordem), savgol_filter(sinal, janela, ordem),
+                               rtol=0, atol=1e-10 * np.abs(sinal).max())
+
+
+def test_savgol_smooth_refuses_a_window_that_does_not_fit():
+    sinal = np.arange(10.0)
+    for janela, ordem in ((4, 2), (3, 3), (11, 2)):
+        with pytest.raises(ValueError):
+            savgol_smooth(sinal, janela, ordem)

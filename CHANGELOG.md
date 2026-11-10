@@ -150,9 +150,36 @@ itself did not change: the same input gives the same output as before.
   candidate). In Séries the note gives the −3 dB cut-off in Hz
   (`savgol_cutoff`). On synthetic signals the choice lands within 10% of the
   smallest error possible with the clean signal known.
+- Three more techniques for the position of a peak or valley, in the peaks
+  table and as "Posição" of the evolution: *ajuste gaussiano* and *ajuste
+  lorentziano* (centre of the curve fitted to the region above the width
+  level, as a weighted parabola through the logarithm or the inverse of the
+  height, without iteration) and *centro da largura* (midpoint between the
+  two crossings of the width level). `analyse_spectrum` returns `gaussian`,
+  `lorentzian` and `midpoint` for each extremum, and `LOCATE_METHODS` lists
+  the six choices of `spectra_evolution(locate=...)`.
+- "?" in the title of the "Evolução entre arquivos" card: every field
+  explained, with each position technique and when to use it.
 
 ### Changed
 
+- "Evolução entre arquivos" is faster. On a series of thousands of spectra the
+  first calculation takes about a third of the time, a recalculation (another
+  mode, reference, window or position) is more than ten times faster, and
+  changing the preparation no longer reads the files again. The results are
+  the same, to rounding.
+  - Each spectrum file is opened once instead of four times
+    (`load_spectra`), and the spectra read stay in memory by size (256 MB,
+    `SPECTRA_CACHE_BYTES`); spectra with the same wavelength axis share one
+    copy of it.
+  - Savitzky-Golay smoothing of a spectrum is one convolution with cached
+    coefficients (`savgol_smooth`, equal to `scipy.signal.savgol_filter` to
+    rounding), and the parabola fits are solved in closed form.
+  - "todos os do 1º arquivo" matches the valleys of consecutive files with
+    arrays instead of sorting every pair.
+  - In the page, stepping through the spectra moves the ring on the plot
+    instead of redrawing it, the table is only built when open, and the file
+    lists are rebuilt only when the files change.
 - Interface review (Impeccable critique, 25/40): the visual system stays
   ("A Bancada Organizada", recorded in `DESIGN.md`) and its weak points are
   fixed:

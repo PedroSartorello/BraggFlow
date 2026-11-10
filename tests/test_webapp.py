@@ -1314,3 +1314,97 @@ def test_evolution_figure_legend_follows_the_figure_language(webapp, monkeypatch
         assert resp.status_code == 200, resp.get_json()
     assert legendas == [["valley near 870.4 nm"], ["vale perto de 870,4 nm"]]
 
+
+# ── evolução: técnicas de posição, cache e caminhos ──────────────────────────
+
+@pytest.mark.parametrize("tecnica", ["gaussian", "lorentzian", "midpoint"])
+def test_evolution_position_can_be_a_shape_fit_or_the_width_midpoint(webapp, tecnica):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "settings": LMR_PREPARO,
+              "mode": "prominent"}
+    data = client.post("/api/spectra/evolution", json={**pedido, "locate": tecnica}).get_json()
+    pontos = data["tracks"][0]["points"]
+    assert data["locate"] == tecnica and data["warnings"] == []
+    assert {p["located"] for p in pontos} == {tecnica}
+    assert [p["wavelength"] for p in pontos] == pytest.approx([870, 866, 862], abs=2)
+    assert all(p["wavelength"] != p["vertex"] for p in pontos)
+
+    resp = client.post("/api/spectra/evolution", json={**pedido, "locate": "wavelet"})
+    assert resp.status_code == 400 and "Posição do extremo" in resp.get_json()["error"]
+
+
+def test_evolution_says_when_the_chosen_position_was_not_possible(webapp):
+    """Vales em dB com menos de 3 dB: sem largura, o ajuste gaussiano dá lugar ao vértice."""
+    dados, client = webapp
+    wl = np.linspace(1540.0, 1560.0, 801)
+    for i in range(2):
+        y = -2.0 * np.exp(-0.5 * ((wl - 1550.0 - 0.1 * i) / 0.5) ** 2)
+        linhas = [f"{a:.4f}\t{b:.6f}" for a, b in zip(wl, y)]
+        (dados.raw / f"raso_{i}.txt").write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    data = client.post("/api/spectra/evolution", json={
+        "items": [{"file": f"data/raw/raso_{i}.txt"} for i in range(2)], "mode": "prominent",
+        "settings": {"intensity_scale": "db"}, "locate": "gaussian"}).get_json()
+    assert {p["located"] for p in data["tracks"][0]["points"]} == {"vertex"}
+    assert any("Sem o ajuste gaussiano em 2 ponto(s)" in aviso for aviso in data["warnings"])
+
+
+def test_changing_the_preparation_does_not_read_the_files_again(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    cache = client.application.extensions["braggflow"].spectra
+    leituras, original = [], cache._loader
+    cache._loader = lambda path: leituras.append(path.name) or original(path)
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "mode": "prominent"}
+
+    client.post("/api/spectra/evolution", json={**pedido, "settings": LMR_PREPARO})
+    client.post("/api/spectra/evolution", json={**pedido, "settings": {**LMR_PREPARO, "smooth_window": 31}})
+    client.post("/api/spectra/evolution", json={**pedido, "kind": "max", "settings": LMR_PREPARO})
+    assert sorted(leituras) == sorted(c.name for c in caminhos), "cada arquivo é lido uma vez só"
+
+
+def test_spectra_of_the_same_instrument_share_one_wavelength_axis(webapp):
+    from braggflow.webapp.state import _spectrum_bytes
+
+    from .lmr_synthetic import WAVELENGTH, lmr_series, transmission, write_oceanview
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0))
+    outro = write_oceanview(dados.raw / "curto.txt", transmission(800.0))
+    outro.write_bytes(b"\r\n".join(outro.read_bytes().split(b"\r\n")[:-200]) + b"\r\n")   # 199 pontos a menos: outro eixo
+    cache = client.application.extensions["braggflow"].spectra
+    a, b, c = (cache.get(caminho).spectra[0] for caminho in (*caminhos, outro))
+    assert a.wavelength is b.wavelength and a.intensity is not b.intensity
+    assert c.wavelength is not a.wavelength and len(c.wavelength) == WAVELENGTH.size - 199
+    with pytest.raises(ValueError):
+        a.wavelength[0] = 0.0                                 # dividido: ninguém pode alterar
+    assert _spectrum_bytes(cache.get(caminhos[0])) == 16 * WAVELENGTH.size
+
+
+def test_data_paths_are_resolved_once_per_folder_and_never_leave_the_data_folder(webapp, tmp_path):
+    dados, _ = webapp
+    (dados.raw / "sub").mkdir()
+    (dados.raw / "sub" / "b.txt").write_text("1\t2\n")
+    segredo = tmp_path / "fora.txt"
+    segredo.write_text("segredo")
+    pastas = {}
+    assert dados.resolve("data/raw/ensaio.ASC", pastas) == dados.resolve("data/raw/ensaio.ASC")
+    assert dados.resolve("data/raw/sub/b.txt", pastas) == dados.resolve("data/raw/sub/b.txt")
+    assert set(pastas) == {("raw",), ("raw", "sub")}
+    assert dados.rel(dados.resolve("data/raw/sub/b.txt", pastas)) == "data/raw/sub/b.txt"
+    for ruim in ("data/raw/../../fora.txt", "data/../fora.txt", "data/raw/nao_existe.txt", "data/raw/sub",
+                 "raw/ensaio.ASC", str(segredo)):
+        with pytest.raises(ValueError):
+            dados.resolve(ruim, pastas)
+    try:
+        (dados.raw / "atalho.txt").symlink_to(segredo)
+        (dados.raw / "pasta_atalho").symlink_to(tmp_path, target_is_directory=True)
+    except OSError:
+        return                                                # sem permissão para criar atalhos (Windows)
+    for ruim in ("data/raw/atalho.txt", "data/raw/pasta_atalho/fora.txt"):
+        with pytest.raises(ValueError):
+            dados.resolve(ruim, {})

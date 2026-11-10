@@ -557,6 +557,7 @@ input[type=color].color-input {
   color: var(--muted); font-size: 12px; font-weight: 700; font-family: var(--font);
   line-height: 1; cursor: pointer;
 }
+.card-state + .help-toggle { margin-left: 10px; }      /* o estado do cartão já empurra os dois para a direita */
 .help-toggle:hover, .help-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .help-box {
   background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
@@ -570,6 +571,7 @@ input[type=color].color-input {
   gap: 3px 12px; margin: 0;
 }
 .help-box dt { font-weight: 600; }
+.help-box dt.from-option::first-letter { text-transform: uppercase; }   /* nomes vindos de uma lista, em minúsculas */
 .help-box dd { margin: 0; color: var(--muted); }
 .help-box em { font-style: normal; font-weight: 600; color: var(--text); }
 .help-box .hint { display: block; margin-top: 10px; }

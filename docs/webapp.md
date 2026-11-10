@@ -205,10 +205,11 @@ converted with themselves. The preparation is applied in this order:
    so shallow valleys on a sloping baseline (LMR, SPR, fringes) stand out.
 4. Normalisation and vertical offset.
 
-Detection of maxima and minima with position (3-point vertex and the vertex
-of a least-squares parabola fitted to the bottom, "λ ajuste"), prominence,
-FWHM or 3-dB band, Q factor, centroid and spacing; results table with CSV
-export.
+Detection of maxima and minima with position by six techniques (3-point
+vertex; vertex of a least-squares parabola fitted to the bottom, "λ ajuste";
+centroid; centre of a fitted Gaussian and of a fitted Lorentzian; midpoint
+between the two crossings of the width level), prominence, FWHM or 3-dB band,
+Q factor and spacing; results table with CSV export.
 
 *Evolução entre arquivos* (under the spectrum plot) follows a valley (or
 peak) across the spectra of the project, in acquisition order (header `Date:`
@@ -232,8 +233,19 @@ evolution, are left out. Modes:
 of a parabola fitted to the points within ⅓ of the width on each side of the
 valley, which uses tens of points and is several times less noisy than the
 *vértice* of 3 points on broad valleys (LMR, SPR); *centroide* is the centre
-of mass above half depth. Where the fit is not possible, the 3-point vertex is
-used and a warning says how many points.
+of mass above half depth; *ajuste gaussiano* and *ajuste lorentziano* are the
+centre of that curve fitted to the same region (a weighted parabola through
+the logarithm or the inverse of the depth, with no iteration), for valleys or
+peaks with that shape; *centro da largura* is the midpoint between the two
+crossings of the half-depth level, which ignores the bottom and suits flat or
+saturated valleys, but is noisier than the fits. All of them assume a flat
+baseline around the valley: on a sloping one, turn on "remover tendência".
+Where the chosen technique gives no result (a valley too shallow or cut by
+the edge of the spectrum has no width), the 3-point vertex is used and a
+warning says in how many points.
+
+The "?" in the title of the card opens the explanation of every field, with
+each technique and when to use it.
 
 Clicking a point of the evolution opens that spectrum above; the arrow buttons walk through
 the files in evolution order, and "Tirar da evolução" leaves an outlier out
@@ -241,8 +253,10 @@ the files in evolution order, and "Tirar da evolução" leaves an outlier out
 brings them back). Files that cannot be read are skipped with a warning
 instead of stopping the calculation, and so are files without a valley in the
 window (an empty point). The prepared spectra and their valleys are cached by
-file, preparation, source and dark: changing λ ref, the window or the mode
-recomputes hundreds of files at once. Plot λ, Δλ to the first file,
+file, preparation, source and dark: changing λ ref, the window, the mode or
+the position technique recomputes thousands of files in a fraction of a
+second, and changing the preparation does not read the files again (the
+spectra read stay in memory, up to 256 MB). Plot λ, Δλ to the first file,
 intensity, depth or width against elapsed time or file order; table and CSV
 with every value; "Fazer figura" opens it in the Figura tab.
 
