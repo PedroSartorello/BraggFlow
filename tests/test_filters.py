@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
-from braggflow.processing.filters import apply_moving_average_filter, apply_savgol_filter
+from braggflow.processing.filters import (
+    apply_moving_average_filter, apply_savgol_filter, choose_savgol, savgol_cutoff, savgol_smooth,
+)
 
 def test_moving_average_filter_constant_signal():
     """A constant signal must be unchanged everywhere, including the borders."""
@@ -65,3 +67,72 @@ def test_savgol_filter_linear():
     filtered = apply_savgol_filter(signals, window_length=5, polyorder=1)
 
     np.testing.assert_allclose(filtered, signals, rtol=1e-6, atol=1e-6)
+
+
+def test_moving_average_keeps_a_lost_reading_local():
+    """Um NaN (pico perdido, sem a remoção de nulos) fica só onde estava."""
+    x = np.ones((1000, 1))
+    x[100] = np.nan
+    y = apply_moving_average_filter(x, 30)
+    assert np.isnan(y[100, 0]) and np.isnan(y).sum() == 1
+    np.testing.assert_allclose(np.delete(y[:, 0], 100), 1.0)
+
+
+# ── janela e ordem pelos dados (validação cruzada) ───────────────────────────
+
+def _erro_real(y, limpo, janela, ordem):
+    from scipy.signal import savgol_filter
+    return np.mean((savgol_filter(y, janela, ordem) - limpo)[1001:-1001] ** 2)
+
+
+@pytest.mark.parametrize("limpo, ruido", [
+    (np.sin(2 * np.pi * np.arange(9001) / 1200), 0.2),                       # oscilação lenta
+    (np.tanh((np.arange(9001) - 3000) / 80) - np.tanh((np.arange(9001) - 6000) / 80), 0.05),  # degraus
+])
+def test_choose_savgol_lands_near_the_true_optimum(limpo, ruido):
+    """Sem conhecer o sinal limpo, a escolha fica a 10% do menor erro possível."""
+    y = limpo + np.random.default_rng(1).normal(0, ruido, limpo.size)
+    escolha = choose_savgol([y])
+    melhor = min(_erro_real(y, limpo, n, p) for p in (2, 4) for n in range(7, 1001, 2))
+    assert escolha["window"] % 2 == 1 and escolha["order"] in (2, 4)
+    assert _erro_real(y, limpo, escolha["window"], escolha["order"]) <= 1.1 * melhor
+
+
+def test_choose_savgol_handles_gaps_several_curves_and_the_moving_average():
+    rng = np.random.default_rng(2)
+    t = np.arange(5000)
+    a = np.sin(t / 300) + rng.normal(0, 0.1, t.size)
+    b = 3 * np.cos(t / 200) + rng.normal(0, 0.5, t.size)
+    a[[100, 2500, 2501]] = np.nan                   # picos perdidos não derrubam a escolha
+    escolha = choose_savgol([a, b])
+    assert 7 <= escolha["window"] <= 1001
+    media = choose_savgol([a], orders=(0,))
+    assert media["order"] == 0 and media["window"] % 2 == 1
+
+
+def test_choose_savgol_refuses_a_curve_too_short():
+    with pytest.raises(ValueError, match="curta demais"):
+        choose_savgol([np.arange(12.0)])
+
+
+def test_savgol_cutoff_matches_the_frequency_response():
+    assert savgol_cutoff(11, 2) * 10 == pytest.approx(0.985, abs=0.002)      # 10 Hz: o padrão do app
+    assert savgol_cutoff(51, 3) == pytest.approx(savgol_cutoff(51, 2))        # ordem 3 = ordem 2
+
+
+@pytest.mark.parametrize("n, janela, ordem", [(2048, 5, 2), (300, 51, 3), (40, 39, 4), (11, 11, 2),
+                                             (2048, 101, 5), (9, 3, 1), (50, 1, 0)])
+def test_savgol_smooth_gives_what_scipy_gives(n, janela, ordem):
+    """Coeficientes e pontas guardados: o mesmo resultado do scipy, sem refazer os ajustes."""
+    from scipy.signal import savgol_filter
+
+    sinal = np.random.default_rng(n + janela).normal(size=n).cumsum()
+    np.testing.assert_allclose(savgol_smooth(sinal, janela, ordem), savgol_filter(sinal, janela, ordem),
+                               rtol=0, atol=1e-10 * np.abs(sinal).max())
+
+
+def test_savgol_smooth_refuses_a_window_that_does_not_fit():
+    sinal = np.arange(10.0)
+    for janela, ordem in ((4, 2), (3, 3), (11, 2)):
+        with pytest.raises(ValueError):
+            savgol_smooth(sinal, janela, ordem)

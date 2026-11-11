@@ -1,6 +1,7 @@
 """Fluxos principais da interface, clicando como o usuário clica."""
 
 import re
+import shutil
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -109,6 +110,23 @@ def test_switching_projects_does_not_mix_their_files(app):
     assert arquivos_do_projeto(app) == ["ensaio_b.asc"]
 
 
+def test_a_new_project_cannot_take_the_name_of_another(app):
+    novo_projeto(app, "Ensaio A")
+    adicionar_serie(app, "ensaio_a.asc")
+    salvar_projeto(app)
+
+    app.click("#btn-projects")
+    expect(app.locator("#gate-projects .gate-row", has_text="Ensaio A")).to_be_visible()
+    app.fill("#gate-name", "ensaio a")          # no Windows, o mesmo arquivo
+    app.click("#btn-gate-new")
+    expect(app.locator("#gate-error")).to_contain_text("Já existe o projeto Ensaio A")
+    expect(app.locator("#project-gate")).to_be_visible()
+
+    abrir_projeto(app, "Ensaio A")
+    assert arquivos_do_projeto(app) == ["ensaio_a.asc"], "o projeto antigo continua inteiro"
+    salvar_projeto(app)                          # e o projeto aberto segue salvando sobre si mesmo
+
+
 def test_unsaved_changes_ask_before_leaving_the_project(app):
     novo_projeto(app, "Rascunho")
     app.uncheck("#autosave")                     # sem salvar sozinho, a pergunta volta
@@ -126,6 +144,29 @@ def test_unsaved_changes_ask_before_leaving_the_project(app):
     app.click("#leave-save")                     # salvar e seguir
     expect(app.locator("#project-gate")).to_be_visible()
     expect(app.locator("#gate-projects .gate-row", has_text="Rascunho")).to_be_visible()
+
+
+def test_savgol_window_and_order_are_chosen_from_the_data(app):
+    novo_projeto(app, "Auto")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator('.step[data-step="savgol"] .step-name').click()          # abre os parâmetros
+    expect(app.locator("#savgol-window")).to_have_value("11")
+    app.click("#btn-savgol-auto")
+    expect(app.locator("#savgol-auto-note")).to_contain_text("Pelos dados: janela")
+    janela = int(app.input_value("#savgol-window"))
+    assert janela != 11 and janela % 2 == 1
+    expect(app.locator("#savgol-auto-note")).to_contain_text(f"janela {janela}")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")     # mudou o projeto, como digitar
+
+
+def test_spectrum_smoothing_window_is_chosen_from_the_data(app):
+    novo_projeto(app, "Auto espectro")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-file", has_text="espectro.txt").click()
+    expect(app.locator("#spectra-status")).not_to_contain_text("Adicione")
+    app.click("#btn-spec-smooth-auto")
+    expect(app.locator("#spec-smooth-auto-note")).to_contain_text("Pelos dados: janela")
+    assert int(app.input_value('[data-spec="smooth_window"]')) % 2 == 1
 
 
 def test_spectrum_peaks_are_detected(app):
@@ -152,6 +193,25 @@ def test_figure_is_drawn_from_the_processed_csv(app):
     expect(app.locator("#viz-img")).to_be_visible()
     assert app.locator("#viz-img").get_attribute("src").startswith("data:image/png;base64,")
     expect(app.locator("#viz-status")).to_contain_text("3 curva(s)")
+
+
+def test_a_file_in_a_folder_keeps_its_csv_apart_and_reaches_the_figure(app, data_dir):
+    pasta = data_dir / "raw" / "dia1"
+    pasta.mkdir()
+    shutil.copy(data_dir / "raw" / "ensaio_a.asc", pasta / "ensaio_a.asc")   # mesmo nome do da raiz
+    app.reload()
+    novo_projeto(app, "Pastas")
+    app.locator("#series-empty-files .empty-folder", has_text="dia1/").click()
+    expect(app.locator("#status-text")).to_contain_text("pré-visualização")
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    assert (data_dir / "processed" / "Pastas" / "raw__dia1__ensaio_a_processado.csv").is_file()
+
+    app.click('#tabs .tab[data-tab="viz"]')
+    fonte = app.locator(".viz-series-source")
+    expect(fonte).to_have_count(1)
+    expect(fonte).to_have_value("data/processed/Pastas/raw__dia1__ensaio_a_processado.csv")
+    expect(fonte).to_be_checked()
 
 
 def test_temperature_compensation_uses_the_thermal_sensitivity_of_each_fbg(app):
@@ -273,6 +333,7 @@ def test_evolution_belongs_to_the_open_project(lmr, app):
             app.click("#btn-add-spectra")
         expect(app.locator("#spectra-files .file-name")).to_have_count(len(nomes))
         preparar_lmr(app)
+        app.evaluate("document.getElementById('evolution-table-box').open = true")   # a tabela só existe aberta
 
     def arquivos_da_evolucao():
         return app.locator("#evolution-table tbody tr td:nth-child(1)").all_text_contents()
@@ -489,7 +550,64 @@ def test_events_are_marked_on_the_evolution_and_go_to_the_figure(pasta_lmr, app)
     app.click('#tabs .tab[data-tab="spectra"]')
     expect(app.locator("#evolution-events .event-row")).to_have_count(2)
     expect(app.locator("#evolution-events .event-label").nth(1)).to_have_value("Glicerina")
-    app.wait_for_function("(document.getElementById('evolution-plot').layout?.shapes || []).length === 2")
+    app.wait_for_function("""(document.getElementById('evolution-plot').layout?.shapes || [])
+        .filter((s) => s.type === 'line').length === 2""")
+
+
+def test_evolution_help_positions_and_the_spectrum_in_focus(pasta_lmr, app):
+    """O "?" explica os campos, as técnicas novas de posição valem e o foco muda sem redesenhar a curva."""
+    novo_projeto(app, "Ajuda")
+    app.click('#tabs .tab[data-tab="spectra"]')
+    app.locator("#spectra-empty-files .empty-folder").click()
+    preparar_lmr(app)
+    expect(app.locator("#evolution-status")).to_contain_text("3 espectro(s)")
+
+    expect(app.locator("#evolution-help")).to_be_hidden()
+    app.click("#btn-evolution-help")
+    expect(app.locator("#evolution-help")).to_be_visible()
+    expect(app.locator("#spectra-evolution")).to_have_attribute("open", "")      # o "?" não fecha o cartão
+    for termo in ("Janela ± (nm)", "Salto máximo (nm)", "ajuste lorentziano", "centro da largura", "Eixo x"):
+        expect(app.locator("#evolution-help dt", has_text=termo)).to_have_count(1)
+    assert app.locator("#evolution-help dd").count() == app.locator("#evolution-help dt").count() >= 22
+    app.click("#btn-evolution-help")
+    expect(app.locator("#evolution-help")).to_be_hidden()
+
+    # A tabela só é montada quando aberta
+    expect(app.locator("#evolution-table-summary")).to_have_text("Tabela (3 linhas)")
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(0)
+    app.locator("#evolution-table-box > summary").click()
+    expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+    ajuste = lambdas_da_evolucao(app)
+
+    for tecnica in ("lorentzian", "gaussian", "midpoint"):
+        with app.expect_response("**/api/spectra/evolution") as resposta:
+            app.select_option("#evo-locate", tecnica)
+        assert resposta.value.ok
+        expect(app.locator("#evolution-table tbody tr")).to_have_count(3)
+        app.wait_for_function("(v) => !document.querySelector('#evolution-table tbody td:nth-child(4)')"
+                              ".textContent.startsWith(v)", arg=f"{ajuste[0]:.4f}".replace(".", ","))
+        assert lambdas_da_evolucao(app) == pytest.approx([870, 866, 862], abs=1.5)
+        assert lambdas_da_evolucao(app) != ajuste, tecnica
+
+    # O espectro em foco é um anel no gráfico; passar para o seguinte move o anel, não refaz a curva
+    def anel():
+        return app.evaluate("""() => {
+            const gd = document.getElementById('evolution-plot');
+            const aneis = gd.layout.shapes.filter((s) => s.type === 'circle');
+            return [gd.data.length, aneis.length, aneis[0]?.xanchor];
+        }""")
+    curvas_antes, aneis, x0 = anel()
+    assert (curvas_antes, aneis) == (1, 1)
+    app.evaluate("window.__curva = document.getElementById('evolution-plot').data[0]")
+    app.click("#btn-evo-next")
+    app.wait_for_function("(x) => document.getElementById('evolution-plot').layout.shapes"
+                          ".find((s) => s.type === 'circle')?.xanchor > x", arg=x0)
+    assert anel()[:2] == [1, 1]
+    assert app.evaluate("window.__curva === document.getElementById('evolution-plot').data[0]")
+    salvar_projeto(app)
+    app.reload()
+    app.locator("#gate-projects .gate-row", has_text="Ajuda").click()
+    expect(app.locator("#evo-locate")).to_have_value("midpoint")
 
 
 def test_a_folder_of_spectra_is_imported_at_once(data_dir, tmp_path, app):
@@ -665,6 +783,59 @@ def test_concatenation_card_appears_with_two_files(app):
     expect(app.locator("#card-concat")).to_be_visible()
 
 
+def test_joined_files_work_as_one_signal(app, data_dir):
+    novo_projeto(app, "Junta")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    expect(app.locator("#status-text")).to_contain_text("9.001 amostras")
+
+    app.locator("#card-concat > summary").click()                     # abrir junta os marcados
+    expect(app.locator("#status-text")).to_contain_text("18.002 amostras")
+    expect(app.locator("#status-text")).to_contain_text("2 arquivos juntos")
+    app.click("#btn-process-join")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    assert (data_dir / "processed" / "Junta" / "ensaio_a_juntos_processado.csv").is_file()
+
+    # Mudar o filtro reprocessa a junção, não só o primeiro arquivo
+    app.locator('.step[data-step="savgol"] .step-name').click()
+    with app.expect_response(lambda r: "/api/process" in r.url) as resposta:
+        app.fill("#savgol-window", "31")
+        app.locator("#savgol-window").press("Tab")
+    assert resposta.value.request.post_data_json["files"] == ["data/raw/ensaio_a.asc", "data/raw/ensaio_b.asc"]
+    expect(app.locator("#status-text")).to_contain_text("18.002 amostras")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    series = projeto_no_disco(data_dir, "Junta")["series"]
+    assert [s["processing"]["savgol"]["window_length"] for s in series] == ["31", "31"], "um sinal: as mesmas etapas"
+
+    app.locator("#card-concat > summary").click()                     # fechar volta a um arquivo
+    expect(app.locator("#status-text")).to_contain_text("9.001 amostras")
+    expect(app.locator("#status-text")).not_to_contain_text("juntos")
+
+
+def test_processing_requests_run_one_at_a_time(app):
+    novo_projeto(app, "Fila")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.locator("#tab-series-sidebar details.advanced > summary").first.click()
+    app.check("#series-picker .pick-series[value='data/raw/ensaio_b.asc']")
+    app.click("#btn-add-series")
+    expect(app.locator("#series-files .file-name")).to_have_count(2)
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+
+    eventos = []
+    app.on("request", lambda r: "/api/process" in r.url and eventos.append(("início", r.post_data_json["file"])))
+    app.on("requestfinished", lambda r: "/api/process" in r.url and eventos.append(("fim", r.post_data_json["file"])))
+    app.locator("#series-files .file-name", has_text="ensaio_a.asc").click()
+    app.locator("#series-files .file-name", has_text="ensaio_b.asc").click()      # sem esperar o primeiro
+    expect(app.locator("#status-text")).to_contain_text("amostras")
+    app.wait_for_timeout(500)
+    # Um de cada vez: cada pedido começa depois que o anterior terminou, e o último é o do arquivo b
+    assert [tipo for tipo, _ in eventos] == ["início", "fim"] * (len(eventos) // 2), eventos
+    assert eventos[-1] == ("fim", "data/raw/ensaio_b.asc"), eventos
+
+
 # ── aba Figura ───────────────────────────────────────────────────────────────
 
 def abrir_figura(page: Page) -> None:
@@ -673,6 +844,29 @@ def abrir_figura(page: Page) -> None:
     expect(page.locator("#status-text")).to_contain_text("CSV salvo")
     page.click('#tabs .tab[data-tab="viz"]')
     expect(page.locator("#viz-img")).to_be_visible()
+
+
+def test_markers_are_added_in_the_figure_tab_too(app, data_dir):
+    novo_projeto(app, "Marcas na figura")
+    abrir_figura(app)
+    app.locator('#tab-viz-sidebar details[data-card="marcacoes"] > summary').click()
+    expect(app.locator("#viz-marker-count")).to_contain_text("Nenhuma marcação: adicione aqui")
+    app.click("#btn-add-marker")                         # o mesmo botão, agora no cartão da Figura
+    linha = app.locator("#tab-viz-sidebar .marker-row")
+    expect(linha).to_have_count(1)
+    linha.locator(".marker-time").fill("300")
+    linha.locator(".marker-label").fill("CO₂")
+    linha.locator(".marker-label").press("Tab")
+    expect(app.locator("#viz-status")).to_contain_text("1 marcação")
+    expect(app.locator("#viz-marker-count")).to_contain_text("1 marcação(ões)")
+
+    # A mesma marcação na aba Séries, no gráfico e no projeto salvo
+    app.click('#tabs .tab[data-tab="series"]')
+    expect(app.locator("#card-markers .marker-row")).to_have_count(1)
+    expect(app.locator("#card-markers .marker-time")).to_have_value("300")
+    assert app.evaluate("document.getElementById('plot').layout.shapes.some(s => s.x0 === 300)")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert [m["label"] for m in projeto_no_disco(data_dir, "Marcas na figura")["markers"]] == ["CO₂"]
 
 
 def test_figure_tab_fits_summarizes_and_finds_options(app):
@@ -822,6 +1016,20 @@ def test_undo_and_redo_walk_through_the_project_changes(app, data_dir):
     app.locator(".marker-label").fill("evento")
     app.locator(".marker-label").press("Control+z")
     expect(app.locator(".marker-row")).to_have_count(1)
+
+
+def test_undo_back_to_before_the_first_save_still_saves(app, data_dir):
+    novo_projeto(app, "Desfazer cedo")
+    adicionar_serie(app, "ensaio_a.asc")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert len(projeto_no_disco(data_dir, "Desfazer cedo")["series"]) == 1
+
+    app.locator("body").click(position={"x": 5, "y": 400})       # fora dos campos
+    app.keyboard.press("Control+z")                             # antes do arquivo: antes do 1º salvamento
+    expect(app.locator("#series-files .file-name")).to_have_count(0)
+    expect(app.locator("#save-state")).to_contain_text("alterações")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert projeto_no_disco(data_dir, "Desfazer cedo")["series"] == []
 
 
 def test_deleting_the_open_project_does_not_bring_it_back(app, data_dir):

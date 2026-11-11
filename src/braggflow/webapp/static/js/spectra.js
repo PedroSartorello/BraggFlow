@@ -74,21 +74,35 @@ export function saveCurrentSpectrumState() {
   }
 }
 
-// Fonte e fundo: qualquer espectro já enviado (no preparo por arquivo, menos o próprio)
+// Fonte e fundo: qualquer espectro já enviado (no preparo por arquivo, menos o
+// próprio). As listas só são refeitas quando mudam (arquivos ou idioma): com
+// milhares de espectros, refazê-las a cada espectro aberto travava a página
+let fileSelectKey = null;
 function fillSpectrumFileSelects() {
   const disponiveis = shared.rawFiles.filter((f) => f.kind === "spectrum").map((f) => f.path);
-  const proprio = spectraCommon.on ? null : shared.currentSpectrumFile;
+  const proprio = spectraCommon.on ? "" : shared.currentSpectrumFile || "";
+  const paths = [...new Set([...projectSpectraPaths(), ...disponiveis])];
+  const chave = `${t("common.none")}\n${paths.join("\n")}`;
+  const refazer = chave !== fileSelectKey;
+  fileSelectKey = chave;
   document.querySelectorAll(".spec-file-select").forEach((sel) => {
-    const atual = sel.value;
-    sel.innerHTML = "";
-    sel.add(new Option(t("common.none"), ""));
-    [...new Set([...projectSpectraPaths(), ...disponiveis])]
-      .filter((path) => path !== proprio)
-      .forEach((path) => sel.add(new Option(shortName(path), path)));
-    if (atual && ![...sel.options].some((o) => o.value === atual)) {
-      sel.add(new Option(t("transmission.notFound", { name: baseName(atual) }), atual));   // escolhido antes, fora da lista
+    if (refazer) {
+      const atual = sel.value;
+      sel.innerHTML = "";
+      sel.add(new Option(t("common.none"), ""));
+      paths.forEach((path) => sel.add(new Option(shortName(path), path)));
+      if (atual && !paths.includes(atual)) {
+        sel.add(new Option(t("transmission.notFound", { name: baseName(atual) }), atual));   // escolhido antes, fora da lista
+      }
+      sel.value = atual;
+      sel.dataset.own = "";
     }
-    sel.value = atual;
+    if (sel.dataset.own === proprio) return;
+    sel.dataset.own = proprio;
+    for (const opcao of sel.options) {
+      const fora = Boolean(proprio) && opcao.value === proprio;
+      if (opcao.hidden !== fora) { opcao.hidden = fora; opcao.disabled = fora; }
+    }
   });
 }
 
@@ -238,7 +252,7 @@ export async function selectSpectrumFile(path) {
   if (novo) renderSpectraFiles();
   else markSelectedRow(path);
   renderEvolutionFocus();
-  if (evolution) renderEvolution();          // o ponto em foco muda de lugar
+  renderFocusMark();                         // o ponto em foco muda de lugar
   if (novo) markProjectDirty();
   await previewSpectrum();
 }
@@ -460,6 +474,9 @@ const SPECTRA_COLUNAS = (db) => [
   [`${db ? t("peaks.band3db") : "FWHM"} (nm)`, (e) => numeroOuTraco(e.fwhm, 4)],
   ["Q", (e) => numeroOuTraco(e.q, 0)],
   [t("peaks.col.centroid"), (e) => numeroOuTraco(e.centroid, 4)],
+  [t("peaks.col.gaussian"), (e) => numeroOuTraco(e.gaussian, 4)],
+  [t("peaks.col.lorentzian"), (e) => numeroOuTraco(e.lorentzian, 4)],
+  [t("peaks.col.midpoint"), (e) => numeroOuTraco(e.midpoint, 4)],
   [t("peaks.col.spacing"), (e) => numeroOuTraco(e.spacing, 4)],
 ];
 
@@ -622,6 +639,38 @@ $("tab-spectra-sidebar").addEventListener("change", (e) => {
   scheduleEvolution();     // o preparo mudou: a evolução também
 });
 $("btn-copy-spectrum").addEventListener("click", copySpectrumSettings);
+
+// Janela da suavização pelos dados: validação cruzada no espectro aberto
+async function chooseSmoothingFromData() {
+  const file = shared.currentSpectrumFile;
+  const nota = $("spec-smooth-auto-note");
+  nota.classList.remove("hidden");
+  if (!file) { setText(nota, "spectra.smoothAutoNoFile"); return; }
+  saveCurrentSpectrumState();          // o que está no formulário vale, mesmo antes de virar prévia
+  const botao = $("btn-spec-smooth-auto");
+  botao.disabled = true;
+  setText(nota, "savgol.autoBusy");
+  try {
+    const resp = await fetch("/api/spectra/smoothing-auto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file, settings: spectrumSettingsFor(file) }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || t("savgol.autoError"));
+    const campo = (nome) => document.querySelector(`#tab-spectra-sidebar [data-spec="${nome}"]`);
+    campo("smooth_window").value = data.window;
+    if (data.method === "savgol") campo("smooth_order").value = data.order;
+    setText(nota, data.method === "savgol" ? "spectra.smoothAutoResultSg" : "spectra.smoothAutoResultMa",
+            { window: data.window, order: data.order, nm: fmtNum(data.window_nm, 3) });
+    ["input", "change"].forEach((tipo) => campo("smooth_window").dispatchEvent(new Event(tipo, { bubbles: true })));
+  } catch (err) {
+    setPlain(nota, err.message);
+  } finally {
+    botao.disabled = false;
+  }
+}
+$("btn-spec-smooth-auto").addEventListener("click", () => chooseSmoothingFromData().catch((err) => showError(err.message)));
 $("spectra-filter").addEventListener("input", renderSpectraFiles);
 $("spectrum-picker-filter").addEventListener("input", () => renderFilePicker("spectrum"));
 ["spectra-upload", "spectra-upload-dir"].forEach((id) => $(id).addEventListener("change", (e) =>
@@ -808,6 +857,35 @@ function evolutionX(file) {
   return $("evo-x").value === "time" && evolution.x === "time" ? file.elapsed_s / 60 : file.index;
 }
 
+// As linhas dos eventos: uma por evento, nos mesmos índices das legendas (o arraste usa isso)
+const eventShapes = () => eventPositions().map(({ x, e }) => ({
+  type: "line", xref: "x", yref: "paper", x0: x, x1: x, y0: 0, y1: 1,
+  line: { color: e.color, width: 1.5, dash: "dash" },
+}));
+
+// O espectro em foco (o do gráfico de cima): um anel em cada ponto dele. São
+// formas do layout, de tamanho fixo em pixels e depois das linhas dos eventos,
+// e não uma curva a mais: trocar de espectro redesenha só os anéis, não os
+// milhares de pontos de uma evolução longa
+const FOCUS_RING_PX = 7.5;
+function focusShapes() {
+  const i = evolution.files.findIndex((f) => f.file === shared.currentSpectrumFile);
+  if (i < 0) return [];
+  const valor = EVO_Y[$("evo-y").value][1];
+  const x = evolutionX(evolution.files[i]);
+  return evolution.tracks.map((trilha) => trilha.points[i]).filter((p) => p && valor(p) != null).map((p) => ({
+    type: "circle", xref: "x", yref: "y", xsizemode: "pixel", ysizemode: "pixel",
+    xanchor: x, yanchor: valor(p), x0: -FOCUS_RING_PX, x1: FOCUS_RING_PX, y0: -FOCUS_RING_PX, y1: FOCUS_RING_PX,
+    line: { color: "#e67e22", width: 2.5 }, fillcolor: "rgba(0,0,0,0)",
+  }));
+}
+
+function renderFocusMark() {
+  const gd = $("evolution-plot");
+  if (!evolution || !gd.layout) return;
+  Plotly.relayout(gd, { shapes: [...eventShapes(), ...focusShapes()] });
+}
+
 function renderEvolution() {
   if (!evolution) return;
   const [chaveRotulo, valor] = EVO_Y[$("evo-y").value];
@@ -825,26 +903,13 @@ function renderEvolution() {
     text: textos, customdata: arquivos,
     hovertemplate: "%{text}<br>%{y:.4f}<extra>%{fullData.name}</extra>",
   }));
-  // O espectro em foco (o do gráfico de cima), destacado
-  const i = arquivos.indexOf(shared.currentSpectrumFile);
-  if (i >= 0) {
-    const pontos = evolution.tracks.map((t) => t.points[i]).filter(Boolean);
-    traces.push({
-      x: pontos.map(() => evolutionX(evolution.files[i])), y: pontos.map(valor),
-      mode: "markers", name: t("evo.inFocus"), showlegend: false, hoverinfo: "skip",
-      marker: { symbol: "circle-open", size: 15, color: "#e67e22", line: { width: 2.5 } },
-    });
-  }
   const eventos = eventPositions();
   const gd = $("evolution-plot");
   Plotly.react(gd, traces, {
     separators: plotSeparators(),
     margin: { l: 60, r: 20, t: eventos.length ? 44 : 30, b: 45 },
     // Um evento = uma linha e a sua legenda, nos mesmos índices (o arraste usa isso)
-    shapes: eventos.map(({ x, e }) => ({
-      type: "line", xref: "x", yref: "paper", x0: x, x1: x, y0: 0, y1: 1,
-      line: { color: e.color, width: 1.5, dash: "dash" },
-    })),
+    shapes: [...eventShapes(), ...focusShapes()],
     annotations: eventos.map(({ x, e }) => ({
       x, y: 1, xref: "x", yref: "paper", yanchor: "bottom", showarrow: false,
       text: textoPlotly(e.label), font: { size: 11, color: e.color },
@@ -909,11 +974,14 @@ function evolutionRows() {
   });
 }
 
+// A tabela só é montada com a caixa aberta: numa evolução longa são milhares
+// de linhas, refeitas a cada cálculo
 function renderEvolutionTable() {
-  const linhas = evolutionRows();
   const tabelaEl = $("evolution-table");
   tabelaEl.innerHTML = "";
-  setText($("evolution-table-summary"), "evo.tableRows", { n: linhas.length });
+  setText($("evolution-table-summary"), "evo.tableRows", { n: evolution.files.length });
+  if (!$("evolution-table-box").open) return;
+  const linhas = evolutionRows();
   if (!linhas.length) return;
   const colunas = Object.keys(linhas[0]);
   const cabeca = tabelaEl.createTHead().insertRow();
@@ -980,6 +1048,14 @@ $("btn-evo-prev").addEventListener("click", () => stepSpectrum(-1));
 $("btn-evo-next").addEventListener("click", () => stepSpectrum(1));
 
 $("btn-evolution").addEventListener("click", () => runEvolution());
+// O "?" vive dentro do <summary>, então não pode abrir e fechar o cartão
+$("btn-evolution-help").addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const fechado = $("evolution-help").classList.toggle("hidden");
+  $("btn-evolution-help").classList.toggle("on", !fechado);
+  if (!$("spectra-evolution").open) $("spectra-evolution").open = true;
+});
 $("spectra-evolution").addEventListener("change", (e) => {
   const campo = e.target.dataset?.evo;
   if (!campo) return;
@@ -996,6 +1072,9 @@ $("spectra-evolution").addEventListener("change", (e) => {
 });
 $("spectra-evolution").addEventListener("toggle", () => {
   if ($("spectra-evolution").open && (!evolution || evolutionStale)) runEvolution();
+});
+$("evolution-table-box").addEventListener("toggle", () => {
+  if (evolution && $("evolution-table-box").open) renderEvolutionTable();
 });
 $("btn-evolution-csv").addEventListener("click", () => {
   if (!evolution) { showError(t("evo.calculateFirst")); return; }

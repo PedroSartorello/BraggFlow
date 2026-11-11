@@ -41,7 +41,7 @@ SENSORS = [
 ]
 
 
-def _process(client, **overrides):
+def _process_options(**overrides):
     options = {
         "file": "data/raw/ensaio.ASC",
         "sensors": SENSORS,
@@ -53,7 +53,11 @@ def _process(client, **overrides):
         "savgol": {"enabled": True, "window_length": "11", "polyorder": "2"},
     }
     options.update(overrides)
-    return client.post("/api/process", json=options)
+    return options
+
+
+def _process(client, **overrides):
+    return client.post("/api/process", json=_process_options(**overrides))
 
 
 def test_channels_endpoint_reports_nominal_and_fs(webapp):
@@ -132,6 +136,55 @@ def test_download_csv_has_units(webapp):
     resp = client.post("/api/download", json={"file": "data/raw/ensaio.ASC", "sensors": SENSORS})
     assert resp.status_code == 200
     assert resp.data.decode().splitlines()[0] == "Time [s],S1 [nm],S2 [nm]"
+
+
+def test_savgol_window_and_order_come_from_the_data(webapp):
+    _, client = webapp
+    resp = client.post("/api/savgol/auto", json=_process_options())
+    data = resp.get_json()
+    assert resp.status_code == 200, data
+    assert data["window"] % 2 == 1 and data["window"] > data["order"] and data["order"] in (2, 4)
+    assert data["fs"] == pytest.approx(50.0, rel=0.01) and 0 < data["cutoff_hz"] < 25   # fixture a 50 Hz
+    assert "reamostragem" in data["warnings"][0], "o fixture reamostra: o aviso explica o viés"
+    sem = client.post("/api/savgol/auto", json=_process_options(
+        timebase={"enabled": True, "duplicates": "mean"})).get_json()
+    assert sem["warnings"] == []
+
+
+def test_spectrum_smoothing_window_comes_from_the_data(webapp, spectrum_file):
+    _, client = webapp
+    sg = client.post("/api/spectra/smoothing-auto", json={
+        "file": spectrum_file, "settings": {"smooth_method": "savgol", "smooth_window": "99"}}).get_json()
+    assert sg["method"] == "savgol" and sg["window"] % 2 == 1 and sg["order"] in (2, 4)
+    assert sg["window_nm"] == pytest.approx(sg["window"] * 0.02, rel=0.01)   # passo de 0,02 nm do fixture
+    media = client.post("/api/spectra/smoothing-auto", json={
+        "file": spectrum_file, "settings": {"smooth_method": "moving_average"}}).get_json()
+    assert media["method"] == "moving_average" and media["order"] == 0
+
+
+def test_download_reuses_the_last_processing(webapp, monkeypatch):
+    import braggflow.webapp.app as app_module
+
+    _, client = webapp
+    chamadas = []
+    original = app_module.run_recipe
+    monkeypatch.setattr(app_module, "run_recipe", lambda *a, **k: chamadas.append(1) or original(*a, **k))
+    processado = _process(client).get_json()
+    csv = client.post("/api/download", json=_process_options()).data.decode()
+    assert len(chamadas) == 1, "o download não processa de novo"
+    assert len(csv.splitlines()) == processado["n_samples"] + 1
+
+
+def test_only_this_page_is_answered(webapp):
+    _, client = webapp
+    assert client.get("/api/projects").status_code == 200
+    # DNS rebinding: um domínio que aponta para 127.0.0.1 chega com outro Host
+    resp = client.get("/api/projects", base_url="http://ataque.example:5000")
+    assert resp.status_code == 403 and "só atende a própria página" in resp.get_json()["error"]
+    # Um formulário de outro site enviando um arquivo
+    arquivo = lambda: {"file": (io.BytesIO(b"500\t1\n"), "a.txt")}
+    assert client.post("/api/upload", headers={"Origin": "http://ataque.example"}, data=arquivo()).status_code == 403
+    assert client.post("/api/upload", headers={"Origin": "http://localhost"}, data=arquivo()).status_code == 200
 
 
 def test_preview_does_not_overwrite_saved_result(webapp):
@@ -242,11 +295,33 @@ def test_project_save_list_open_and_delete(webapp):
 
 def test_project_keeps_creation_date_when_replaced(webapp):
     _, client = webapp
-    client.post("/api/projects", json=PROJECT)
-    created = client.get("/api/projects/Ensaio 1").get_json()["created"]
-    client.post("/api/projects", json={**PROJECT, "description": "revisado"})
+    created = client.post("/api/projects", json=PROJECT).get_json()["created"]
+    assert client.get("/api/projects/Ensaio 1").get_json()["created"] == created
+    client.post("/api/projects", json={**PROJECT, "created": created, "description": "revisado"})
     updated = client.get("/api/projects/Ensaio 1").get_json()
     assert updated["created"] == created and updated["description"] == "revisado"
+
+
+@pytest.mark.parametrize("nome", ["Ensaio 1", "Ensaio: 1"])      # "Ensaio: 1" vira o mesmo arquivo
+def test_a_new_project_does_not_replace_another_with_the_same_name(webapp, nome):
+    _, client = webapp
+    client.post("/api/projects", json={**PROJECT, "description": "o original"})
+    resp = client.post("/api/projects", json={**PROJECT, "name": nome, "description": "novo e vazio"})
+    assert resp.status_code == 409 and "Já existe um projeto chamado Ensaio 1" in resp.get_json()["error"]
+    assert client.get("/api/projects/Ensaio 1").get_json()["description"] == "o original"
+
+
+def test_a_renamed_copy_gets_its_own_creation_date(webapp):
+    _, client = webapp
+    original = client.post("/api/projects", json={**PROJECT, "description": "o original"}).get_json()["created"]
+    # Renomear grava uma cópia com o novo nome; a página manda a data do original
+    copia = client.post("/api/projects", json={**PROJECT, "name": "Cópia", "created": original,
+                                               "description": "a cópia"}).get_json()["created"]
+    assert copia != original
+    # Renomear o original para o nome da cópia não apaga a cópia
+    resp = client.post("/api/projects", json={**PROJECT, "name": "Cópia", "created": original})
+    assert resp.status_code == 409
+    assert client.get("/api/projects/Cópia").get_json()["description"] == "a cópia"
 
 
 @pytest.mark.parametrize("payload, message", [
@@ -865,6 +940,19 @@ def test_file_cache_reloads_a_changed_file(tmp_path):
     assert len(leituras) == 4
 
 
+def test_file_cache_limit_can_count_points_instead_of_files(tmp_path):
+    from braggflow.webapp.state import FileCache
+
+    cache = FileCache(lambda p: p.read_text(), size=10, weigh=len)    # peso = nº de caracteres
+    a, b, c = (tmp_path / n for n in ("a.txt", "b.txt", "c.txt"))
+    for arquivo in (a, b, c):
+        arquivo.write_text("1234")
+        cache.get(arquivo)
+    assert [k[0] for k in cache._entries] == [str(b), str(c)], "4 + 4 cabem em 10; o mais antigo saiu"
+    c.write_text("x" * 50)                       # sozinho passa do limite, mas fica (é o mais recente)
+    assert cache.get(c) == "x" * 50 and [k[0] for k in cache._entries] == [str(c)]
+
+
 # ── espectros LMR: transmissão a partir do bruto e evolução entre arquivos ────
 
 LMR_PREPARO = {"lambda_min": 450, "lambda_max": 950, "smooth_window": 21, "detrend": 2}
@@ -1110,6 +1198,37 @@ def test_upload_takes_many_files_and_keeps_the_folder(webapp):
     assert {"data/uploads/LMR dia 1/a.txt", "data/uploads/LMR dia 1/sub/b.txt"} <= set(listados)
 
 
+def test_upload_with_the_same_name_keeps_the_earlier_file(webapp):
+    dados, client = webapp
+
+    def enviar(conteudo):
+        return client.post("/api/upload", data={"file": (io.BytesIO(conteudo), "ensaio.txt")}).get_json()["files"]
+
+    assert enviar(b"500\t1\n") == ["data/uploads/ensaio.txt"]
+    assert enviar(b"500\t1\n") == ["data/uploads/ensaio.txt"], "o mesmo arquivo de novo: reaproveita"
+    assert enviar(b"600\t2\n") == ["data/uploads/ensaio (2).txt"], "outro conteúdo: não apaga o primeiro"
+    assert (dados.uploads / "ensaio.txt").read_bytes() == b"500\t1\n"
+
+
+def test_files_with_the_same_name_in_different_folders_get_their_own_csv(webapp):
+    dados, client = webapp
+    for pasta in ("dia1", "dia2"):
+        (dados.raw / pasta).mkdir()
+        (dados.raw / pasta / "ensaio.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
+    salvos = {_process(client, file=f"data/raw/{pasta}/ensaio.ASC", project="P").get_json()["processed_file"]
+              for pasta in ("dia1", "dia2")}
+    assert salvos == {"data/processed/P/raw__dia1__ensaio_processado.csv",
+                      "data/processed/P/raw__dia2__ensaio_processado.csv"}
+    raiz = _process(client, project="P").get_json()["processed_file"]
+    assert raiz == "data/processed/P/ensaio_processado.csv", "na raiz, o nome de sempre"
+
+    # A mesma pasta enviada pela página (data/uploads) não cruza com a de data/raw
+    (dados.uploads / "dia1").mkdir(parents=True)
+    (dados.uploads / "dia1" / "ensaio.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
+    enviado = _process(client, file="data/uploads/dia1/ensaio.ASC", project="P").get_json()["processed_file"]
+    assert enviado == "data/processed/P/dia1__ensaio_processado.csv"
+
+
 def test_evolution_figure(webapp):
     from .lmr_synthetic import lmr_series
 
@@ -1195,3 +1314,97 @@ def test_evolution_figure_legend_follows_the_figure_language(webapp, monkeypatch
         assert resp.status_code == 200, resp.get_json()
     assert legendas == [["valley near 870.4 nm"], ["vale perto de 870,4 nm"]]
 
+
+# ── evolução: técnicas de posição, cache e caminhos ──────────────────────────
+
+@pytest.mark.parametrize("tecnica", ["gaussian", "lorentzian", "midpoint"])
+def test_evolution_position_can_be_a_shape_fit_or_the_width_midpoint(webapp, tecnica):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "settings": LMR_PREPARO,
+              "mode": "prominent"}
+    data = client.post("/api/spectra/evolution", json={**pedido, "locate": tecnica}).get_json()
+    pontos = data["tracks"][0]["points"]
+    assert data["locate"] == tecnica and data["warnings"] == []
+    assert {p["located"] for p in pontos} == {tecnica}
+    assert [p["wavelength"] for p in pontos] == pytest.approx([870, 866, 862], abs=2)
+    assert all(p["wavelength"] != p["vertex"] for p in pontos)
+
+    resp = client.post("/api/spectra/evolution", json={**pedido, "locate": "wavelet"})
+    assert resp.status_code == 400 and "Posição do extremo" in resp.get_json()["error"]
+
+
+def test_evolution_says_when_the_chosen_position_was_not_possible(webapp):
+    """Vales em dB com menos de 3 dB: sem largura, o ajuste gaussiano dá lugar ao vértice."""
+    dados, client = webapp
+    wl = np.linspace(1540.0, 1560.0, 801)
+    for i in range(2):
+        y = -2.0 * np.exp(-0.5 * ((wl - 1550.0 - 0.1 * i) / 0.5) ** 2)
+        linhas = [f"{a:.4f}\t{b:.6f}" for a, b in zip(wl, y)]
+        (dados.raw / f"raso_{i}.txt").write_text("\n".join(linhas) + "\n", encoding="utf-8")
+    data = client.post("/api/spectra/evolution", json={
+        "items": [{"file": f"data/raw/raso_{i}.txt"} for i in range(2)], "mode": "prominent",
+        "settings": {"intensity_scale": "db"}, "locate": "gaussian"}).get_json()
+    assert {p["located"] for p in data["tracks"][0]["points"]} == {"vertex"}
+    assert any("Sem o ajuste gaussiano em 2 ponto(s)" in aviso for aviso in data["warnings"])
+
+
+def test_changing_the_preparation_does_not_read_the_files_again(webapp):
+    from .lmr_synthetic import lmr_series
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0, 862.0))
+    cache = client.application.extensions["braggflow"].spectra
+    leituras, original = [], cache._loader
+    cache._loader = lambda path: leituras.append(path.name) or original(path)
+    pedido = {"items": [{"file": f"data/raw/{c.name}"} for c in caminhos], "mode": "prominent"}
+
+    client.post("/api/spectra/evolution", json={**pedido, "settings": LMR_PREPARO})
+    client.post("/api/spectra/evolution", json={**pedido, "settings": {**LMR_PREPARO, "smooth_window": 31}})
+    client.post("/api/spectra/evolution", json={**pedido, "kind": "max", "settings": LMR_PREPARO})
+    assert sorted(leituras) == sorted(c.name for c in caminhos), "cada arquivo é lido uma vez só"
+
+
+def test_spectra_of_the_same_instrument_share_one_wavelength_axis(webapp):
+    from braggflow.webapp.state import _spectrum_bytes
+
+    from .lmr_synthetic import WAVELENGTH, lmr_series, transmission, write_oceanview
+
+    dados, client = webapp
+    caminhos = lmr_series(dados.raw, resonances=(870.0, 866.0))
+    outro = write_oceanview(dados.raw / "curto.txt", transmission(800.0))
+    outro.write_bytes(b"\r\n".join(outro.read_bytes().split(b"\r\n")[:-200]) + b"\r\n")   # 199 pontos a menos: outro eixo
+    cache = client.application.extensions["braggflow"].spectra
+    a, b, c = (cache.get(caminho).spectra[0] for caminho in (*caminhos, outro))
+    assert a.wavelength is b.wavelength and a.intensity is not b.intensity
+    assert c.wavelength is not a.wavelength and len(c.wavelength) == WAVELENGTH.size - 199
+    with pytest.raises(ValueError):
+        a.wavelength[0] = 0.0                                 # dividido: ninguém pode alterar
+    assert _spectrum_bytes(cache.get(caminhos[0])) == 16 * WAVELENGTH.size
+
+
+def test_data_paths_are_resolved_once_per_folder_and_never_leave_the_data_folder(webapp, tmp_path):
+    dados, _ = webapp
+    (dados.raw / "sub").mkdir()
+    (dados.raw / "sub" / "b.txt").write_text("1\t2\n")
+    segredo = tmp_path / "fora.txt"
+    segredo.write_text("segredo")
+    pastas = {}
+    assert dados.resolve("data/raw/ensaio.ASC", pastas) == dados.resolve("data/raw/ensaio.ASC")
+    assert dados.resolve("data/raw/sub/b.txt", pastas) == dados.resolve("data/raw/sub/b.txt")
+    assert set(pastas) == {("raw",), ("raw", "sub")}
+    assert dados.rel(dados.resolve("data/raw/sub/b.txt", pastas)) == "data/raw/sub/b.txt"
+    for ruim in ("data/raw/../../fora.txt", "data/../fora.txt", "data/raw/nao_existe.txt", "data/raw/sub",
+                 "raw/ensaio.ASC", str(segredo)):
+        with pytest.raises(ValueError):
+            dados.resolve(ruim, pastas)
+    try:
+        (dados.raw / "atalho.txt").symlink_to(segredo)
+        (dados.raw / "pasta_atalho").symlink_to(tmp_path, target_is_directory=True)
+    except OSError:
+        return                                                # sem permissão para criar atalhos (Windows)
+    for ruim in ("data/raw/atalho.txt", "data/raw/pasta_atalho/fora.txt"):
+        with pytest.raises(ValueError):
+            dados.resolve(ruim, {})

@@ -142,9 +142,44 @@ itself did not change: the same input gives the same output as before.
 
   `braggflow.io.reader.read_catman_binary` reads the channels. Tests use
   synthetic `.BIN` files (`tests/catman_synthetic.py`).
+- Savitzky-Golay window and order chosen from the data: a button under the
+  filter fields in Séries temporais, and under the smoothing in Espectros,
+  fills them by leave-one-out cross-validation
+  (`braggflow.processing.filters.choose_savgol`; the filter is linear, so
+  the error of leaving each sample out comes from one filtering per
+  candidate). In Séries the note gives the −3 dB cut-off in Hz
+  (`savgol_cutoff`). On synthetic signals the choice lands within 10% of the
+  smallest error possible with the clean signal known.
+- Three more techniques for the position of a peak or valley, in the peaks
+  table and as "Posição" of the evolution: *ajuste gaussiano* and *ajuste
+  lorentziano* (centre of the curve fitted to the region above the width
+  level, as a weighted parabola through the logarithm or the inverse of the
+  height, without iteration) and *centro da largura* (midpoint between the
+  two crossings of the width level). `analyse_spectrum` returns `gaussian`,
+  `lorentzian` and `midpoint` for each extremum, and `LOCATE_METHODS` lists
+  the six choices of `spectra_evolution(locate=...)`.
+- "?" in the title of the "Evolução entre arquivos" card: every field
+  explained, with each position technique and when to use it.
 
 ### Changed
 
+- "Evolução entre arquivos" is faster. On a series of thousands of spectra the
+  first calculation takes about a third of the time, a recalculation (another
+  mode, reference, window or position) is more than ten times faster, and
+  changing the preparation no longer reads the files again. The results are
+  the same, to rounding.
+  - Each spectrum file is opened once instead of four times
+    (`load_spectra`), and the spectra read stay in memory by size (256 MB,
+    `SPECTRA_CACHE_BYTES`); spectra with the same wavelength axis share one
+    copy of it.
+  - Savitzky-Golay smoothing of a spectrum is one convolution with cached
+    coefficients (`savgol_smooth`, equal to `scipy.signal.savgol_filter` to
+    rounding), and the parabola fits are solved in closed form.
+  - "todos os do 1º arquivo" matches the valleys of consecutive files with
+    arrays instead of sorting every pair.
+  - In the page, stepping through the spectra moves the ring on the plot
+    instead of redrawing it, the table is only built when open, and the file
+    lists are rebuilt only when the files change.
 - Interface review (Impeccable critique, 25/40): the visual system stays
   ("A Bancada Organizada", recorded in `DESIGN.md`) and its weak points are
   fixed:
@@ -228,6 +263,20 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- Markers could only be added in the Séries temporais tab. The marker list now
+  also appears in the "Marcações e eixos" card of the Figura tab, for series
+  and spectra figures: add, change or remove a marker there and the figure,
+  the Séries plot, the statistics and the project follow. It is the same list,
+  moved to the open tab.
+
+- Joined files only worked as one signal for the "Processar juntos" click:
+  any later change (a filter, a sensor) reprocessed the first file alone and
+  was saved only in it. While the "Concatenação" card is open, the checked
+  files are now one signal for every processing (steps, "Processar", CSV
+  download, measurements, statistics, automatic Savitzky-Golay); the
+  settings on screen are saved in all of them, and opening or closing the
+  card switches between the join and the single file.
+
 - Switching projects left the "Evolução entre arquivos" (and the peaks and
   valleys table) of the previous project on screen. They are cleared, and the
   evolution is recomputed for the open project, also when its files or their
@@ -243,3 +292,41 @@ itself did not change: the same input gives the same output as before.
 
 - The "Projetos…" screen no longer erases a project name typed while the
   project list is still loading.
+- Fixes from the code review (`/ponytail-audit`):
+  - A new project, or a renamed one, with the name of an existing project
+    replaced it at the first autosave. The page now sends the creation date of
+    the open project, and the server only replaces the file with that date
+    (409 otherwise). The project screen refuses the name before that. A copy
+    made by renaming gets its own date, and the date is kept to the
+    microsecond, so it identifies the project. Undo and redo leave the date
+    alone.
+  - Uploading a file with the name of one already in `data/uploads/` replaced
+    it. A file with other content now goes in as `nome (2).ext`; the same
+    file again is reused.
+  - With null removal off, one lost reading made the moving average blank
+    the rest of the channel (915 of 1000 samples in the test). Missing
+    samples now stay where they are and leave their neighbours' windows.
+  - The server answers only its own page: requests with another `Host` (DNS
+    rebinding) or, for uploads and changes, another `Origin` are refused (403).
+  - Two files with the same name in different folders wrote the same
+    processed CSV. A file in a subfolder now gets the folder in the name
+    (`dia1__ensaio_processado.csv`, or `raw__dia1__…` for a subfolder of
+    `data/raw`, so it does not meet the same folder sent through the page);
+    files at the root keep their name. A result already processed from a
+    subfolder under the old name shows again after processing it once more.
+  - Processing requests in the Séries tab run one at a time, in order. Before,
+    clicking a long file and then another could draw the first one's answer
+    last, with the second file selected, and the CSV on disk could end up
+    with the older options.
+  - Projects, sensor setups and figure styles are written to a temporary file
+    and then put in place, so an interrupted save no longer leaves half a JSON.
+  - The last interval of the statistics left out the last sample.
+  - The evolution figure called raw spectra in dB (catman, OSA) "Transmissão
+    (dB)"; it now says "Intensidade (dB)".
+  - The spectra cache is limited by points (8 million, about 128 MB) instead
+    of by files, so hundreds of catman `.BIN` files (32,768 points each) do
+    not take half a gigabyte.
+  - "Baixar CSV" reuses the last processing instead of running it again, and
+    shares the CSV writer with `save_processed_data`
+    (`braggflow.io.processed.write_processed_csv`).
+  - The unused `processing.filters.detrend_signal` was removed.

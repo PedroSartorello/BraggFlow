@@ -35,7 +35,10 @@ A project keeps a whole analysis under a name: the files with their own sensors
 and processing steps, the concatenation order, the time markers, the spectra
 settings, the selected curves and the figure style
 (`data/projects/<name>.json`). Processed CSVs go to `data/processed/<project>/`, so two
-projects never overwrite each other's results. Opening a project only shows the
+projects never overwrite each other's results. A file in a subfolder gets the
+folder in the name of its CSV (`dia1__ensaio_processado.csv`; `raw__dia1__…`
+for a subfolder of `data/raw`), so two `ensaio.ASC` from different days do not
+share one. Opening a project only shows the
 saved state; "Processar" (or automatic reprocessing) writes the CSV.
 
 *Saving and undoing.* With "Salvar sozinho" on (the default, remembered in
@@ -44,8 +47,9 @@ header says "alterações…", "salvando…" or "salvo às 14:03" (a failed save
 shows "erro ao salvar", click to retry). Switching projects or closing the
 page saves what is pending first, without asking. The project name is saved
 when you leave the field or press Enter, not at each letter, since saving
-under another name makes a copy. A project deleted while open is not saved
-again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
+under another name makes a copy. A name already taken by another project is
+refused, on the project screen and when saving, so a project never replaces
+another. A project deleted while open is not saved again by itself. With "Salvar sozinho" off, "Salvar" (Ctrl+S) saves and the app
 asks before leaving a project with unsaved changes.
 
 The undo and redo buttons in the header (Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y
@@ -92,8 +96,32 @@ them by default.
 the work: *1 · Arquivos*, *2 · Sensores* (names, allowed bands and K_T,
 reusable as setups) and *3 · Etapas* (cleaning and sampling, filters and
 conversion, each with its parameters). The plot shows the processed signal
-over the raw one. Several files of one run can be joined in the "Concatenação"
-card, which appears once the project has two or more files. Shortcuts:
+over the raw one. "Escolher janela e ordem pelos dados", under the
+Savitzky-Golay fields, fills them from the signal itself: leave-one-out
+cross-validation on the signal as it reaches the filter (after cleaning,
+nulls, outliers and resampling) picks the window and order (2 or 4) that best
+predict each sample from its neighbours, and the note gives the resulting
+−3 dB cut-off in Hz. With resampling on, neighbouring samples are correlated
+and the window tends to come out short; the note says so.
+
+*Joining files.* Several files of one run can be joined in the
+"Concatenação" card, which appears once the project has two or more files.
+While the card is open, the files checked in the list are one signal, in the
+order of the card:
+- every processing works on the join: changing a step, "Processar",
+  "Baixar CSV", the measurements, the statistics and the automatic
+  Savitzky-Golay;
+- the sensors and steps on screen apply to all of them, and the project saves
+  them in each file;
+- the status reads "N arquivos juntos", and the CSV is
+  `<first>_juntos_processado.csv`.
+
+Checking, unchecking or moving a file reprocesses the join. Clicking a file
+that is not checked shows it alone, and closing the card goes back to the
+file selected in the list. "Processar marcados" still processes each checked
+file on its own.
+
+Shortcuts:
 Ctrl+Enter processes, Ctrl+S saves the project.
 
 *Hiding a column.* "ocultar" on a sensor row leaves that column out of
@@ -109,7 +137,10 @@ statistics) are made on the plot with the *Marcar* tool: a click adds one, and
 dragging a marker line changes its instant. With the other tools a click adds
 nothing, so zooming never leaves stray markers. They are listed, with label
 and colour, in the "Marcações" panel under the plot, where they can also be
-typed in.
+typed in. The same list moves to the "Marcações e eixos" card of the Figura
+tab while that tab is open (for figures of series, in s, and of spectra, in
+nm), so markers can be added, changed and removed there too; it is one list,
+and a change in either tab shows in the other.
 
 The toolbar above the plot chooses how to look at it (display only, the
 processing does not change; the choice is remembered in this browser):
@@ -144,7 +175,9 @@ exports with or without header), from one file to hundreds.
 
 *Files.* "Importar pasta" (or dropping a folder on the empty page) sends a
 whole folder at once, kept as `data/uploads/<folder>/`; files of other types
-in it (notes, photos) are left out without an error. A subfolder of
+in it (notes, photos) are left out without an error. A file with the name of
+one already sent, but other content, goes in as `nome (2).ext` instead of
+replacing it. A subfolder of
 `data/raw` or `data/uploads` shows up as one button, "N arquivo(s) ·
 adicionar todos", and as a group in "Adicionar arquivos ao projeto", which
 also has a name filter. The project list is sorted by name (01, 02… 10),
@@ -165,14 +198,18 @@ converted with themselves. The preparation is applied in this order:
    dark, or `S − D` without source. Left empty, the spectrum is analysed as
    it is — raw counts, or transmission already computed by the spectrometer.
 2. Wavelength window, smoothing (Savitzky-Golay or moving average).
+   "Escolher a janela pelos dados" picks the window (and the order, for
+   Savitzky-Golay) the same way, on the open spectrum cropped and not yet
+   smoothed, and gives it in points and in nm.
 3. *Remove trend*: subtracts a polynomial (degree 0–4) fitted to the window,
    so shallow valleys on a sloping baseline (LMR, SPR, fringes) stand out.
 4. Normalisation and vertical offset.
 
-Detection of maxima and minima with position (3-point vertex and the vertex
-of a least-squares parabola fitted to the bottom, "λ ajuste"), prominence,
-FWHM or 3-dB band, Q factor, centroid and spacing; results table with CSV
-export.
+Detection of maxima and minima with position by six techniques (3-point
+vertex; vertex of a least-squares parabola fitted to the bottom, "λ ajuste";
+centroid; centre of a fitted Gaussian and of a fitted Lorentzian; midpoint
+between the two crossings of the width level), prominence, FWHM or 3-dB band,
+Q factor and spacing; results table with CSV export.
 
 *Evolução entre arquivos* (under the spectrum plot) follows a valley (or
 peak) across the spectra of the project, in acquisition order (header `Date:`
@@ -196,8 +233,19 @@ evolution, are left out. Modes:
 of a parabola fitted to the points within ⅓ of the width on each side of the
 valley, which uses tens of points and is several times less noisy than the
 *vértice* of 3 points on broad valleys (LMR, SPR); *centroide* is the centre
-of mass above half depth. Where the fit is not possible, the 3-point vertex is
-used and a warning says how many points.
+of mass above half depth; *ajuste gaussiano* and *ajuste lorentziano* are the
+centre of that curve fitted to the same region (a weighted parabola through
+the logarithm or the inverse of the depth, with no iteration), for valleys or
+peaks with that shape; *centro da largura* is the midpoint between the two
+crossings of the half-depth level, which ignores the bottom and suits flat or
+saturated valleys, but is noisier than the fits. All of them assume a flat
+baseline around the valley: on a sloping one, turn on "remover tendência".
+Where the chosen technique gives no result (a valley too shallow or cut by
+the edge of the spectrum has no width), the 3-point vertex is used and a
+warning says in how many points.
+
+The "?" in the title of the card opens the explanation of every field, with
+each technique and when to use it.
 
 Clicking a point of the evolution opens that spectrum above; the arrow buttons walk through
 the files in evolution order, and "Tirar da evolução" leaves an outlier out
@@ -205,8 +253,10 @@ the files in evolution order, and "Tirar da evolução" leaves an outlier out
 brings them back). Files that cannot be read are skipped with a warning
 instead of stopping the calculation, and so are files without a valley in the
 window (an empty point). The prepared spectra and their valleys are cached by
-file, preparation, source and dark: changing λ ref, the window or the mode
-recomputes hundreds of files at once. Plot λ, Δλ to the first file,
+file, preparation, source and dark: changing λ ref, the window, the mode or
+the position technique recomputes thousands of files in a fraction of a
+second, and changing the preparation does not read the files again (the
+spectra read stay in memory, up to 256 MB). Plot λ, Δλ to the first file,
 intensity, depth or width against elapsed time or file order; table and CSV
 with every value; "Fazer figura" opens it in the Figura tab.
 

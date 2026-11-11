@@ -28,6 +28,7 @@ import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import numpy as np
 from flask import Blueprint, Flask, current_app, g, jsonify, render_template, request, send_file
@@ -42,7 +43,9 @@ from braggflow.io.processed import (
     metadata_path_for,
     read_metadata,
     read_processed_header,
+    write_processed_csv,
 )
+from braggflow.paths import write_text_atomic
 from braggflow.io.reader import (
     DESCRIPTOR_EXTENSIONS,
     concat_plan,
@@ -51,6 +54,7 @@ from braggflow.io.reader import (
 )
 from braggflow.pipeline import OpticalPipeline
 from braggflow.processing import estimate_sampling_rate
+from braggflow.processing.filters import choose_savgol, savgol_cutoff
 from braggflow.projects import Project
 from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
 from braggflow.sensors import SensorSetup
@@ -117,7 +121,7 @@ MAX_UPLOAD_DEPTH = 3
 
 # Mude junto com o literal API_BUILD em static/js/core.js sempre que as
 # rotas mudarem: é assim que a página percebe um servidor ainda sem reiniciar.
-API_BUILD = "2026-11-03"
+API_BUILD = "2026-11-10"
 
 bp = Blueprint("braggflow", __name__)
 
@@ -157,6 +161,22 @@ def _restore_language(_erro=None):
         reset_language(token)
 
 
+# O app só atende a própria página: um site aberto no navegador não pode
+# enviar arquivos nem apagar projetos (Origin de outro site), nem ler os dados
+# por um domínio que aponta para 127.0.0.1 (DNS rebinding: o Host não é local)
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+@bp.before_request
+def _only_this_page():
+    if urlsplit(f"//{request.host}").hostname not in LOCAL_HOSTS:
+        return jsonify({"error": tr("app.foreignRequest")}), 403
+    origem = request.headers.get("Origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origem and urlsplit(origem).netloc != request.host:
+        return jsonify({"error": tr("app.foreignRequest")}), 403
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -174,8 +194,31 @@ def _rel(path: Path) -> str:
     return _data().rel(path)
 
 
+def _memo(nome: str) -> dict:
+    """
+    Anotações que valem só enquanto o pedido é atendido (caminhos resolvidos,
+    data e tamanho dos arquivos): uma evolução pede a mesma fonte e o mesmo
+    fundo milhares de vezes, e cada consulta ao disco custa.
+    """
+    if "_memo" not in g:
+        g._memo = {}
+    return g._memo.setdefault(nome, {})
+
+
 def _resolve_data_file(rel_path: str) -> Path:
-    return _data().resolve(rel_path)
+    vistos = _memo("paths")
+    if rel_path not in vistos:
+        vistos[rel_path] = _data().resolve(rel_path, _memo("folders"))
+    return vistos[rel_path]
+
+
+def _signature(path: Path) -> tuple:
+    """Caminho, data de modificação e tamanho: muda quando o arquivo muda."""
+    vistos = _memo("signatures")
+    if path not in vistos:
+        stat = path.stat()
+        vistos[path] = (str(path), stat.st_mtime_ns, stat.st_size)
+    return vistos[path]
 
 
 def _list_raw_files() -> list[dict]:
@@ -250,6 +293,15 @@ def _acquisition(spectra) -> dict:
     return {"acquired": texto, "acquired_from": spectra.acquired_from}
 
 
+def _settings_key(settings: dict) -> str:
+    """O preparo como texto, para as chaves do cache: montado uma vez por preparo e por pedido."""
+    vistos = _memo("settings")
+    achado = vistos.get(id(settings))
+    if achado is None or achado[0] is not settings:
+        achado = vistos[id(settings)] = (settings, json.dumps(settings, sort_keys=True, default=str))
+    return achado[1]
+
+
 def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
     """
     Extremos de um espectro já preparado, com a unidade e o instante da
@@ -260,7 +312,7 @@ def _spectrum_extrema(path: Path, trace: str, settings: dict) -> dict:
     deps = [path] + [_resolve_data_file(settings[k])
                      for k in ("reference_file", "dark_file") if settings.get(k)]
     cache = _state().analyses
-    chave = cache.key({"trace": trace, "settings": settings}, deps)
+    chave = (trace, _settings_key(settings), *(_signature(p) for p in deps))
     pronto = cache.get(chave)
     if pronto is None:
         spectra = _state().spectra.get(path)
@@ -298,6 +350,7 @@ def _compute_evolution(options: dict) -> dict:
     comum = options.get("settings") or {}
     kind = opts["kind"]
     entradas, unidades, ignorados, vistos = [], set(), [], set()
+    preparos = {}       # o preparo comum é validado uma vez, não uma por arquivo
     for item in options.get("items") or []:
         arquivo = str(item.get("file") or "")
         trace = str(item.get("trace") or "")
@@ -306,10 +359,12 @@ def _compute_evolution(options: dict) -> dict:
         vistos.add((arquivo, trace))
         try:
             path = _resolve_data_file(arquivo)
-            settings = resolve_spectrum_settings(
-                {**(item.get("settings") or comum), "find_min": kind == "min",
-                 "find_max": kind == "max", "max_peaks": EVOLUTION_MAX_PEAKS},
-                prefix=f"[{path.name}] ")
+            bruto = item.get("settings") or comum
+            settings = preparos.get(id(bruto))
+            if settings is None:
+                settings = preparos[id(bruto)] = resolve_spectrum_settings(
+                    {**bruto, "find_min": kind == "min", "find_max": kind == "max",
+                     "max_peaks": EVOLUTION_MAX_PEAKS}, prefix=f"[{path.name}] ")
             pronto = _spectrum_extrema(path, trace, settings)
         except Exception as e:
             ignorados.append({"file": arquivo, "error": str(e)})
@@ -360,7 +415,9 @@ def _compute_evolution(options: dict) -> dict:
         sem = sum(1 for t in resultado["tracks"] for p in t["points"]
                   if p is not None and p["located"] != opts["locate"])
         if sem:
-            metodo = tr("app.methodFit" if opts["locate"] == "fit" else "app.methodCentroid")
+            metodo = tr({"fit": "app.methodFit", "centroid": "app.methodCentroid",
+                         "gaussian": "app.methodGaussian", "lorentzian": "app.methodLorentzian",
+                         "midpoint": "app.methodMidpoint"}[opts["locate"]])
             avisos.append(tr("app.locateFallback", method=metodo, n=sem))
     inicio = datetime.fromisoformat(resultado["start"]) if resultado["start"] else None
     for evento in eventos:
@@ -476,35 +533,47 @@ def _series_entries(options: dict) -> list[dict]:
     return [{"file": file, "channel": channel} for channel in channels]
 
 
-def _series_items(options: dict, style: dict, markers: list):
+def _series_curves(options: dict, data_s: dict) -> list[dict]:
     """
-    Curvas de série no tempo, possivelmente de vários CSVs processados.
-    Retorna ``(items, xlabel, ylabel, divisor, markers)``.
+    As curvas pedidas dos CSVs processados, para a figura e para a análise:
+    ``key`` (o canal, ou ``arquivo · canal`` com vários CSVs), a tabela
+    (``df``), os valores como aparecem no gráfico (``y``), ``unit`` e
+    ``is_shift``.
     """
     entries = _series_entries(options)
-    if not entries:
-        raise ValueError(tr("app.selectCurve"))
-
-    offset = marker_offset(markers, style["data"])
-    markers = shift_markers(markers, offset)
     several = len({entry["file"] for entry in entries}) > 1
-
-    items, unit, is_shift, divisor = [], "nm", False, 1.0
+    curvas = []
     for entry in entries:
         path = _resolve_data_file(entry["file"])
         df, units, quantities = _state().processed.get(path)
         channel = entry["channel"]
         if channel not in df.columns:
             raise ValueError(tr("app.channelMissing", channel=channel, file=path.name))
-
-        x, divisor = time_axis(df, style["data"], offset)
-        y, unit, is_shift = channel_values(df, units, quantities, channel, style["data"])
+        y, unit, is_shift = channel_values(df, units, quantities, channel, data_s)
         stem = path.stem.removesuffix("_processado")
-        key = f"{stem} · {channel}" if several else channel
-        items.append({"key": key, "label": key, "x": x, "y": y})
+        curvas.append({"key": f"{stem} · {channel}" if several else channel,
+                       "df": df, "y": y, "unit": unit, "is_shift": is_shift})
+    return curvas
 
-    xlabel, ylabel = series_labels(unit, is_shift, style["data"]["time_unit"],
-                                   style["axes"]["language"])
+
+def _series_items(options: dict, style: dict, markers: list):
+    """
+    Curvas de série no tempo, possivelmente de vários CSVs processados.
+    Retorna ``(items, xlabel, ylabel, divisor, markers)``.
+    """
+    curvas = _series_curves(options, style["data"])
+    if not curvas:
+        raise ValueError(tr("app.selectCurve"))
+
+    offset = marker_offset(markers, style["data"])
+    markers = shift_markers(markers, offset)
+    items, divisor = [], 1.0
+    for curva in curvas:
+        x, divisor = time_axis(curva["df"], style["data"], offset)
+        items.append({"key": curva["key"], "label": curva["key"], "x": x, "y": curva["y"]})
+
+    xlabel, ylabel = series_labels(curvas[-1]["unit"], curvas[-1]["is_shift"],
+                                   style["data"]["time_unit"], style["axes"]["language"])
     return items, xlabel, ylabel, divisor, markers
 
 
@@ -543,9 +612,19 @@ def _requested_files(options: dict) -> list[Path]:
 
 
 def _processed_name(options: dict) -> str:
-    """``<primeiro>_processado.csv``; com vários arquivos, ``_juntos``."""
+    """
+    ``<primeiro>_processado.csv``; com vários arquivos, ``_juntos``. Um
+    arquivo numa subpasta leva a pasta no nome (``dia1__ensaio``): dois
+    ``ensaio.ASC`` de pastas diferentes não gravam o mesmo CSV. Em data/raw,
+    leva também ``raw__``, para não cruzar com a mesma pasta enviada pela
+    página (data/uploads). ``loadVizSources`` (viz.js) monta o mesmo nome.
+    """
     arquivos = options.get("files") or [options.get("file", "")]
-    stem = Path(arquivos[0]).stem
+    partes = Path(arquivos[0]).parts
+    raiz, pastas = (partes[1], partes[2:-1]) if partes[:1] == (DataFolder.PREFIX,) else ("", ())
+    if pastas and raiz == "raw":
+        pastas = ("raw", *pastas)
+    stem = "__".join([*pastas, Path(arquivos[0]).stem])
     return f"{stem}_juntos" if len(arquivos) > 1 else stem
 
 
@@ -837,6 +916,29 @@ def api_spectrum_preview():
                     **_acquisition(spectra)})
 
 
+@bp.route("/api/spectra/smoothing-auto", methods=["POST"])
+def api_spectrum_smoothing_auto():
+    """
+    Janela da suavização do espectro (e a ordem, no Savitzky-Golay) escolhida
+    pelos dados, por validação cruzada (``choose_savgol``), no espectro como
+    chega à suavização: recortado e convertido em transmissão, se for o caso.
+    Corpo: ``{file, settings}``, como em ``/api/spectra/preview``.
+    """
+    options = request.get_json(silent=True) or {}
+    try:
+        path = _resolve_data_file(options.get("file", ""))
+        spectra = _state().spectra.get(path)
+        settings = resolve_spectrum_settings({**(options.get("settings") or {}), "smooth_window": None,
+                                              "detrend": None, "normalize": "none", "offset": 0})
+        preparados = [_prepared(spectrum, settings) for spectrum in spectra.spectra]
+        savgol = settings["smooth_method"] == "savgol"
+        escolha = choose_savgol([y for _, y in preparados], orders=(2, 4) if savgol else (0,))
+        passo = float(np.median(np.diff(preparados[0][0])))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({**escolha, "method": settings["smooth_method"], "window_nm": escolha["window"] * passo})
+
+
 @bp.route("/api/spectra/evolution", methods=["POST"])
 def api_spectrum_evolution():
     """
@@ -987,26 +1089,11 @@ def _analysis_curves(options: dict, style: dict):
     if _is_spectrum_request(options) or _is_evolution_request(options):
         raise ValueError(tr("app.analysisSeriesOnly"))
 
-    entries = _series_entries(options)
-    if not entries:
+    curvas = _series_curves(options, style["data"])
+    if not curvas:
         raise ValueError(tr("app.checkCurve"))
-    several = len({entry["file"] for entry in entries}) > 1
-
-    curvas, unidade = [], "nm"
-    for entry in entries:
-        path = _resolve_data_file(entry["file"])
-        df, units, quantities = _state().processed.get(path)
-        channel = entry["channel"]
-        if channel not in df.columns:
-            raise ValueError(tr("app.channelMissing", channel=channel, file=path.name))
-        values, unidade, _ = channel_values(df, units, quantities, channel, style["data"])
-        stem = path.stem.removesuffix("_processado")
-        curvas.append({
-            "key": f"{stem} · {channel}" if several else channel,
-            "time": df["Time"].to_numpy(dtype=float),
-            "values": values,
-        })
-    return curvas, unidade
+    return ([{"key": c["key"], "time": c["df"]["Time"].to_numpy(dtype=float), "values": c["y"]}
+             for c in curvas], curvas[-1]["unit"])
 
 
 @bp.route("/api/analysis", methods=["POST"])
@@ -1084,8 +1171,7 @@ def api_style_save():
     try:
         path = _style_path(str(options.get("name", "")))
         style = resolve_style(options.get("style"))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(style, indent=2, ensure_ascii=False), encoding="utf-8")
+        write_text_atomic(path, json.dumps(style, indent=2, ensure_ascii=False))
     except (ValueError, TypeError, KeyError, OSError) as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"name": path.stem})
@@ -1127,9 +1213,15 @@ def api_project_save():
     data = request.get_json(silent=True) or {}
     try:
         path = _project_path(str(data.get("name", "")))
-        # Preserva a data de criação quando o projeto já existe
         if path.is_file():
-            data = {**data, "created": Project.load(path).created}
+            # Só substitui o projeto que a página abriu (a mesma data de
+            # criação): um projeto novo, ou renomeado, com o nome de outro não o apaga
+            criado = json.loads(path.read_text(encoding="utf-8")).get("created")
+            if criado and str(data.get("created") or "") != criado:
+                return jsonify({"error": tr("app.projectExists", name=path.stem)}), 409
+            data = {**data, "created": criado or ""}
+        else:
+            data = {**data, "created": ""}      # projeto novo ou cópia (renomear): data própria
         project = Project.from_dict(data)
         project.name = path.stem
         project.save(path)
@@ -1177,9 +1269,16 @@ def _save_upload(file) -> str:
     if suffix not in RAW_EXTENSIONS:
         raise ValueError(tr("app.badExtension", name=nome, suffix=suffix or tr("app.noExtension"),
                             accepted=", ".join(sorted(RAW_EXTENSIONS))))
-    dest = _upload_destination(file.filename)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    file.save(dest)
+    # Um arquivo com o mesmo nome e outro conteúdo não substitui o que já
+    # está lá (um projeto pode usá-lo): vai como "nome (2).ext"
+    dest, dados = _upload_destination(file.filename), file.read()
+    original, n = dest, 1
+    while dest.is_file() and dest.read_bytes() != dados:
+        n += 1
+        dest = original.with_name(f"{original.stem} ({n}){original.suffix}")
+    if not dest.is_file():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(dados)
     return _rel(dest)
 
 
@@ -1259,6 +1358,32 @@ def api_process():
     return jsonify(payload)
 
 
+@bp.route("/api/savgol/auto", methods=["POST"])
+def api_savgol_auto():
+    """
+    Janela e ordem do Savitzky-Golay escolhidas pelos dados, por validação
+    cruzada (``choose_savgol``), no sinal como chega ao filtro: depois do
+    recorte, da limpeza, dos nulos, dos outliers e da reamostragem, sem os
+    filtros nem o Δλ. Corpo: as mesmas opções de ``/api/process``. Devolve
+    também o corte de −3 dB em Hz.
+    """
+    options = request.get_json(silent=True) or {}
+    try:
+        antes_do_filtro = {**options, **{etapa: {"enabled": False} for etapa in (
+            "savgol", "moving_average", "lowpass", "highpass", "delta_lambda", "temp_comp")}}
+        pipeline, _, _ = _run_pipeline(antes_do_filtro)
+        t, sig, _ = pipeline.get_data()
+        escolha = choose_savgol([sig[:, i] for i in range(sig.shape[1])])
+        fs = estimate_sampling_rate(t)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    avisos = []
+    if (options.get("timebase") or {}).get("resample"):
+        avisos.append(tr("app.autoResampled"))
+    return jsonify({**escolha, "fs": fs, "warnings": avisos,
+                    "cutoff_hz": savgol_cutoff(escolha["window"], escolha["order"]) * fs})
+
+
 @bp.route("/api/series/stats", methods=["POST"])
 def api_series_stats():
     """
@@ -1322,21 +1447,18 @@ def api_series_intervals():
 
 @bp.route("/api/download", methods=["POST"])
 def api_download():
-    """Reprocessa com as mesmas opções e devolve o CSV completo (sem downsample)."""
+    """O CSV completo (sem downsample) da receita; reaproveita o último processamento."""
     options = request.get_json(silent=True) or {}
     if not (options.get("file") or options.get("files")):
         return jsonify({"error": tr("app.noFileInRequest")}), 400
 
     try:
-        pipeline, _, _ = _run_pipeline(options)
+        t, sig, channels, units = _processed_result(options)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-    t, sig, _ = pipeline.get_data()
     buf = io.StringIO()
-    np.savetxt(buf, np.hstack((t.reshape(-1, 1), sig)), delimiter=",",
-               header=pipeline.csv_header(), comments="")
-    buf.seek(0)
+    write_processed_csv(buf, t, sig, channels, units)
 
     stem = _processed_name(options)
     return send_file(

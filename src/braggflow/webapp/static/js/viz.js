@@ -162,10 +162,14 @@ export async function loadVizSources(pending) {
     const data = await resp.json();
     const checked = marked("viz-series-source");
     if (pending) checked.add(pending);
-    // Só os CSVs dos arquivos que estão no projeto, inclusive o de uma junção
+    // Só os CSVs dos arquivos que estão no projeto, inclusive o de uma junção;
+    // o nome leva a subpasta, como em _processed_name (app.py): dia1__ensaio,
+    // ou raw__dia1__ensaio numa subpasta de data/raw
     const doProjeto = new Set();
     projectSeriesPaths().forEach((path) => {
-      const stem = shortName(path).split("/").pop().replace(/\.[^.]+$/, "");
+      const [raiz, ...partes] = shortName(path).split("/");
+      if (raiz === "raw" && partes.length > 1) partes.unshift("raw");
+      const stem = partes.join("__").replace(/\.[^.]+$/, "");
       doProjeto.add(`${data.folder}/${stem}_processado.csv`);
       doProjeto.add(`${data.folder}/${stem}_juntos_processado.csv`);
     });
@@ -619,6 +623,22 @@ function resetStyle() {
 }
 
 // ── Marcações ────────────────────────────────────────────────────────────────
+// A lista é uma só: fica embaixo do gráfico das Séries ou no cartão
+// "Marcações e eixos" da Figura, conforme a aba aberta
+const MARKER_PARTS = ["marker-hint", "marker-list", "btn-add-marker"];
+export function placeMarkerList(aba) {
+  const destino = aba === "viz" ? $("viz-markers-slot") : $("card-markers");
+  MARKER_PARTS.forEach((id) => destino.appendChild($(id)));
+  showMarkerCount();
+}
+
+function showMarkerCount() {
+  const n = collectMarkers().length;
+  $("marker-count").textContent = n ? `(${n})` : "";
+  if (n) setText($("viz-marker-count"), "viz.markerCountSome", { n });
+  else setText($("viz-marker-count"), "viz.markerCountNone");
+}
+
 // Cada marcação nova pega a próxima cor: intervalos vizinhos não se confundem
 const MARKER_COLORS = ["#4682B4", "#2E8B57", "#8B008B", "#C0392B", "#D35400", "#7F8C8D"];
 
@@ -705,10 +725,7 @@ export function moveMarker(indice, x) {
 
 export function drawPlotMarkers() {
   scheduleAnalysis();
-  const n = collectMarkers().length;
-  $("marker-count").textContent = n ? `(${n})` : "";
-  if (n) setText($("viz-marker-count"), "viz.markerCountSome", { n });
-  else setText($("viz-marker-count"), "viz.markerCountNone");
+  showMarkerCount();
   if ($("plot").data) Plotly.relayout($("plot"), plotDecorations());
   refreshStyleState();
 }
