@@ -14,8 +14,9 @@ o cabeçalho ``Accept-Language`` em todo pedido, e cada pedido usa esse idioma
 (``braggflow.i18n``); sem o cabeçalho, português.
 
 Uso:
-    braggflow-web [--port 5000] [--data-dir DIR]
-    # abra http://127.0.0.1:5000
+    braggflow-web [--port 5000] [--data-dir DIR] [--no-browser]
+    python -m braggflow.webapp.app [os mesmos argumentos]
+    # abre o navegador em http://127.0.0.1:5000 (ou na próxima porta livre)
 """
 
 import base64
@@ -1469,19 +1470,57 @@ def api_download():
     )
 
 
+DEFAULT_PORT = 5000
+
+
+def _port_free(port: int) -> bool:
+    """Se dá para escutar em 127.0.0.1:``port`` agora."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def choose_port(requested=None, tries: int = 20) -> int:
+    """
+    Porta do servidor. Pedida com ``--port``, é ela (ocupada, o servidor diz
+    o porquê ao subir). Sem pedido, a 5000 ou a próxima livre: no macOS o
+    receptor AirPlay ocupa a 5000, e outro BraggFlow aberto também.
+    """
+    if requested is not None:
+        return requested
+    for port in range(DEFAULT_PORT, DEFAULT_PORT + tries):
+        if _port_free(port):
+            return port
+    raise SystemExit(f"Nenhuma porta livre entre {DEFAULT_PORT} e {DEFAULT_PORT + tries - 1}: "
+                     "escolha uma com --port.")
+
+
 def main(argv=None) -> None:
-    """Ponto de entrada do comando ``braggflow-web``."""
+    """Ponto de entrada de ``braggflow-web`` e de ``python -m braggflow.webapp.app``."""
     import argparse
+    import webbrowser
 
     parser = argparse.ArgumentParser(prog="braggflow-web", description="BraggFlow — interface web")
-    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--port", type=int, default=None,
+                        help=f"Porta (padrão: {DEFAULT_PORT} ou a próxima livre)")
     parser.add_argument("--data-dir", default=None,
                         help="Pasta de dados (padrão: $BRAGGFLOW_DATA_DIR ou ./data)")
+    parser.add_argument("--no-browser", action="store_true", help="Não abrir o navegador")
     args = parser.parse_args(argv)
     app = create_app(args.data_dir)
     pasta = app.extensions["braggflow"].data.root
-    print(f"BraggFlow web — http://127.0.0.1:{args.port}  (dados em {pasta})")
-    app.run(host="127.0.0.1", port=args.port, debug=False)
+    port = choose_port(args.port)
+    url = f"http://127.0.0.1:{port}"
+    print(f"BraggFlow web — {url}  (dados em {pasta})", flush=True)
+    if not args.no_browser:
+        # Depois de o servidor subir; sem navegador (servidor remoto), não faz nada
+        threading.Timer(1.0, webbrowser.open, [url]).start()
+    app.run(host="127.0.0.1", port=port, debug=False)
 
 
 if __name__ == "__main__":

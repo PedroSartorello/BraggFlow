@@ -14,15 +14,18 @@ The web app is described in [`webapp.md`](webapp.md).
 
 ## Installation
 
-```bash
-git clone https://github.com/PedroSartorello/BraggFlow.git
-cd BraggFlow
-pip install -e .            # or: pip install -e ".[dev]" to run the tests
-```
+Follow the [quick start](../README.md#quick-start): it clones the
+repository, creates a virtual environment in `.venv` and installs into it
+with `.venv\Scripts\python -m pip install -e .` (Windows) or
+`.venv/bin/python -m pip install -e .` (Linux, macOS); `-e ".[dev]"` adds
+pytest. If a step fails, see
+[Installation problems](webapp.md#installation-problems).
 
 This installs the `braggflow` package and the `braggflow` and
-`braggflow-web` commands. `pip install -r requirements.txt` does the same with
-the dev extra. Coming from an older checkout (imports of the old `src` package,
+`braggflow-web` commands. Run your scripts with the same Python
+(`.venv\Scripts\python my_script.py`), or activate the environment first.
+Installing from `requirements.txt` (`-r requirements.txt` in place of `-e .`)
+gives the same plus the dev extra. Coming from an older checkout (imports of the old `src` package,
 `python main.py`, `python webapp/app.py`)? See
 [`docs/migration.md`](migration.md).
 
@@ -299,10 +302,10 @@ BraggFlow/
 ## Running tests
 
 ```bash
-pip install -e ".[dev]"
-pytest
+python -m pip install -e ".[dev]"     # with the Python of .venv
+python -m pytest
 ```
 
 The browser tests in `tests/e2e/` (the web app driven in Chromium) run too
-when Playwright is installed: `pip install -e ".[e2e]"` and
-`playwright install chromium`.
+when Playwright is installed: `python -m pip install -e ".[e2e]"` and
+`python -m playwright install chromium`.

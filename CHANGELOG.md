@@ -263,6 +263,23 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- The quick start in the README failed on other computers. It is now one
+  block for Windows and one for Linux and macOS, run line by line, that
+  creates `.venv` and calls its Python directly, so it no longer depends on:
+  - `&&`, which Windows PowerShell 5.1 does not accept;
+  - `python` on Windows, often only the Microsoft Store shortcut (`py` instead),
+    or on Linux and macOS, where it is `python3`;
+  - activating the environment, which PowerShell blocks by default;
+  - `pip` outside a virtual environment, refused by recent Linux and Homebrew
+    (`externally-managed-environment`);
+  - `braggflow-web.exe`, which Smart App Control blocks on Windows 11
+    (`python -m braggflow.webapp.app` instead).
+  `docs/webapp.md` gained "Installation problems", with each usual message
+  and what to do; CONTRIBUTING and the library guide follow the same steps.
+- The web app opens the browser when it starts (`--no-browser` to skip) and,
+  without `--port`, takes the next free port when 5000 is taken, as by the
+  AirPlay receiver on macOS (`choose_port`).
+
 - Markers could only be added in the Séries temporais tab. The marker list now
   also appears in the "Marcações e eixos" card of the Figura tab, for series
   and spectra figures: add, change or remove a marker there and the figure,
