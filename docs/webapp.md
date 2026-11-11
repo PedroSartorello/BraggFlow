@@ -6,11 +6,27 @@ publication figures. It runs locally; nothing leaves your computer.
 
 ## Start it
 
-```bash
-braggflow-web                         # http://127.0.0.1:5000
-braggflow-web --port 5001
-braggflow-web --data-dir /path/to/my/data
+After the [quick start](../README.md#quick-start), from the `BraggFlow`
+folder. On Windows:
+
+```bat
+.venv\Scripts\python -m braggflow.webapp.app
 ```
+
+On Linux and macOS:
+
+```bash
+.venv/bin/python -m braggflow.webapp.app
+```
+
+It opens the browser on http://127.0.0.1:5000, or on the next free port when
+5000 is taken (on macOS the AirPlay receiver uses it). Options:
+
+- `--port 5001` serves on that port;
+- `--data-dir /path/to/my/data` uses another data folder;
+- `--no-browser` does not open the browser.
+
+With the virtual environment activated, `braggflow-web` is the same command.
 
 The data folder is `--data-dir`, else `$BRAGGFLOW_DATA_DIR`, else `./data` in
 the directory you start it from; the subfolders are created on start (see
@@ -18,16 +34,54 @@ the directory you start it from; the subfolders are created on start (see
 and has no login, so it is meant for your own machine. The page loads Plotly
 from a CDN, so the first load needs internet access.
 
-Quick try with the example data:
+Quick try with the example data: run `examples/make_synthetic_data.py` with
+the same Python (the quick start does), start the app, create a project in
+the start screen and add `examples/data/synthetic_interrogator.asc` with
+"Escolher no computador" (or drop it on the page).
 
-```bash
-python examples/make_synthetic_data.py
-braggflow-web
-```
+## Installation problems
 
-then, in the start screen, create a project and add
-`examples/data/synthetic_interrogator.asc` with "Escolher no computador" (or
-drop it on the page).
+The message you see, and what to do. Commands are written for Windows; on
+Linux and macOS, `.venv/bin/python` takes the place of `.venv\Scripts\python`.
+
+- **`The token '&&' is not a valid statement separator`** (Windows
+  PowerShell 5.1): it does not chain commands with `&&`. Run one command per
+  line.
+- **`Python was not found; run without arguments to install from the
+  Microsoft Store`**: `python` is only the Store shortcut. Install Python from
+  [python.org](https://www.python.org/downloads/) and use `py`, as in the
+  quick start.
+- **`'py' is not recognized`** (Python installed from the Microsoft Store):
+  use `python -m venv .venv` instead; the other lines stay the same.
+- **`running scripts is disabled on this system`** / **`a execução de scripts
+  foi desabilitada neste sistema`** when activating `.venv`: PowerShell blocks
+  `Activate.ps1`. You do not need to activate: the commands call
+  `.venv\Scripts\python` directly.
+- **`An Application Control policy has blocked this file`** /
+  **`Uma política de Controle de Aplicativo bloqueou este arquivo`** on
+  `braggflow-web.exe` (Windows 11, Smart App Control): pip writes that file
+  unsigned. Start with `.venv\Scripts\python -m braggflow.webapp.app`, which
+  runs the signed `python.exe`.
+- **`'braggflow-web' is not recognized`** / **`command not found`**: the
+  command only exists inside the virtual environment. Use the `python -m`
+  line above.
+- **`requires a different Python: 3.9.6 not in '>=3.10'`** (often macOS,
+  whose `python3` from the Xcode tools is 3.9): install a newer Python from
+  [python.org](https://www.python.org/downloads/) or Homebrew, delete the
+  `.venv` folder and create it again with that Python (`python3.13 -m venv
+  .venv`).
+- **`ensurepip is not available`** (Debian, Ubuntu): install the venv module
+  with `sudo apt install python3-venv`, delete `.venv` and create it again.
+- **`error: externally-managed-environment`** (Linux, Homebrew): `pip` ran
+  outside the virtual environment. Use `.venv/bin/python -m pip install -e .`.
+- **pip compiles numpy, pandas or scipy** and stops with a compiler error
+  (`Microsoft Visual C++ 14.0 or greater is required`, `gcc failed`): your
+  Python is newer than the ready-made packages of those libraries. Install
+  the previous Python version and create `.venv` again.
+- **`Address already in use`** with `--port`: another program uses that
+  port. Choose another, or leave `--port` out and the app picks a free one.
+- **The page opens but the plots stay empty**: the page loads Plotly from a
+  CDN, so the first load needs internet access.
 
 ## Projects
 

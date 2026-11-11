@@ -47,15 +47,41 @@ repository.</sub>
 
 ## Quick start
 
-```bash
-git clone https://github.com/PedroSartorello/BraggFlow.git && cd BraggFlow
-pip install -e .
-python examples/make_synthetic_data.py   # small synthetic example files
-braggflow-web                            # opens on http://127.0.0.1:5000
+You need [Python](https://www.python.org/downloads/) 3.10 or newer and
+[Git](https://git-scm.com/downloads). Run one line at a time. The commands
+create a virtual environment in `.venv` and call its Python directly, so
+there is nothing to activate.
+
+**Windows** (PowerShell or Command Prompt):
+
+```bat
+git clone https://github.com/PedroSartorello/BraggFlow.git
+cd BraggFlow
+py -m venv .venv
+.venv\Scripts\python -m pip install -e .
+.venv\Scripts\python examples\make_synthetic_data.py
+.venv\Scripts\python -m braggflow.webapp.app
 ```
 
-You need Python 3.10 or newer. Use a virtual environment if you
-prefer (`python -m venv .venv`, then activate it before `pip install`).
+**Linux and macOS:**
+
+```bash
+git clone https://github.com/PedroSartorello/BraggFlow.git
+cd BraggFlow
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+.venv/bin/python examples/make_synthetic_data.py
+.venv/bin/python -m braggflow.webapp.app
+```
+
+The last line opens BraggFlow in the browser, on http://127.0.0.1:5000 or
+the next free port. Ctrl+C in the terminal stops it. Next time, go into the
+`BraggFlow` folder and run only that line. Without Git, download the ZIP from
+the green **Code** button on GitHub, unzip it, go into the `BraggFlow-main`
+folder and start from the third line.
+
+If a step fails, [Installation problems](docs/webapp.md#installation-problems)
+lists the usual messages and what to do.
 
 ## The library
 

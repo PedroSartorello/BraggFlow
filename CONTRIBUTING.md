@@ -8,14 +8,18 @@ test.
 
 Python 3.10 or newer.
 
+Follow the [quick start](README.md#quick-start), installing with the
+`dev` extra:
+
 ```bash
-git clone https://github.com/PedroSartorello/BraggFlow.git
-cd BraggFlow
-python -m venv .venv
-# Windows: .venv\Scripts\activate    Linux/macOS: source .venv/bin/activate
-pip install -e ".[dev]"
-python examples/make_synthetic_data.py      # example data for a quick check
+.venv/bin/python -m pip install -e ".[dev]"      # Windows: .venv\Scripts\python
 ```
+
+To type just `python` and `pytest`, activate the environment:
+`source .venv/bin/activate` on Linux and macOS, `.venv\Scripts\activate.bat`
+in the Windows Command Prompt. In PowerShell, `.venv\Scripts\Activate.ps1`
+only runs if scripts are allowed; without it, call `.venv\Scripts\python -m
+pytest`.
 
 The editable install (`-e`) means your edits in `src/braggflow/` take effect
 without reinstalling.

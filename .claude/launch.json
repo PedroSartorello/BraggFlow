@@ -4,13 +4,13 @@
     {
       "name": "braggflow-web",
       "runtimeExecutable": "braggflow-web",
-      "runtimeArgs": ["--port", "5000"],
+      "runtimeArgs": ["--port", "5000", "--no-browser"],
       "port": 5000
     },
     {
       "name": "braggflow-web-5001",
       "runtimeExecutable": "braggflow-web",
-      "runtimeArgs": ["--port", "5001"],
+      "runtimeArgs": ["--port", "5001", "--no-browser"],
       "port": 5001
     }
   ]

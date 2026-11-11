@@ -128,3 +128,64 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
+
+  quick-start:
+    # Os comandos do quick start do README, como estão escritos, num sistema
+    # limpo de cada tipo: o README quebrava fora do computador do autor
+    name: quick start do README (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Comandos do README
+        shell: python
+        run: |
+          # Roda os comandos do quick start do README, como estão escritos, a partir do
+          # clone (pula o git clone e o cd) e confere que a página responde.
+          import os, re, signal, subprocess, sys, time, urllib.request
+          from pathlib import Path
+
+          texto = Path("README.md").read_text(encoding="utf-8")
+          bloco = "bat" if sys.platform == "win32" else "bash"
+          secao = texto.split("## Quick start", 1)[1].split("\n## ", 1)[0]
+          linhas = re.search(rf"```{bloco}\n(.*?)```", secao, re.S).group(1).strip().splitlines()
+          assert linhas[0].startswith("git clone") and linhas[1] == "cd BraggFlow", linhas
+          *passos, iniciar = linhas[2:]
+          for passo in passos:
+              print(">", passo, flush=True)
+              subprocess.run(passo, shell=True, check=True)
+          print(">", iniciar, flush=True)
+          servidor = subprocess.Popen(iniciar + " --no-browser", shell=True, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                      start_new_session=sys.platform != "win32")
+          try:
+              url = None
+              for linha in servidor.stdout:
+                  print(linha, end="", flush=True)
+                  achado = re.search(r"http://127\.0\.0\.1:\d+", linha)
+                  if achado:
+                      url = achado.group(0)
+                      break
+              assert url, "o servidor não disse onde escuta"
+              for _ in range(60):
+                  try:
+                      with urllib.request.urlopen(url, timeout=5) as r:
+                          assert r.status == 200 and b"BraggFlow" in r.read()
+                          print("ok:", url, flush=True)
+                          break
+                  except OSError:
+                      time.sleep(1)
+              else:
+                  raise SystemExit("a página não respondeu")
+          finally:
+              if sys.platform == "win32":
+                  subprocess.run(["taskkill", "/F", "/T", "/PID", str(servidor.pid)], capture_output=True)
+              else:
+                  os.killpg(servidor.pid, signal.SIGTERM)
