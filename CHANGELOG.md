@@ -110,8 +110,7 @@ itself did not change: the same input gives the same output as before.
   applied first by `run_recipe`; recorded in the provenance). Saved with the
   setup and the project.
 - `braggflow.recipe`: the processing recipe as a dict of options
-  (`run_recipe`, `STANDARD_RECIPE`), shared by `braggflow process` and the web
-  app.
+  (`run_recipe`), shared by `braggflow process` and the web app.
 - `braggflow.webapp.app.create_app(data_dir)`: each app has its own data folder
   and read caches (`braggflow.webapp.state`).
 - Bilingual interface: Brazilian Portuguese (the default) and English, with a
@@ -171,8 +170,13 @@ itself did not change: the same input gives the same output as before.
   (`braggflow.sensors.channel_labels`), which is also the name of an unnamed
   channel in the processed CSV (`CH_1 Sensor_1 [nm]` instead of
   `CH_1 Sensor_1 [nm] [nm]`). A new project no longer inherits the steps of
-  the project open before it. `braggflow process` keeps its standard recipe
-  and names.
+  the project open before it.
+- `braggflow process` follows the same rule: no step is on, and without
+  `--setup` each sensor is named after its column without the unit. It now
+  saves the file as a processed CSV with its JSON, as it was read.
+  `STANDARD_RECIPE`, `DEFAULT_RENAME` and `default_setup` are gone from
+  `braggflow.recipe`; `examples/01_process_file.py` still shows a full chain
+  of steps written with the fluent API.
 - "Evolução entre arquivos" is faster. On a series of thousands of spectra the
   first calculation takes about a third of the time, a recalculation (another
   mode, reference, window or position) is more than ten times faster, and
@@ -243,8 +247,8 @@ itself did not change: the same input gives the same output as before.
 - `main.py` became `examples/01_process_file.py`; without arguments it
   processes the synthetic example.
 - `requirements.txt` is a shortcut for `-e .[dev]`.
-- `braggflow process` runs `STANDARD_RECIPE` through `run_recipe` instead of
-  its own copy of the steps. The CSV is byte for byte the same; the JSON no
+- `braggflow process` runs through `run_recipe` instead of its own copy of
+  the steps. The CSV is byte for byte the same; the JSON no
   longer lists the empty time-window step and records `None` for the optional
   parameters, as the web app does.
 - `API_BUILD` is `2026-11-03`: the page sends its language and expects the

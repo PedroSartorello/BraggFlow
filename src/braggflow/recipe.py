@@ -3,7 +3,7 @@ Receita de processamento descrita como um dicionário de opções.
 
 A interface web monta esse dicionário a partir dos cartões de etapa
 (``{"cleaning": {"enabled": true, ...}, "savgol": {...}, ...}``) e o comando
-``braggflow process`` usa ``STANDARD_RECIPE``. Os dois passam por
+``braggflow process`` não liga nenhuma etapa. Os dois passam por
 ``run_recipe``, que traduz as opções em chamadas ao ``OpticalPipeline`` — a
 mesma regra num lugar só.
 
@@ -38,36 +38,11 @@ from .sensors import Sensor, SensorSetup
 
 # Mapeamento usado quando nenhum setup de sensores é informado. A interface
 # o sugere como ponto de partida e permite editar por arquivo.
-DEFAULT_RENAME = {
-    "CH_1 Sensor_1 [nm]": "EFBG1",
-    "CH_2 Sensor_1 [nm]": "EFBG2",
-    "CH_3 Sensor_1 [nm]": "FBG",
-}
-
-# Receita do ``braggflow process`` (e de examples/01_process_file.py, escrita
-# lá com a API fluente): limpeza do interrogador, ordem do tempo, nulos,
-# outliers, Savitzky-Golay e média móvel.
-STANDARD_RECIPE = {
-    "cleaning": {"enabled": True, "zeros": True, "bands": True},
-    "timebase": {"enabled": True, "duplicates": "mean"},
-    "nulls": {"enabled": True, "strategy": "linear"},
-    "outliers": {"enabled": True, "method": "rolling", "threshold": 3.5,
-                 "window_size": 51, "strategy": "linear"},
-    "savgol": {"enabled": True, "window_length": 11, "polyorder": 2},
-    "moving_average": {"enabled": True, "window_size": 30},
-}
-
-
 def as_float(value, default=None):
     """Converte para float aceitando None/'' como ausente."""
     if value is None or value == "":
         return default
     return float(value)
-
-
-def default_setup() -> SensorSetup:
-    """Setup de três canais usado quando nenhum é informado."""
-    return SensorSetup.from_rename_map(DEFAULT_RENAME, name="padrão")
 
 
 def setup_from_options(options: dict) -> SensorSetup:
