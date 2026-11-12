@@ -73,11 +73,12 @@ def default_setup() -> SensorSetup:
 def setup_from_options(options: dict) -> SensorSetup:
     """
     Setup de sensores enviado pela interface. Sem ele, usa o mapeamento
-    ``rename`` (formato antigo) ou ``DEFAULT_RENAME``.
+    ``rename`` (formato antigo); sem nenhum dos dois, os canais ficam com o
+    nome do arquivo.
     """
     raw = options.get("sensors")
     if not raw:
-        return SensorSetup.from_rename_map(options.get("rename") or DEFAULT_RENAME)
+        return SensorSetup.from_rename_map(options.get("rename") or {})
 
     sensors = []
     for s in raw:

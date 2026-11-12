@@ -4,7 +4,7 @@
 import { $, fmtBytes, fmtWhen, hintHtml, icon, setPlain, setText, showError } from "./core.js";
 import { numberLocale, onLanguageChange, t } from "./i18n.js";
 import { baseName, commonSpectrumSettings, fileKind, folderOf, porNome, projectSeriesPaths, projectSpectraPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName, spectraCommon, spectraState } from "./state.js";
-import { clearSelection, addFilesAndShow, applyProcessing, applySensors, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
+import { clearSelection, addFilesAndShow, applyProcessing, applySensors, resetProcessing, collectProcessing, collectSensors, loadChannels, processData, renderSeriesFiles, saveCurrentSeriesState, selectSeriesFile, uploadFiles } from "./series.js";
 import { addSpectraToProject, applySpectraProject, evolutionEventsList, evolutionOptions, renderSpectraFiles, resetSpectraAnalyses, resetSpectraProject, saveCurrentSpectrumState, selectSpectrumFile } from "./spectra.js";
 import { addMarkerRow, applySourceMode, applyStyle, channelStyleMemory, collectMarkers, collectStyle, drawPlotMarkers, loadVizSources, refreshVizCurves, rememberChannelStyles, vizSource } from "./viz.js";
 import { switchTab } from "./tabs.js";
@@ -761,6 +761,7 @@ async function deleteProject(name, button) {
 
 function newProject() {
   $("project-name").value = "";
+  resetProcessing();     // não herda as etapas do projeto aberto antes
   projectCreated = "";
   markProjectDirty(false);
   setSaveState("");

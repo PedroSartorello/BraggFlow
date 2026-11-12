@@ -65,6 +65,8 @@ def test_channels_endpoint_reports_nominal_and_fs(webapp):
     data = client.get("/api/channels?file=data/raw/ensaio.ASC").get_json()
     assert data["channels"] == ["CH_1 Sensor_1 [nm]", "CH_2 Sensor_1 [nm]"]
     assert data["nominal"]["CH_1 Sensor_1 [nm]"] == pytest.approx(1550.0, abs=0.01)
+    # Nome inicial dos sensores: o da coluna, sem nomes inventados
+    assert data["defaults"]["CH_1 Sensor_1 [nm]"] == "CH_1 Sensor_1"
     assert data["fs"] == pytest.approx(50.0)
     assert data["n_samples"] == 500
 

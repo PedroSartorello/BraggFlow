@@ -209,7 +209,7 @@
       </div>
       <div class="step" data-step="cleaning">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="cleaning-enabled" data-opt="cleaning.enabled" checked>
+          <input class="step-switch" type="checkbox" id="cleaning-enabled" data-opt="cleaning.enabled">
           <button type="button" class="step-name" data-i18n="steps.cleaning">Limpeza do interrogador</button>
         </div>
         <div class="step-body hidden">
@@ -225,7 +225,7 @@
       </div>
       <div class="step" data-step="timebase">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="timebase-enabled" data-opt="timebase.enabled" checked>
+          <input class="step-switch" type="checkbox" id="timebase-enabled" data-opt="timebase.enabled">
           <button type="button" class="step-name" data-i18n="steps.timebase">Eixo de tempo</button>
         </div>
         <div class="step-body hidden">
@@ -244,7 +244,7 @@
       </div>
       <div class="step" data-step="nulls">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="nulls-enabled" data-opt="nulls.enabled" checked>
+          <input class="step-switch" type="checkbox" id="nulls-enabled" data-opt="nulls.enabled">
           <button type="button" class="step-name" data-i18n="steps.nulls">Remoção de nulos (NaN/Inf)</button>
         </div>
         <div class="step-body hidden">
@@ -261,7 +261,7 @@
       </div>
       <div class="step" data-step="outliers">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="outliers-enabled" data-opt="outliers.enabled" checked>
+          <input class="step-switch" type="checkbox" id="outliers-enabled" data-opt="outliers.enabled">
           <button type="button" class="step-name" data-i18n="steps.outliers">Remoção de outliers</button>
         </div>
         <div class="step-body hidden">
@@ -293,7 +293,7 @@
     <div class="card-body" style="grid-template-columns: 1fr;">
       <div class="step" data-step="savgol">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="savgol-enabled" data-opt="savgol.enabled" checked>
+          <input class="step-switch" type="checkbox" id="savgol-enabled" data-opt="savgol.enabled">
           <button type="button" class="step-name" data-i18n="steps.savgol">Filtro Savitzky-Golay</button>
         </div>
         <div class="step-body hidden">
@@ -306,7 +306,7 @@
       </div>
       <div class="step" data-step="movavg">
         <div class="step-head">
-          <input class="step-switch" type="checkbox" id="movavg-enabled" data-opt="moving_average.enabled" checked>
+          <input class="step-switch" type="checkbox" id="movavg-enabled" data-opt="moving_average.enabled">
           <button type="button" class="step-name" data-i18n="common.movingAverage">Média móvel</button>
         </div>
         <div class="step-body hidden">
@@ -357,7 +357,7 @@
         </div>
         <div class="step-body hidden">
       <label class="field" data-i18n="tempcomp.channel">Canal de referência
-        <select id="tempcomp-channel" data-opt="temp_comp.channel"><option value="FBG">FBG</option></select>
+        <select id="tempcomp-channel" data-opt="temp_comp.channel"></select>
       </label>
       <label class="field" title="k dos sensores sem K_T no cartão Sensores. Redes iguais, com o mesmo encapsulamento: k = 1." data-i18n="tempcomp.k" data-i18n-title="tempcomp.kTitle">k padrão <input type="number" id="tempcomp-k" data-opt="temp_comp.k_coeff" value="1.0" step="0.05" min="0"></label>
       <span class="hint step-note" data-i18n-html="tempcomp.note">Δλ<sub>comp</sub> = Δλ<sub>s</sub> − (K<sub>T,s</sub>/K<sub>T,r</sub>)·Δλ<sub>r</sub>: tira de cada sensor a parte térmica medida pela rede de referência. O K<sub>T</sub> de cada rede fica no cartão Sensores; o sensor sem K<sub>T</sub> usa o k ao lado. Precisa do Δλ (ligado junto).</span>

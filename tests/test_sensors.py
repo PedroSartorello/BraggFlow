@@ -1,5 +1,5 @@
 import pytest
-from braggflow.sensors import Sensor, SensorSetup
+from braggflow.sensors import Sensor, SensorSetup, channel_labels
 
 
 def _setup():
@@ -12,7 +12,7 @@ def _setup():
 def test_names_and_bands_follow_file_channels():
     setup = _setup()
     channels = ["CH_1 Sensor_1 [nm]", "CH_2 Sensor_1 [nm]", "CH_3 Sensor_1 [nm]"]
-    assert setup.names(channels) == ["EFBG1", "FBG", "CH_3 Sensor_1 [nm]"]
+    assert setup.names(channels) == ["EFBG1", "FBG", "CH_3 Sensor_1"]
     assert setup.bands(channels) == [(1548.0, 1552.0), None, None]
 
 
@@ -76,3 +76,14 @@ def test_hidden_flag_roundtrip_and_lookup(tmp_path):
     loaded = SensorSetup.load(path)
     assert loaded.hidden_channels(["CH_1", "CH_2", "CH_3"]) == ["CH_2"]
     assert Sensor.from_dict({"channel": "CH_9"}).hidden is False, "setups antigos: nada oculto"
+
+
+def test_channel_labels_drop_the_unit_unless_two_channels_collide():
+    assert channel_labels(["CH_1 Sensor_1 [nm]", "Temp", "CH_2 [nm]", "CH_2 [dBm]", "[nm]"]) == [
+        "CH_1 Sensor_1", "Temp", "CH_2 [nm]", "CH_2 [dBm]", "[nm]"]
+
+
+def test_a_blank_name_falls_back_to_the_channel_label():
+    setup = SensorSetup(sensors=[Sensor("CH_1 Sensor_1 [nm]", "  "), Sensor("CH_2 Sensor_1 [nm]", "Ref")])
+    assert setup.names(["CH_1 Sensor_1 [nm]", "CH_2 Sensor_1 [nm]"]) == ["CH_1 Sensor_1", "Ref"]
+    assert setup.sensors[0].label == "CH_1 Sensor_1"

@@ -150,7 +150,15 @@ them by default.
 the work: *1 · Arquivos*, *2 · Sensores* (names, allowed bands and K_T,
 reusable as setups) and *3 · Etapas* (cleaning and sampling, filters and
 conversion, each with its parameters). The plot shows the processed signal
-over the raw one. "Escolher janela e ordem pelos dados", under the
+over the raw one.
+
+A new project starts with every step off, so the first plot is the file as
+it is: turn on the steps the analysis needs. Each sensor starts with the
+name of its column without the unit (`CH_1 Sensor_1 [nm]` → `CH_1 Sensor_1`),
+or with the name from the chosen setup. A new project does not inherit the
+steps of the project open before it.
+
+"Escolher janela e ordem pelos dados", under the
 Savitzky-Golay fields, fills them from the signal itself: leave-one-out
 cross-validation on the signal as it reaches the filter (after cleaning,
 nulls, outliers and resampling) picks the window and order (2 or 4) that best
