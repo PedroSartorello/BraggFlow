@@ -46,7 +46,8 @@ def test_steps_follow_the_options():
     assert steps == ["apply_setup", "mark_invalid_peaks", "sort_and_deduplicate",
                      "remove_null_values", "remove_outliers", "apply_savgol_filter",
                      "apply_moving_average_filter"]
-    assert pipeline.channels == ["EFBG1", "EFBG2", "FBG"]
+    # Sem setup, cada canal fica com o nome da coluna, sem a unidade
+    assert pipeline.channels == ["CH_1 Sensor_1", "CH_2 Sensor_1", "CH_3 Sensor_1"]
     assert messages["report"][0].startswith("Limpeza:")
 
 
@@ -112,9 +113,10 @@ def _deriva(pipeline, canal=0):
 def test_compensation_removes_the_thermal_drift_of_the_synthetic_data():
     """No sintético todas as redes derivam 10 pm/°C: com k = 1 sobra o ruído."""
     sem, _, _ = run_recipe([EXAMPLE], {**COMP, "temp_comp": {"enabled": False}})
-    com, _, messages = run_recipe([EXAMPLE], COMP)
+    # Sem setup, a referência é chamada pelo nome da coluna, sem a unidade
+    com, _, messages = run_recipe([EXAMPLE], {**COMP, "temp_comp": {"enabled": True, "channel": "CH_3 Sensor_1"}})
     assert _deriva(sem) > 10 * _deriva(com)
-    assert any("EFBG1 k = 1 (k informado)" in r for r in messages["report"])
+    assert any("CH_1 Sensor_1 k = 1 (k informado)" in r for r in messages["report"])
 
 
 def test_each_sensor_uses_its_thermal_sensitivity():

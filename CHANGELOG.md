@@ -163,6 +163,16 @@ itself did not change: the same input gives the same output as before.
 
 ### Changed
 
+- Séries temporais: a new project starts with every step off. Cleaning, time
+  axis, nulls, outliers, Savitzky-Golay and moving average used to come on,
+  so the first plot was already filtered. The page has no predefined sensor
+  names either. `CH_1`, `CH_2` and `CH_3` were called EFBG1, EFBG2 and FBG;
+  now each sensor starts with its column name without the unit
+  (`braggflow.sensors.channel_labels`), which is also the name of an unnamed
+  channel in the processed CSV (`CH_1 Sensor_1 [nm]` instead of
+  `CH_1 Sensor_1 [nm] [nm]`). A new project no longer inherits the steps of
+  the project open before it. `braggflow process` keeps its standard recipe
+  and names.
 - "Evolução entre arquivos" is faster. On a series of thousands of spectra the
   first calculation takes about a third of the time, a recalculation (another
   mode, reference, window or position) is more than ten times faster, and

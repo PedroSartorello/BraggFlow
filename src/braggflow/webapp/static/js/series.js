@@ -67,6 +67,18 @@ export function collectProcessing() {
   return options;
 }
 
+// Etapas e valores como vêm na página: o ponto de partida de um projeto novo
+export function resetProcessing() {
+  document.querySelectorAll("#tab-series-sidebar [data-opt]").forEach((el) => {
+    if (el.type === "checkbox") el.checked = el.defaultChecked;
+    else if (el.tagName === "SELECT") {
+      const padrao = [...el.options].find((o) => o.defaultSelected) || el.options[0];
+      el.value = padrao ? padrao.value : "";
+    } else el.value = el.defaultValue;
+  });
+  syncCardStyles();
+}
+
 export function applyProcessing(processing) {
   if (!processing) return;
   document.querySelectorAll("#tab-series-sidebar [data-opt]").forEach((el) => {
@@ -700,7 +712,7 @@ function sensorRow(ch, data, previous) {
   row.append(
     caption,
     makeInput("text", "sensor-name",
-      previous?.name ?? fromSetup?.name ?? data.defaults[ch] ?? ch, ch),
+      previous?.name ?? fromSetup?.name ?? data.defaults?.[ch] ?? ch, ch),
     makeInput("number", "sensor-band-min",
       previous?.min ?? (band ? band[0] : ""), ""),
     makeInput("number", "sensor-band-max",

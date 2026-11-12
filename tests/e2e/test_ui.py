@@ -24,6 +24,26 @@ def adicionar_serie(page: Page, arquivo: str) -> None:
     expect(page.locator("#status-text")).to_contain_text("pré-visualização")
 
 
+# As etapas que o projeto novo trazia ligadas até 0.1.0 (hoje começam desligadas)
+ETAPAS_DO_EXEMPLO = ("cleaning", "timebase", "nulls", "outliers", "savgol", "movavg")
+
+
+def ligar_etapas(page: Page, *etapas: str) -> None:
+    """Liga as etapas (todas as do exemplo, sem argumento) e espera o processamento."""
+    for etapa in etapas or ETAPAS_DO_EXEMPLO:
+        page.check(f"#{etapa}-enabled")
+    # "Gravar o CSV a cada mudança" vem ligado: o fim do processamento grava o CSV
+    expect(page.locator("#status-text")).to_contain_text("CSV salvo")
+
+
+def abrir_etapa(page: Page, etapa: str) -> None:
+    """Mostra os parâmetros da etapa (ligar uma etapa já os mostra)."""
+    corpo = page.locator(f'.step[data-step="{etapa}"] .step-body')
+    if not corpo.is_visible():
+        page.locator(f'.step[data-step="{etapa}"] .step-name').click()
+    expect(corpo).to_be_visible()
+
+
 def salvar_projeto(page: Page) -> None:
     page.click("#btn-project-save")
     expect(page.locator("#status-text")).to_contain_text("salvo em data/projects")
@@ -52,11 +72,16 @@ def test_choosing_a_file_shows_raw_and_processed_curves(app):
     novo_projeto(app, "E2E")
     adicionar_serie(app, "ensaio_a.asc")
 
-    expect(app.locator("#status-text")).to_contain_text("EFBG1, EFBG2, FBG")
+    # Sem nomes inventados: cada sensor começa com o nome da coluna, sem a unidade
+    expect(app.locator("#status-text")).to_contain_text("CH_1 Sensor_1, CH_2 Sensor_1, CH_3 Sensor_1")
     nomes = curvas(app)
-    assert {"EFBG1", "EFBG2", "FBG"} <= set(nomes)
-    assert "EFBG1 (bruto)" in nomes
+    assert {"CH_1 Sensor_1", "CH_2 Sensor_1", "CH_3 Sensor_1"} <= set(nomes)
+    assert "CH_1 Sensor_1 (bruto)" in nomes
     assert arquivos_do_projeto(app) == ["ensaio_a.asc"]
+    # e nenhuma etapa vem ligada
+    ligadas = app.evaluate("[...document.querySelectorAll('#tab-series-sidebar .step-switch')]"
+                           ".filter((e) => e.checked).map((e) => e.id)")
+    assert ligadas == []
 
 
 def test_process_saves_the_csv_in_the_project_folder(app, data_dir):
@@ -67,13 +92,13 @@ def test_process_saves_the_csv_in_the_project_folder(app, data_dir):
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
     csv = data_dir / "processed" / "E2E" / "ensaio_a_processado.csv"
     assert csv.is_file() and csv.with_suffix(".json").is_file()
-    assert csv.read_text(encoding="utf-8").startswith("Time [s],EFBG1 [nm],EFBG2 [nm],FBG [nm]")
+    assert csv.read_text(encoding="utf-8").startswith("Time [s],CH_1 Sensor_1 [nm],CH_2 Sensor_1 [nm],CH_3 Sensor_1 [nm]")
 
 
 def test_saved_project_reopens_with_steps_and_sensors(app):
     novo_projeto(app, "Ensaio A")
     adicionar_serie(app, "ensaio_a.asc")
-    app.uncheck("#movavg-enabled")
+    app.check("#movavg-enabled")
     sensor = app.locator('.sensor-row[data-channel="CH_1 Sensor_1 [nm]"] .sensor-name')
     sensor.fill("Sensor A")
     salvar_projeto(app)
@@ -83,11 +108,27 @@ def test_saved_project_reopens_with_steps_and_sensors(app):
 
     expect(app.locator("#project-name")).to_have_value("Ensaio A")
     expect(app.locator("#project-dirty")).to_be_hidden()
-    expect(app.locator("#movavg-enabled")).not_to_be_checked()
-    expect(app.locator("#savgol-enabled")).to_be_checked()
+    expect(app.locator("#movavg-enabled")).to_be_checked()
+    expect(app.locator("#savgol-enabled")).not_to_be_checked()
     expect(sensor).to_have_value("Sensor A")
     assert "Sensor A" in curvas(app)
     assert arquivos_do_projeto(app) == ["ensaio_a.asc"]
+
+
+def test_a_new_project_does_not_inherit_the_steps_of_the_previous_one(app):
+    novo_projeto(app, "Com etapas")
+    adicionar_serie(app, "ensaio_a.asc")
+    ligar_etapas(app, "savgol", "movavg")
+    abrir_etapa(app, "movavg")
+    app.fill("#movavg-window", "7")
+    app.locator("#movavg-window").press("Tab")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+
+    app.click("#btn-projects")
+    novo_projeto(app, "Sem etapas")
+    expect(app.locator("#savgol-enabled")).not_to_be_checked()
+    expect(app.locator("#movavg-enabled")).not_to_be_checked()
+    expect(app.locator("#movavg-window")).to_have_value("30")     # o valor que a página traz
 
 
 def test_switching_projects_does_not_mix_their_files(app):
@@ -155,7 +196,7 @@ def test_savgol_window_and_order_are_chosen_from_the_data(app):
     expect(app.locator("#savgol-auto-note")).to_contain_text("Pelos dados: janela")
     janela = int(app.input_value("#savgol-window"))
     assert janela != 11 and janela % 2 == 1
-    expect(app.locator("#savgol-auto-note")).to_contain_text(f"janela {janela}")
+    expect(app.locator("#savgol-auto-note")).to_contain_text(f"janela {janela:,}".replace(",", "."))
     expect(app.locator("#save-state")).to_contain_text("salvo às")     # mudou o projeto, como digitar
 
 
@@ -225,14 +266,14 @@ def test_temperature_compensation_uses_the_thermal_sensitivity_of_each_fbg(app):
     app.check("#tempcomp-enabled")
     expect(app.locator("#delta-enabled")).to_be_checked()      # compensação precisa do Δλ
     expect(app.locator("#tempcomp-k")).to_be_visible()           # ligar a etapa abre o cartão
-    expect(app.locator("#tempcomp-channel")).to_have_value("FBG")
+    app.select_option("#tempcomp-channel", "CH_3 Sensor_1")
     app.fill("#tempcomp-k", "0.5")
     app.click("#btn-process")
 
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
     detalhes = app.locator("#status-details")
-    expect(detalhes).to_contain_text("EFBG1 k = 2 (K_T 20 / 10 pm/°C)")
-    expect(detalhes).to_contain_text("EFBG2 k = 0,5 (k informado)")
+    expect(detalhes).to_contain_text("CH_1 Sensor_1 k = 2 (K_T 20 / 10 pm/°C)")
+    expect(detalhes).to_contain_text("CH_2 Sensor_1 k = 0,5 (k informado)")
 
     salvar_projeto(app)
     app.reload()
@@ -632,12 +673,12 @@ def layout_do_grafico(page: Page) -> dict:
     return page.evaluate(r"""() => {
         const gd = document.getElementById('plot');
         const ys = Object.keys(gd.layout).filter((k) => /^yaxis\d*$/.test(k)).sort();
-        const efbg = gd.data.find((t) => t.name === 'EFBG1');
+        const efbg = gd.data.find((t) => t.name === 'CH_1 Sensor_1');
         return {
             grade: Boolean(gd.layout.grid), eixosY: ys.length,
             faixa: gd.layout.yaxis.range,
             primeiro: efbg.y.find((v) => v !== null),
-            eixoDoEfbg2: gd.data.find((t) => t.name === 'EFBG2').yaxis || 'y',
+            eixoDoEfbg2: gd.data.find((t) => t.name === 'CH_2 Sensor_1').yaxis || 'y',
         };
     }""")
 
@@ -645,6 +686,7 @@ def layout_do_grafico(page: Page) -> dict:
 def test_plot_shows_channels_apart_or_together(app):
     novo_projeto(app, "Vistas")
     adicionar_serie(app, "ensaio_a.asc")
+    ligar_etapas(app)                       # a escala segue o processado, sem os picos do bruto
 
     vista = layout_do_grafico(app)
     assert vista["grade"] and vista["eixosY"] == 3, "padrão: um painel por canal"
@@ -692,12 +734,12 @@ def test_dragging_measures_a_stretch_of_every_channel(app):
     expect(linhas).to_have_count(3)
     expect(app.locator("#selection-range")).to_contain_text("Δt")
     expect(app.locator("#selection-note")).to_contain_text("Sinal processado inteiro")
-    assert linhas.nth(0).locator("td").first.inner_text() == "EFBG1"
+    assert linhas.nth(0).locator("td").first.inner_text() == "CH_1 Sensor_1"
     assert app.evaluate("document.getElementById('plot').layout.shapes[0].type") == "rect"
 
     # mudar o processamento mede de novo o mesmo trecho
-    app.uncheck("#savgol-enabled")
-    app.uncheck("#movavg-enabled")
+    app.check("#savgol-enabled")
+    app.check("#movavg-enabled")
     expect(app.locator("#status-text")).to_contain_text("amostras")
     expect(linhas).to_have_count(3)
 
@@ -955,10 +997,10 @@ def test_project_saves_itself_and_switching_does_not_ask(app, data_dir):
     expect(app.locator("#project-dirty")).to_be_hidden()
     assert projeto_no_disco(data_dir, "Sozinho")["series"][0]["file"] == "data/raw/ensaio_a.asc"
 
-    app.uncheck("#movavg-enabled")
+    app.check("#movavg-enabled")
     expect(app.locator("#save-state")).to_contain_text("alterações")
     expect(app.locator("#save-state")).to_contain_text("salvo às")
-    assert projeto_no_disco(data_dir, "Sozinho")["series"][0]["processing"]["moving_average"]["enabled"] is False
+    assert projeto_no_disco(data_dir, "Sozinho")["series"][0]["processing"]["moving_average"]["enabled"] is True
 
     app.click("#btn-projects")                                  # nada pendente: não pergunta
     expect(app.locator("#leave-dialog")).to_be_hidden()
@@ -986,7 +1028,7 @@ def test_undo_and_redo_walk_through_the_project_changes(app, data_dir):
     expect(app.locator("#btn-undo")).to_be_enabled()
     expect(app.locator("#btn-redo")).to_be_disabled()
 
-    app.uncheck("#savgol-enabled")
+    app.check("#savgol-enabled")
     expect(app.locator("#status-text")).to_contain_text("amostras")
     app.wait_for_timeout(700)      # mudanças a menos de ~0,5 s viram um passo só (digitar um valor)
     app.locator("#card-markers > summary").click()
@@ -999,13 +1041,13 @@ def test_undo_and_redo_walk_through_the_project_changes(app, data_dir):
     app.locator("body").click(position={"x": 5, "y": 400})       # fora dos campos
     app.keyboard.press("Control+z")                             # tira a marcação
     expect(app.locator(".marker-row")).to_have_count(0)
-    expect(app.locator("#savgol-enabled")).not_to_be_checked()
-    app.click("#btn-undo")                                      # volta o Savitzky-Golay
     expect(app.locator("#savgol-enabled")).to_be_checked()
+    app.click("#btn-undo")                                      # desliga de novo o Savitzky-Golay
+    expect(app.locator("#savgol-enabled")).not_to_be_checked()
     expect(app.locator("#project-name")).to_have_value("Desfazer")
 
     app.keyboard.press("Control+Shift+z")                       # refaz
-    expect(app.locator("#savgol-enabled")).not_to_be_checked()
+    expect(app.locator("#savgol-enabled")).to_be_checked()
     app.keyboard.press("Control+y")
     expect(app.locator(".marker-row")).to_have_count(1)
     expect(app.locator("#btn-redo")).to_be_disabled()
@@ -1056,16 +1098,16 @@ def test_hidden_column_disappears_from_the_program(app, data_dir):
     linha.locator(".sensor-hide").click()
     expect(app.locator("#hidden-sensors summary")).to_have_text("1 coluna oculta")
     expect(linha).to_be_hidden()                               # grupo recolhido
-    app.wait_for_function("!document.getElementById('plot').data.some((t) => t.name.startsWith('FBG'))")
-    assert set(curvas(app)) == {"EFBG1", "EFBG2", "EFBG1 (bruto)", "EFBG2 (bruto)"}
+    app.wait_for_function("!document.getElementById('plot').data.some((t) => t.name.startsWith('CH_3'))")
+    assert set(curvas(app)) == {"CH_1 Sensor_1", "CH_2 Sensor_1", "CH_1 Sensor_1 (bruto)", "CH_2 Sensor_1 (bruto)"}
     opcoes = app.locator("#tempcomp-channel option").all_inner_texts()
-    assert "FBG" not in opcoes, "coluna oculta não serve de referência"
-    expect(app.locator("#status-details")).to_contain_text("Colunas ocultas, fora do processamento: FBG")
+    assert "CH_3 Sensor_1" not in opcoes, "coluna oculta não serve de referência"
+    expect(app.locator("#status-details")).to_contain_text("Colunas ocultas, fora do processamento: CH_3 Sensor_1")
 
     app.click("#btn-process")
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
     csv = data_dir / "processed" / "Ocultar" / "ensaio_a_processado.csv"
-    assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],EFBG1 [nm],EFBG2 [nm]"
+    assert csv.read_text(encoding="utf-8").splitlines()[0] == "Time [s],CH_1 Sensor_1 [nm],CH_2 Sensor_1 [nm]"
     app.click('#tabs .tab[data-tab="viz"]')
     expect(app.locator('[data-summary="curvas"]')).to_contain_text("2 curvas")
 
@@ -1078,7 +1120,7 @@ def test_hidden_column_disappears_from_the_program(app, data_dir):
     linha.locator(".sensor-hide").click()                      # mostrar de novo
     expect(app.locator("#hidden-sensors")).to_be_hidden()
     expect(linha.locator(".sensor-name")).to_be_visible()
-    app.wait_for_function("document.getElementById('plot').data.some((t) => t.name === 'FBG')")
+    app.wait_for_function("document.getElementById('plot').data.some((t) => t.name === 'CH_3 Sensor_1')")
 
 
 # ── erros perto do campo, teclado e leitores de tela ─────────────────────────
@@ -1086,10 +1128,11 @@ def test_hidden_column_disappears_from_the_program(app, data_dir):
 def test_an_invalid_field_is_marked_where_it_is_and_nothing_is_sent(app, server):
     novo_projeto(app, "Campos")
     adicionar_serie(app, "ensaio_a.asc")
+    ligar_etapas(app, "savgol")                 # só a etapa ligada confere os seus campos
     pedidos = []
     app.on("request", lambda r: "/api/process" in r.url and pedidos.append(r.url))
 
-    app.locator('.step[data-step="savgol"] .step-name').click()
+    abrir_etapa(app, "savgol")
     app.fill("#savgol-window", "2")
     app.locator("#savgol-window").press("Tab")
     expect(app.locator("#savgol-window")).to_have_attribute("aria-invalid", "true")
@@ -1173,6 +1216,7 @@ def textos_em_portugues(page: Page) -> list[str]:
 def test_switching_to_english_translates_the_page_and_survives_a_reload(app):
     novo_projeto(app, "Idioma")
     adicionar_serie(app, "ensaio_a.asc")
+    ligar_etapas(app)                           # o relatório da limpeza vem do servidor
     app.click("#btn-process")
     expect(app.locator("#status-text")).to_contain_text("CSV salvo")
 
@@ -1197,7 +1241,7 @@ def test_switching_to_english_translates_the_page_and_survives_a_reload(app):
     expect(app.locator("#status-text")).to_contain_text("CSV saved")
 
     # erro de campo
-    app.locator('.step[data-step="savgol"] .step-name').click()
+    abrir_etapa(app, "savgol")
     app.fill("#savgol-window", "4")
     app.click("#btn-process")
     expect(app.locator(".field-error")).to_have_text("Use an odd number, 3 or more.")
@@ -1269,7 +1313,7 @@ def test_statistics_evolution_and_events_in_english(pasta_lmr, app):
     expect(app.locator("#selection-note")).to_contain_text("Whole processed signal")
     expect(app.locator("#selection-table th").first).to_have_text("Channel")
     expect(app.locator("#plot-hint")).to_have_text("drag = measure stretch · Esc clears")
-    assert curvas(app)[0] == "EFBG1 (raw)"
+    assert curvas(app)[0] == "CH_1 Sensor_1 (raw)"
     assert textos_em_portugues(app) == []
 
     app.click('#tabs .tab[data-tab="spectra"]')

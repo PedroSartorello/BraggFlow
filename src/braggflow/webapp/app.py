@@ -57,8 +57,8 @@ from braggflow.pipeline import OpticalPipeline
 from braggflow.processing import estimate_sampling_rate
 from braggflow.processing.filters import choose_savgol, savgol_cutoff
 from braggflow.projects import Project
-from braggflow.recipe import DEFAULT_RENAME, as_float, run_recipe, setup_from_options
-from braggflow.sensors import SensorSetup
+from braggflow.recipe import as_float, run_recipe, setup_from_options
+from braggflow.sensors import SensorSetup, channel_labels
 from braggflow.processing.spectra import (
     NORMALIZATIONS,
     TRANSMISSION_OUTPUTS,
@@ -807,8 +807,9 @@ def api_channels():
             fs = None
         return jsonify({
             "channels": data.channels,
-            "defaults": {c: DEFAULT_RENAME.get(c, c) for c in data.channels},
             "units": dict(zip(data.channels, data.units)),
+            # Nome inicial de cada sensor: o da coluna, sem a unidade
+            "defaults": dict(zip(data.channels, channel_labels(data.channels))),
             "nominal": nominal,
             "n_samples": int(len(data.time)),
             "duration_s": float(data.time[-1] - data.time[0]) if len(data.time) else 0.0,

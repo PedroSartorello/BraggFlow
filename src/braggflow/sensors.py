@@ -9,11 +9,26 @@ acquisitions of the same experimental assembly.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .paths import write_text_atomic
+
+_UNIT_SUFFIX = re.compile(r"\s*\[[^\[\]]*\]\s*$")
+
+
+def channel_labels(channels: Sequence[str]) -> List[str]:
+    """
+    Default display name of each channel: the column name without the unit
+    the interrogator appends (``'CH_1 Sensor_1 [nm]'`` -> ``'CH_1 Sensor_1'``),
+    since the processed CSV writes the unit again. Channels that would end up
+    with the same name (the same grating in nm and dBm) keep the full column.
+    """
+    curtos = [_UNIT_SUFFIX.sub("", ch) or ch for ch in channels]
+    repetidos = {c for c in curtos if curtos.count(c) > 1}
+    return [ch if c in repetidos else c for ch, c in zip(channels, curtos)]
 
 
 @dataclass
@@ -55,7 +70,7 @@ class Sensor:
 
     @property
     def label(self) -> str:
-        return (self.name or "").strip() or self.channel
+        return (self.name or "").strip() or channel_labels([self.channel])[0]
 
     def to_dict(self) -> dict:
         return {
@@ -93,8 +108,12 @@ class SensorSetup:
         return next((s for s in self.sensors if s.channel == channel), None)
 
     def names(self, channels: Sequence[str]) -> List[str]:
-        """Display name for each file channel (the channel itself when unmapped)."""
-        return [self.get(ch).label if self.get(ch) else ch for ch in channels]
+        """Display name for each file channel (:func:`channel_labels` when unnamed)."""
+        nomes = []
+        for ch, padrao in zip(channels, channel_labels(channels)):
+            sensor = self.get(ch)
+            nomes.append(((sensor.name or "").strip() if sensor else "") or padrao)
+        return nomes
 
     def bands(self, channels: Sequence[str]) -> List[Optional[Tuple[float, float]]]:
         """Allowed band for each file channel (None when not configured)."""
