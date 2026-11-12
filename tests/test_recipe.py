@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import numpy as np
@@ -13,19 +14,32 @@ from braggflow.processing import (
     remove_outliers,
     sort_and_deduplicate,
 )
-from braggflow.recipe import STANDARD_RECIPE, as_float, default_setup, run_recipe, setup_from_options
+from braggflow.recipe import as_float, run_recipe, setup_from_options
+from braggflow.sensors import SensorSetup
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "data" / "synthetic_interrogator.asc"
 
 
-def test_cli_matches_the_fluent_recipe_of_the_example(tmp_path):
+# A cadeia de etapas de examples/01_process_file.py, como opções da receita
+RECEITA_DO_EXEMPLO = {
+    "cleaning": {"enabled": True, "zeros": True, "bands": True},
+    "timebase": {"enabled": True, "duplicates": "mean"},
+    "nulls": {"enabled": True, "strategy": "linear"},
+    "outliers": {"enabled": True, "method": "rolling", "threshold": 3.5,
+                 "window_size": 51, "strategy": "linear"},
+    "savgol": {"enabled": True, "window_length": 11, "polyorder": 2},
+    "moving_average": {"enabled": True, "window_size": 30},
+}
+
+
+def test_recipe_matches_the_fluent_chain_of_the_example(tmp_path):
     """
-    ``braggflow process`` (STANDARD_RECIPE via run_recipe) e a cadeia fluente
-    de examples/01_process_file.py precisam continuar dando o mesmo CSV.
+    As opções da receita (o que o web app envia) e a cadeia fluente de
+    examples/01_process_file.py precisam dar o mesmo CSV.
     """
     fluente = tmp_path / "fluente.csv"
     pipeline = OpticalPipeline(EXAMPLE)
-    pipeline.load_data().apply_setup(default_setup())
+    pipeline.load_data().apply_setup(SensorSetup())
     (pipeline
      .delimit_time_window(start_time=None, end_time=None)
      .preprocess(mark_invalid_peaks, zero_as_missing=True, bands=pipeline.sensor_bands())
@@ -36,12 +50,22 @@ def test_cli_matches_the_fluent_recipe_of_the_example(tmp_path):
      .apply_filter(apply_moving_average_filter, window_size=30)
      .save_processed_data(fluente))
 
+    receita, _, _ = run_recipe([EXAMPLE], RECEITA_DO_EXEMPLO)
+    receita.save_processed_data(tmp_path / "receita.csv")
+    assert (tmp_path / "receita.csv").read_bytes() == fluente.read_bytes()
+
+
+def test_cli_saves_the_file_with_no_step_and_names_from_the_columns(tmp_path):
+    """Como um projeto novo do web app: nenhuma etapa ligada, nenhum nome inventado."""
     cli = process_file(EXAMPLE, out=tmp_path / "cli.csv", plot=False)
-    assert cli.read_bytes() == fluente.read_bytes()
+    assert cli.read_text(encoding="utf-8").splitlines()[0] == (
+        "Time [s],CH_1 Sensor_1 [nm],CH_2 Sensor_1 [nm],CH_3 Sensor_1 [nm]")
+    passos = [p["step"] for p in json.loads(cli.with_suffix(".json").read_text(encoding="utf-8"))["steps"]]
+    assert passos == ["apply_setup"]
 
 
 def test_steps_follow_the_options():
-    pipeline, _, messages = run_recipe([EXAMPLE], STANDARD_RECIPE)
+    pipeline, _, messages = run_recipe([EXAMPLE], RECEITA_DO_EXEMPLO)
     steps = [entry["step"] for entry in pipeline.history]
     assert steps == ["apply_setup", "mark_invalid_peaks", "sort_and_deduplicate",
                      "remove_null_values", "remove_outliers", "apply_savgol_filter",
@@ -75,7 +99,7 @@ def test_custom_loader_is_used():
 
 def test_no_files_is_an_error():
     with pytest.raises(ValueError, match="Nenhum arquivo"):
-        run_recipe([], STANDARD_RECIPE)
+        run_recipe([], RECEITA_DO_EXEMPLO)
 
 
 def test_incomplete_band_is_refused():

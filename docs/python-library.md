@@ -100,11 +100,14 @@ Two kinds of steps:
 braggflow process data/raw/your_file.ASC [--setup data/setups/bench.json] [--out result.csv]
 ```
 
-Processes one file with the standard recipe (interrogator cleaning, time
-order, null and outlier removal, Savitzky-Golay and moving average), saves
-`<data dir>/processed/<name>_processado.csv` with its JSON, and opens one plot
-per channel (`--no-plot` to skip). The same recipe, written with the fluent
-API, is in [`examples/01_process_file.py`](../examples/01_process_file.py).
+Saves one file as `<data dir>/processed/<name>_processado.csv` with its
+JSON (time in seconds, one column per sensor, units in the header) and opens
+one plot per channel (`--no-plot` to skip). No processing step is on, as in a
+new project of the web app. Without `--setup`, each sensor is named after its
+column without the unit (`CH_1 Sensor_1 [nm]` → `CH_1 Sensor_1`). A full chain
+of steps (interrogator cleaning, time order, null and outlier removal,
+Savitzky-Golay and moving average), written with the fluent API, is in
+[`examples/01_process_file.py`](../examples/01_process_file.py).
 
 ### Input files
 
