@@ -131,6 +131,27 @@ def test_a_new_project_does_not_inherit_the_steps_of_the_previous_one(app):
     expect(app.locator("#movavg-window")).to_have_value("30")     # o valor que a página traz
 
 
+def test_time_in_the_file_can_be_read_in_minutes(app, data_dir):
+    novo_projeto(app, "Minutos")
+    adicionar_serie(app, "ensaio_a.asc")
+    unidade = app.locator("#time-unit")
+    expect(unidade).to_be_visible()
+    expect(unidade.locator('option[value="auto"]')).to_have_text("automático (segundos)")
+    expect(app.locator("#status-text")).to_contain_text("900 s")
+
+    app.select_option("#time-unit", "min")                    # o arquivo estava em minutos
+    expect(app.locator("#file-info")).to_contain_text("54.000")
+    expect(app.locator("#status-text")).to_contain_text("54.000 s")
+    expect(app.locator("#status-details")).to_contain_text("Tempo do arquivo lido em minutos.")
+    expect(app.locator("#save-state")).to_contain_text("salvo às")
+    assert projeto_no_disco(data_dir, "Minutos")["series"][0]["processing"]["time_unit"] == "min"
+
+    app.reload()                                               # fica no projeto, por arquivo
+    abrir_projeto(app, "Minutos")
+    expect(unidade).to_have_value("min")
+    expect(app.locator("#file-info")).to_contain_text("54.000")
+
+
 def test_switching_projects_does_not_mix_their_files(app):
     novo_projeto(app, "Projeto A")
     adicionar_serie(app, "ensaio_a.asc")

@@ -67,6 +67,7 @@ def test_channels_endpoint_reports_nominal_and_fs(webapp):
     assert data["nominal"]["CH_1 Sensor_1 [nm]"] == pytest.approx(1550.0, abs=0.01)
     # Nome inicial dos sensores: o da coluna, sem nomes inventados
     assert data["defaults"]["CH_1 Sensor_1 [nm]"] == "CH_1 Sensor_1"
+    assert data["time_unit_detected"] == "s"                     # "Time [s]" no cabeçalho
     assert data["fs"] == pytest.approx(50.0)
     assert data["n_samples"] == 500
 
@@ -1410,3 +1411,16 @@ def test_data_paths_are_resolved_once_per_folder_and_never_leave_the_data_folder
     for ruim in ("data/raw/atalho.txt", "data/raw/pasta_atalho/fora.txt"):
         with pytest.raises(ValueError):
             dados.resolve(ruim, {})
+
+
+def test_time_unit_reaches_the_processing_and_the_join_preview(webapp):
+    _, client = webapp
+    segundos = client.post("/api/process", json=_process_options(save=False)).get_json()
+    horas = client.post("/api/process", json=_process_options(save=False, time_unit="h")).get_json()
+    assert "Tempo do arquivo lido em horas." in horas["report"]
+    assert horas["time"][-1] == pytest.approx(segundos["time"][-1] * 3600)
+
+    arquivos = ["data/raw/ensaio.ASC", "data/raw/ensaio.ASC"]
+    normal = client.post("/api/concat/preview", json={"files": arquivos}).get_json()
+    em_min = client.post("/api/concat/preview", json={"files": arquivos, "time_unit": "min"}).get_json()
+    assert em_min["parts"][0]["duration"] == pytest.approx(normal["parts"][0]["duration"] * 60)

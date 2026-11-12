@@ -152,6 +152,15 @@ reusable as setups) and *3 · Etapas* (cleaning and sampling, filters and
 conversion, each with its parameters). The plot shows the processed signal
 over the raw one.
 
+*Time in the file.* Under the file summary, "Tempo no arquivo" says how to
+read the numbers of the time column. "automático" uses the unit in the header
+(`Time [min]`, `Tempo (h)`, `Time [ms]`) or, without one, seconds, and shows
+which it found ("automático (segundos)"). When that is wrong, choose
+milissegundos, segundos, minutos or horas: the time axis, the duration and
+the sampling rate follow, the processing report says so, and the project
+keeps the choice per file. Times written as dates and hours are absolute,
+so the choice does not apply to them.
+
 A new project starts with every step off, so the first plot is the file as
 it is: turn on the steps the analysis needs. Each sensor starts with the
 name of its column without the unit (`CH_1 Sensor_1 [nm]` → `CH_1 Sensor_1`),

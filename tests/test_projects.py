@@ -35,6 +35,11 @@ def test_project_normalizes_its_contents():
     assert project.created and project.updated
 
 
+def test_the_time_unit_of_the_file_is_kept_and_an_unknown_one_dropped():
+    assert _project(processing={"time_unit": "min"}).processing == {"time_unit": "min"}
+    assert _project(processing={"time_unit": "dias"}).processing == {}
+
+
 def test_unknown_processing_sections_are_dropped():
     project = _project(processing={"nulls": {"strategy": "linear"}, "hack": {"x": 1},
                                    "outliers": {"method": "rolling", "callback": {"a": 1}}})

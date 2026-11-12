@@ -21,6 +21,7 @@ from .processing.spectra import (
     resolve_evolution_options,
     resolve_spectrum_settings,
 )
+from .io.reader import TIME_UNITS
 from .sensors import Sensor
 from .visualization.figure import default_style, parse_markers, resolve_style
 
@@ -50,6 +51,9 @@ def _clean_processing(processing: Optional[dict]) -> Dict[str, dict]:
         }
     if "include_raw" in processing:
         clean["include_raw"] = bool(processing["include_raw"])
+    # "Tempo no arquivo": automático ou a unidade escolhida para a coluna de tempo
+    if processing.get("time_unit") in ("auto", *TIME_UNITS):
+        clean["time_unit"] = processing["time_unit"]
     return clean
 
 

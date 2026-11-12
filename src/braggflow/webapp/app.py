@@ -52,6 +52,7 @@ from braggflow.io.reader import (
     concat_plan,
     describe_file,
     read_descriptor,
+    with_time_unit,
 )
 from braggflow.pipeline import OpticalPipeline
 from braggflow.processing import estimate_sampling_rate
@@ -815,6 +816,9 @@ def api_channels():
             "duration_s": float(data.time[-1] - data.time[0]) if len(data.time) else 0.0,
             "fs": fs,
             "time_origin": data.time_origin,
+            # ms, s, min ou h pelo cabeçalho; None quando o tempo vem de datas e
+            # horas. A página converte duração e fs se "Tempo no arquivo" mudar
+            "time_unit_detected": data.time_unit,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -968,7 +972,9 @@ def api_concat_preview():
         caminhos = _requested_files(options)
         if len(caminhos) < 2:
             raise ValueError(tr("app.joinNeedsTwo"))
-        plano = concat_plan([_state().interrogator.get(caminho)[0] for caminho in caminhos])
+        unidade = options.get("time_unit")
+        plano = concat_plan([with_time_unit(_state().interrogator.get(caminho)[0], unidade)
+                             for caminho in caminhos])
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 

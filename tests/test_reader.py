@@ -9,6 +9,8 @@ from braggflow.io.reader import (
 	load_spectra,
 	read_asc,
 	sniff_format,
+	time_unit_from_header,
+	with_time_unit,
 )
 
 def test_read_asc_basic(tmp_path):
@@ -293,3 +295,45 @@ def test_a_spectrum_file_is_opened_once(tmp_path, monkeypatch):
     assert aberturas.count(str(arquivo)) == 1
     assert lido.acquired == esperado.acquired and lido.metadata == esperado.metadata
     np.testing.assert_array_equal(lido.spectra[0].intensity, esperado.spectra[0].intensity)
+
+
+# ── unidade da coluna de tempo ───────────────────────────────────────────────
+
+@pytest.mark.parametrize("coluna, unidade", [
+	("Time [min]", "min"), ("Tempo (h)", "h"), ("Time [ms]", "ms"), ("Time [s]", "s"),
+	("Time (sec)", "s"), ("Time", None), ("Timestamp [h:m:s]", None)])
+def test_time_unit_comes_from_the_header(coluna, unidade):
+	assert time_unit_from_header(coluna) == unidade
+
+
+def test_a_time_column_in_minutes_is_read_in_seconds(tmp_path):
+	p = _write(tmp_path, "Time [min]\tCH1\n0\t1550,1\n0,5\t1550,2\n2\t1550,3\n")
+	data = load_interrogator_file(p)
+	np.testing.assert_allclose(data.time, [0.0, 30.0, 120.0])
+	assert data.time_unit == "min"
+
+
+def test_without_a_unit_the_numbers_are_seconds_and_can_be_read_otherwise(tmp_path):
+	p = _write(tmp_path, "Time\tCH1\n0\t1550,1\n1\t1550,2\n2\t1550,3\n")
+	data = load_interrogator_file(p)
+	assert data.time_unit == "s"
+	np.testing.assert_allclose(with_time_unit(data, "h").time, [0.0, 3600.0, 7200.0])
+	np.testing.assert_allclose(with_time_unit(data, "ms").time, [0.0, 0.001, 0.002])
+	assert with_time_unit(data, "auto") is data
+	np.testing.assert_allclose(data.time, [0.0, 1.0, 2.0])        # o original não muda
+	# a escolha vale sobre a unidade do cabeçalho, não sobre segundos já convertidos
+	minutos = load_interrogator_file(_write(tmp_path, "Time [min]\tCH1\n0\t1\n2\t1\n", "m.asc"))
+	np.testing.assert_allclose(with_time_unit(minutos, "s").time, [0.0, 2.0])
+
+
+def test_dates_and_times_ignore_the_chosen_unit(tmp_path):
+	p = _write(tmp_path, "Timestamp;CH1\n16/09/2026 10:23:38,000;1550,1\n16/09/2026 10:23:40,000;1550,3\n")
+	data = load_interrogator_file(p)
+	assert data.time_unit is None
+	np.testing.assert_allclose(with_time_unit(data, "min").time, [0.0, 2.0])
+
+
+def test_an_unknown_time_unit_is_refused(tmp_path):
+	data = load_interrogator_file(_write(tmp_path, "Time\tCH1\n0\t1550,1\n1\t1550,2\n"))
+	with pytest.raises(ValueError, match="Unidade de tempo desconhecida"):
+		with_time_unit(data, "dias")

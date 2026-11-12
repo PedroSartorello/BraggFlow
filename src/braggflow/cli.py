@@ -20,13 +20,16 @@ from .paths import resolve_data_dir
 
 
 def process_file(path: Path, setup_path: Optional[Path] = None, out: Optional[Path] = None,
-                 data_dir: Optional[Path] = None, plot: bool = True) -> Path:
+                 data_dir: Optional[Path] = None, plot: bool = True,
+                 time_unit: Optional[str] = None) -> Path:
     """
     One interrogator file to a processed CSV; returns the CSV written.
 
     No step is on, as in a new project of the web app, and it goes through
     the same ``run_recipe``. Without ``setup_path`` each sensor is named after
     its column without the unit (``braggflow.sensors.channel_labels``).
+    ``time_unit`` (``'ms'``, ``'s'``, ``'min'`` or ``'h'``) says how to read
+    the numbers of the time column when the header does not say it right.
     Without ``out`` the result goes to
     ``<data dir>/processed/<name>_processado.csv``.
     """
@@ -38,7 +41,9 @@ def process_file(path: Path, setup_path: Optional[Path] = None, out: Optional[Pa
     if out is None:
         out = resolve_data_dir(data_dir) / "processed" / f"{path.stem}_processado.csv"
 
-    pipeline, _, _ = run_recipe([path], {}, setup=setup)
+    pipeline, _, messages = run_recipe([path], {"time_unit": time_unit}, setup=setup)
+    for linha in messages["report"] + messages["warnings"]:
+        print(linha)
     pipeline.save_processed_data(out)
 
     t, sig, ch = pipeline.get_data()
@@ -69,10 +74,13 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("--out", type=Path, help="output CSV (default: <data dir>/processed/<name>_processado.csv)")
     p.add_argument("--data-dir", type=Path, help="data folder (default: $BRAGGFLOW_DATA_DIR or ./data)")
     p.add_argument("--no-plot", action="store_true", help="do not open the signal plots")
+    p.add_argument("--time-unit", choices=["ms", "s", "min", "h"],
+                   help="unit of the numbers in the time column (default: from the header, else s)")
 
     args = parser.parse_args(argv)
     if args.command == "process":
-        process_file(args.file, args.setup, args.out, args.data_dir, plot=not args.no_plot)
+        process_file(args.file, args.setup, args.out, args.data_dir, plot=not args.no_plot,
+                     time_unit=args.time_unit)
 
 
 def web(argv: Optional[List[str]] = None) -> None:

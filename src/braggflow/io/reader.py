@@ -27,7 +27,7 @@ import io
 import re
 import struct
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -90,6 +90,42 @@ class InterrogatorData:
     channels: List[str]                # nomes das colunas do arquivo
     units: List[Optional[str]]         # unidade lida do cabeçalho, ex.: 'nm'
     time_origin: Optional[str] = None  # instante da primeira amostra, se houver
+    # Unidade dos números da coluna de tempo (ms, s, min, h), já convertidos
+    # em segundos em ``time``; None quando o tempo veio de datas e horas
+    time_unit: Optional[str] = "s"
+
+
+# Quantos segundos vale cada unidade de tempo aceita
+TIME_UNITS = {"ms": 1e-3, "s": 1.0, "min": 60.0, "h": 3600.0}
+
+_TIME_UNIT_ALIASES = {
+    "ms": "ms", "msec": "ms", "millisecond": "ms", "milliseconds": "ms", "milissegundos": "ms",
+    "s": "s", "sec": "s", "secs": "s", "second": "s", "seconds": "s", "seg": "s", "segundos": "s",
+    "min": "min", "mins": "min", "minute": "min", "minutes": "min", "minutos": "min",
+    "h": "h", "hr": "h", "hrs": "h", "hour": "h", "hours": "h", "hora": "h", "horas": "h",
+}
+_HEADER_UNIT = re.compile(r"[\[(]\s*([^\[\]()]+?)\s*[\])]\s*$")
+
+
+def time_unit_from_header(column) -> Optional[str]:
+    """``'Time [min]'`` ou ``'Tempo (h)'`` -> ``'min'``/``'h'``; sem unidade conhecida, None."""
+    achado = _HEADER_UNIT.search(str(column))
+    return _TIME_UNIT_ALIASES.get(achado.group(1).lower()) if achado else None
+
+
+def with_time_unit(data: "InterrogatorData", unit: Optional[str]) -> "InterrogatorData":
+    """
+    Os mesmos dados com os números da coluna de tempo lidos em ``unit``
+    (``'ms'``, ``'s'``, ``'min'`` ou ``'h'``) em vez da unidade detectada.
+    ``None``, ``''`` ou ``'auto'`` mantêm a detectada; um tempo que veio de
+    datas e horas não muda.
+    """
+    if unit in (None, "", "auto") or data.time_unit is None or unit == data.time_unit:
+        return data
+    if unit not in TIME_UNITS:
+        raise ValueError(tr("reader.badTimeUnit", unit=unit))
+    fator = TIME_UNITS[unit] / TIME_UNITS[data.time_unit]
+    return replace(data, time=data.time * fator, time_unit=unit)
 
 
 def concat_plan(datasets: List[InterrogatorData]) -> List[dict]:
@@ -519,18 +555,24 @@ def parse_time_column(values: pd.Series) -> Tuple[np.ndarray, Optional[str]]:
     """
     Converte a coluna de tempo em segundos.
 
-    Colunas numéricas passam direto. Colunas de texto são lidas como data e
-    hora (ISO ou dia/mês/ano, ou só hora) e convertidas em segundos desde a
-    primeira amostra; o instante inicial é devolvido. Horas que passam da
-    meia-noite são desdobradas. Valores ilegíveis viram NaN.
+    Colunas numéricas passam direto (já em segundos). Colunas de texto são
+    lidas como data e hora (ISO ou dia/mês/ano, ou só hora) e convertidas em
+    segundos desde a primeira amostra; o instante inicial é devolvido. Horas
+    que passam da meia-noite são desdobradas. Valores ilegíveis viram NaN.
     """
+    segundos, origem, _ = _parse_time(values)
+    return segundos, origem
+
+
+def _parse_time(values: pd.Series) -> Tuple[np.ndarray, Optional[str], bool]:
+    """:func:`parse_time_column` e se a coluna era de números (True) ou de datas e horas."""
     if pd.api.types.is_numeric_dtype(values):
-        return values.to_numpy(dtype=float), None
+        return values.to_numpy(dtype=float), None, True
 
     text = values.astype(str).str.strip().str.replace(",", ".", regex=False)
     numeric = pd.to_numeric(text, errors="coerce")
     if numeric.notna().mean() >= 0.9:
-        return numeric.to_numpy(dtype=float), None
+        return numeric.to_numpy(dtype=float), None, True
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
@@ -549,8 +591,8 @@ def parse_time_column(values: pd.Series) -> Tuple[np.ndarray, Optional[str]]:
         finite = np.flatnonzero(valid)
         wraps = np.concatenate([[0], np.cumsum(np.diff(seconds[finite]) < -43200)])
         seconds[finite] += 86400.0 * wraps
-        return seconds, None
-    return seconds, first.isoformat()
+        return seconds, None, False
+    return seconds, first.isoformat(), False
 
 
 def load_interrogator_file(path) -> InterrogatorData:
@@ -558,7 +600,10 @@ def load_interrogator_file(path) -> InterrogatorData:
     Lê a série temporal de picos de um interrogador.
 
     * A coluna de tempo é a primeira cujo nome começa com Time/Tempo/
-      Timestamp/Date; sem cabeçalho, a primeira coluna numérica.
+      Timestamp/Date; sem cabeçalho, a primeira coluna numérica. Números
+      estão em segundos, salvo outra unidade no cabeçalho (``Time [min]``,
+      ``Tempo (h)``, ``Time [ms]``); :func:`with_time_unit` corrige uma
+      unidade detectada errado.
     * Os canais são as colunas que começam com ``CH``; não havendo nenhuma,
       todas as outras colunas numéricas.
     * Os valores saem como foram exportados: picos perdidos (0) são tratados
@@ -590,7 +635,10 @@ def load_interrogator_file(path) -> InterrogatorData:
     if not ch_cols:
         raise ValueError(tr("reader.noChannelColumn"))
 
-    time_array, origin = parse_time_column(df[time_col])
+    time_array, origin, numerico = _parse_time(df[time_col])
+    time_unit = (time_unit_from_header(time_col) or "s") if numerico else None
+    if time_unit:
+        time_array = time_array * TIME_UNITS[time_unit]
     keep = np.isfinite(time_array)
     signals = np.column_stack([_to_float(df[c], fmt.decimal) for c in ch_cols])
     units = [split_unit(str(c))[1] or "nm" for c in ch_cols]
@@ -601,6 +649,7 @@ def load_interrogator_file(path) -> InterrogatorData:
         channels=[str(c) for c in ch_cols],
         units=units,
         time_origin=origin,
+        time_unit=time_unit,
     )
 
 
