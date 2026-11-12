@@ -156,6 +156,16 @@
       <span class="hint" title="Um arquivo aberto pela primeira vez começa com as opções que estão na tela; depois disso, as mudanças valem só para ele." data-i18n="series.filesHint" data-i18n-title="series.filesHintTitle">Cada arquivo guarda os próprios sensores e etapas. Marque os do lote.</span>
       <span class="hint" id="raw-kind-hint"></span>
       <span class="hint" id="file-info"></span>
+      <label class="field hidden" id="time-unit-field" data-i18n="time.unitLabel" data-i18n-title="time.unitTitle"
+             title="Como ler os números da coluna de tempo. Automático usa a unidade do cabeçalho (Time [min], Tempo (h)) ou, sem ela, segundos.">Tempo no arquivo
+        <select id="time-unit" data-opt="time_unit">
+          <option value="auto" selected>automático</option>
+          <option value="ms" data-i18n="time.ms">milissegundos</option>
+          <option value="s" data-i18n="time.s">segundos</option>
+          <option value="min" data-i18n="time.min">minutos</option>
+          <option value="h" data-i18n="time.h">horas</option>
+        </select>
+      </label>
     </div>
   </div>
 

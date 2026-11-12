@@ -102,7 +102,9 @@ braggflow process data/raw/your_file.ASC [--setup data/setups/bench.json] [--out
 
 Saves one file as `<data dir>/processed/<name>_processado.csv` with its
 JSON (time in seconds, one column per sensor, units in the header) and opens
-one plot per channel (`--no-plot` to skip). No processing step is on, as in a
+one plot per channel (`--no-plot` to skip). `--time-unit ms|s|min|h` reads
+the numbers of the time column in that unit when the header does not say it
+(or says it wrong). No processing step is on, as in a
 new project of the web app. Without `--setup`, each sensor is named after its
 column without the unit (`CH_1 Sensor_1 [nm]` → `CH_1 Sensor_1`). A full chain
 of steps (interrogator cleaning, time order, null and outlier removal,

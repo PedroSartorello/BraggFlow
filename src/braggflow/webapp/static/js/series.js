@@ -77,6 +77,7 @@ export function resetProcessing() {
     } else el.value = el.defaultValue;
   });
   syncCardStyles();
+  renderFileInfo();
 }
 
 export function applyProcessing(processing) {
@@ -89,6 +90,7 @@ export function applyProcessing(processing) {
     else el.value = value ?? "";
   });
   syncCardStyles();
+  renderFileInfo();          // a duração e a fs seguem "Tempo no arquivo"
 }
 
 function collectOptions() {
@@ -747,11 +749,36 @@ function labelSensorRow(row) {
 // Resumo do arquivo aberto (amostras, fs, duração, início), no idioma atual
 let fileInfo = null;
 
-function renderFileInfo() {
+// Segundos de cada unidade de tempo e o nome dela ("Tempo no arquivo")
+const SEGUNDOS = { ms: 1e-3, s: 1, min: 60, h: 3600 };
+const NOME_DA_UNIDADE = { ms: "time.ms", s: "time.s", min: "time.min", h: "time.h" };
+
+// Quanto o tempo lido muda com a unidade escolhida em vez da detectada
+function timeFactor() {
+  const detectada = fileInfo?.time_unit_detected;
+  const escolhida = $("time-unit").value;
+  if (!detectada || !(escolhida in SEGUNDOS)) return 1;
+  return SEGUNDOS[escolhida] / SEGUNDOS[detectada];
+}
+
+function renderTimeUnit() {
+  const detectada = fileInfo?.time_unit_detected;
+  $("time-unit-field").classList.toggle("hidden", !fileInfo);
+  // Datas e horas no arquivo: o tempo já é absoluto, a unidade não se aplica
+  $("time-unit").disabled = Boolean(fileInfo) && !detectada;
+  $("time-unit").querySelector('option[value="auto"]').textContent =
+    !fileInfo ? t("time.auto")
+      : detectada ? t("time.autoDetected", { unit: t(NOME_DA_UNIDADE[detectada]) })
+        : t("time.autoDates");
+}
+
+export function renderFileInfo() {
+  renderTimeUnit();
   if (!fileInfo) { setPlain($("file-info"), ""); return; }
+  const fator = timeFactor();
   const info = [`${fmtNum(fileInfo.n_samples, 0)} ${t("series.samples", { n: fileInfo.n_samples })}`];
-  if (fileInfo.fs) info.push(`≈ ${fmtNum(fileInfo.fs, 4)} Hz`);
-  info.push(`${fmtNum(fileInfo.duration_s, 1)} s`);
+  if (fileInfo.fs) info.push(`≈ ${fmtNum(fileInfo.fs / fator, 4)} Hz`);
+  info.push(`${fmtNum(fileInfo.duration_s * fator, 1)} s`);
   if (fileInfo.time_origin) info.push(t("sensors.fileStart", { time: fileInfo.time_origin.replace("T", " ") }));
   setPlain($("file-info"), info.join(" · "));
 }
@@ -1226,7 +1253,7 @@ async function refreshConcatPlan() {
     const resp = await fetch("/api/concat/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ files: arquivos }),
+      body: JSON.stringify({ files: arquivos, time_unit: $("time-unit").value }),
     });
     const dados = await resp.json();
     if (!resp.ok) throw new Error(dados.error || t("concat.previewError"));
@@ -1274,6 +1301,13 @@ $("show-raw").addEventListener("change", () => {
   processData({ save: false });
 });
 $("btn-process-all").addEventListener("click", () => processAll().catch((err) => showError(err.message)));
+
+// Outra unidade de tempo: o resumo do arquivo e a prévia da junção mudam junto
+// (o reprocessamento vem do tratamento geral da barra lateral)
+$("time-unit").addEventListener("change", () => {
+  renderFileInfo();
+  scheduleConcatPlan();
+});
 
 // ── Idioma trocado: o que esta aba desenha fora do HTML ─────────────────────
 onLanguageChange(() => {

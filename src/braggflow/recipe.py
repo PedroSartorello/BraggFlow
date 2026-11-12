@@ -17,7 +17,7 @@ from typing import Callable, Optional, Sequence
 import numpy as np
 
 from .i18n import count, num, tr
-from .io.reader import concatenate, file_fingerprint, load_interrogator_file
+from .io.reader import concatenate, file_fingerprint, load_interrogator_file, with_time_unit
 from .pipeline import OpticalPipeline
 from .processing import (
     apply_highpass_filter,
@@ -88,6 +88,26 @@ def _invalid_report(entry: dict) -> str:
     return tr("recipe.cleaning", parts=", ".join(parts) if parts else tr("recipe.cleaningNone"))
 
 
+def _apply_time_unit(caminhos, partes, unidade, messages):
+    """
+    A unidade da coluna de tempo: escolhida (``time_unit`` = ms, s, min ou
+    h) ou a do cabeçalho (``'auto'``, vazio). Devolve as partes convertidas
+    e a unidade escolhida, que fica registrada no JSON (None em automático).
+    """
+    if unidade in (None, "", "auto"):
+        lidas = sorted({dados.time_unit for dados, _ in partes} - {None, "s"})
+        if lidas:
+            messages["report"].append(tr("recipe.timeUnitFromHeader",
+                                         unit=", ".join(tr(f"unit.{u}") for u in lidas)))
+        return partes, None
+    datas = [c.name for c, (dados, _) in zip(caminhos, partes) if dados.time_unit is None]
+    if datas:
+        messages["warnings"].append(tr("recipe.timeUnitIgnored", names=", ".join(datas)))
+    partes = [(with_time_unit(dados, unidade), origem) for dados, origem in partes]
+    messages["report"].append(tr("recipe.timeUnit", unit=tr(f"unit.{unidade}")))
+    return partes, unidade
+
+
 def run_recipe(files: Sequence[Path], options: dict, *,
                setup: Optional[SensorSetup] = None,
                load: Callable = load_file):
@@ -110,6 +130,7 @@ def run_recipe(files: Sequence[Path], options: dict, *,
         raise ValueError(tr("recipe.noFile"))
 
     partes = [load(caminho) for caminho in caminhos]
+    partes, unidade = _apply_time_unit(caminhos, partes, options.get("time_unit"), messages)
     if len(partes) == 1:
         data, source = partes[0]
         juncoes = []
@@ -122,6 +143,8 @@ def run_recipe(files: Sequence[Path], options: dict, *,
 
     pipeline = OpticalPipeline.from_data(data, str(caminhos[0]), source)
     pipeline.joins = juncoes
+    if unidade:
+        pipeline._record("time_unit", "time", {"unit": unidade}, None)
     setup = setup if setup is not None else setup_from_options(options)
 
     # Colunas ocultas saem antes de tudo: para o resto, é como se não existissem

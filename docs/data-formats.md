@@ -24,7 +24,7 @@ The Bragg peak wavelength of each channel over time. Read by
 
 | Column | Rule | Unit |
 |---|---|---|
-| Time | first column named `Time…`, `Tempo…`, `Timestamp…` or `Date…`; seconds or absolute timestamps (converted to seconds since the first sample) | s |
+| Time | first column named `Time…`, `Tempo…`, `Timestamp…` or `Date…`; numbers in seconds, or in the unit of the header (`Time [ms]`, `Time [min]`, `Tempo (h)`), or absolute timestamps (converted to seconds since the first sample). "Tempo no arquivo" in the web app and `--time-unit` in `braggflow process` override a unit read wrong | s |
 | Channels | columns whose name starts with `CH`; otherwise every other numeric column. The unit in brackets (`[nm]`) is kept | nm |
 
 Values are kept as exported. A lost peak is usually written as `0`;

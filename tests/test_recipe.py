@@ -223,3 +223,32 @@ def test_savgol_window_is_explained_in_the_step_terms(janela, ordem, trecho):
         run_recipe([EXAMPLE], {"savgol": {"enabled": True, "window_length": janela, "polyorder": ordem}})
     assert trecho in str(erro.value)
 
+
+# ── unidade do tempo ─────────────────────────────────────────────────────────
+
+def test_time_unit_option_reads_the_file_time_in_minutes(tmp_path):
+    segundos, _, _ = run_recipe([EXAMPLE], {})
+    minutos, _, messages = run_recipe([EXAMPLE], {"time_unit": "min"})
+    np.testing.assert_allclose(minutos.time_array, segundos.time_array * 60)
+    assert "Tempo do arquivo lido em minutos." in messages["report"]
+    assert minutos.history[0] == {"step": "time_unit", "kind": "time", "params": {"unit": "min"}}
+
+
+def test_cli_time_unit(tmp_path):
+    cli = process_file(EXAMPLE, out=tmp_path / "h.csv", plot=False, time_unit="h")
+    tempo = np.loadtxt(cli, delimiter=",", skiprows=1, usecols=0)
+    assert tempo[-1] == pytest.approx(900 * 3600)
+
+
+def test_a_unit_in_the_header_is_reported_and_dates_are_left_alone(tmp_path):
+    arquivo = tmp_path / "min.asc"
+    arquivo.write_text("Time [min]\tCH_1\n0\t1550.1\n1\t1550.2\n2\t1550.3\n", encoding="utf-8")
+    pipeline, _, messages = run_recipe([arquivo], {})
+    np.testing.assert_allclose(pipeline.time_array, [0, 60, 120])
+    assert any("Tempo do arquivo em minutos, pelo cabeçalho" in r for r in messages["report"])
+
+    datas = tmp_path / "datas.csv"
+    datas.write_text("Timestamp;CH_1\n16/09/2026 10:23:38;1550,1\n16/09/2026 10:23:40;1550,3\n", encoding="utf-8")
+    pipeline, _, messages = run_recipe([datas], {"time_unit": "h"})
+    np.testing.assert_allclose(pipeline.time_array, [0, 2])
+    assert messages["warnings"] == ["O tempo de datas.csv vem de datas e horas: a unidade escolhida não se aplica."]

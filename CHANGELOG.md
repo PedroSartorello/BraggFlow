@@ -22,6 +22,17 @@ itself did not change: the same input gives the same output as before.
 
 ### Added
 
+- The unit of the time column. Numbers used to be taken as seconds even
+  under `Time [min]`; now the header unit (`[ms]`, `[s]`, `[min]`, `[h]`,
+  also in parentheses) is read, and "Tempo no arquivo", under the file
+  summary in Séries temporais, overrides it with milissegundos, segundos,
+  minutos or horas. The time axis, duration, sampling rate and the join
+  preview follow; the project keeps the choice per file
+  (`processing.time_unit`), the report and the JSON record it, and dates and
+  hours are left alone with a warning. In the library:
+  `InterrogatorData.time_unit`, `braggflow.io.reader.with_time_unit`,
+  `time_unit_from_header`, the `time_unit` option of `run_recipe` and
+  `braggflow process --time-unit`.
 - `pyproject.toml`: installable with `pip install -e .`, Python ≥ 3.10,
   runtime dependencies with minimum versions, `dev` extra with pytest.
 - Commands `braggflow process <file>` and `braggflow-web`.
