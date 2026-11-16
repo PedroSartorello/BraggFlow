@@ -372,3 +372,16 @@ itself did not change: the same input gives the same output as before.
     shares the CSV writer with `save_processed_data`
     (`braggflow.io.processed.write_processed_csv`).
   - The unused `processing.filters.detrend_signal` was removed.
+- Second part of the code review of `main`:
+  - A tick step too small for the axis range (0.01 over 900 s) made the
+    figure create ~90,000 ticks and hang for minutes; it is refused with
+    the number of ticks it would make (up to 200).
+  - A PNG or TIFF export larger than 100 megapixels (or 65,535 px on a side)
+    is refused, with the largest dpi that fits; PDF and SVG are not limited.
+  - The decimal mark came only from the first ~60 lines: a file with only
+    whole numbers at the start lost the comma decimals further down (they
+    became NaN). A text column whose only decimal is the comma now switches
+    the reading to comma.
+  - Spectrum smoothing longer than the (cropped) spectrum, or a
+    Savitzky-Golay window not above its order, was skipped without a word;
+    it is now an error that says why.

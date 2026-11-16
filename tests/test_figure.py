@@ -308,3 +308,33 @@ def test_evolution_labels():
     assert evolution_labels("prominence", "", "max", "s")[1] == "Height"
     with pytest.raises(ValueError, match="Grandeza"):
         evolution_labels("x", "", "min")
+
+
+# ── limites que protegem o servidor ──────────────────────────────────────────
+
+def _curva_de_900_s():
+    from braggflow.visualization.figure import render_curve_figure, resolve_style
+    itens = [{"key": "a", "x": np.linspace(0, 900, 500), "y": np.sin(np.linspace(0, 9, 500))}]
+    return render_curve_figure, resolve_style, itens
+
+
+def test_a_tick_step_too_small_for_the_axis_is_refused_quickly():
+    """Passo 0,01 em 900 s daria 90 mil ticks: antes travava a figura por minutos."""
+    import time
+    render, resolve, itens = _curva_de_900_s()
+    inicio = time.perf_counter()
+    with pytest.raises(ValueError, match="Passo dos ticks X pequeno demais"):
+        render(itens, [], resolve({"ticks": {"x_step": "0.01"}}), "t", "y", fmt="png", dpi=50)
+    assert time.perf_counter() - inicio < 10
+    imagem, _ = render(itens, [], resolve({"ticks": {"x_step": "100", "y_step": "0.5"}}), "t", "y",
+                       fmt="png", dpi=50)
+    assert imagem[:4] == b"\x89PNG"
+
+
+def test_a_raster_export_too_large_says_how_many_dpi_fit():
+    render, resolve, itens = _curva_de_900_s()
+    grande = resolve({"figure": {"width": "100", "height": "60"}})
+    with pytest.raises(ValueError, match=r"grande demais para exportar em imagem\. Use até \d+ dpi"):
+        render(itens, [], grande, "t", "y", fmt="tiff", dpi=2400)
+    pdf, _ = render(itens, [], grande, "t", "y", fmt="pdf", dpi=2400)    # vetor: o tamanho não pesa
+    assert pdf[:4] == b"%PDF"

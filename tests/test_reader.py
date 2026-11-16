@@ -337,3 +337,19 @@ def test_an_unknown_time_unit_is_refused(tmp_path):
 	data = load_interrogator_file(_write(tmp_path, "Time\tCH1\n0\t1550,1\n1\t1550,2\n"))
 	with pytest.raises(ValueError, match="Unidade de tempo desconhecida"):
 		with_time_unit(data, "dias")
+
+
+
+def test_a_comma_decimal_that_only_shows_up_later_in_the_file_is_kept(tmp_path):
+	"""As primeiras linhas só têm inteiros: o decimal sai delas como ponto, mas a vírgula vem depois."""
+	linhas = ["Time\tCH1"] + [f"{i}\t1550" for i in range(80)] + ["80,5\t1550,25", "81\t1550,5"]
+	data = load_interrogator_file(_write(tmp_path, "\n".join(linhas) + "\n"))
+	np.testing.assert_allclose(data.time[-2:], [80.5, 81.0])
+	np.testing.assert_allclose(data.signals[-2:, 0], [1550.25, 1550.5])
+	assert np.isfinite(data.signals).all()
+
+
+def test_a_point_decimal_file_with_a_comma_in_text_stays_point(tmp_path):
+	linhas = ["Time\tCH1\tObs"] + [f"{i}.5\t1550.1\tok" for i in range(5)] + ["5.5\t1550.2\t1,2"]
+	data = load_interrogator_file(_write(tmp_path, "\n".join(linhas) + "\n"))
+	np.testing.assert_allclose(data.time, [0.5, 1.5, 2.5, 3.5, 4.5, 5.5])

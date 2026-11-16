@@ -157,16 +157,18 @@ def smooth_spectrum(intensity: np.ndarray, window: Optional[int], order: int,
     if not window:
         return intensity
     window = int(window)
-    if method == "moving_average":
-        if window > len(intensity):
-            return intensity
-        return apply_moving_average_filter(intensity.reshape(-1, 1), window)[:, 0]
-    if method != "savgol":
+    if method not in SMOOTH_METHODS:
         raise ValueError(tr("spectra.unknownSmoothing", method=method))
-    if window % 2 == 0:
+    if method == "savgol" and window % 2 == 0:
         window += 1
-    if window <= order or window > len(intensity):
-        return intensity
+    # Uma janela que não cabe não é ignorada em silêncio: o espectro sairia
+    # sem suavizar com a suavização ligada na tela
+    if window > len(intensity):
+        raise ValueError(tr("spectra.smoothTooLong", window=window, n=len(intensity)))
+    if method == "moving_average":
+        return apply_moving_average_filter(intensity.reshape(-1, 1), window)[:, 0]
+    if window <= order:
+        raise ValueError(tr("spectra.smoothOrder", window=window, order=order))
     return savgol_smooth(intensity, window, order)
 
 

@@ -194,3 +194,22 @@ def test_nothing_is_detected_when_disabled():
     resultado = _analise(_gauss(1550, 0.2))
     assert resultado["extrema"] == []
     assert resultado["summary"]["global_max"] is not None, "os globais vêm sempre"
+
+
+# ── suavização que não cabe ──────────────────────────────────────────────────
+
+def test_a_smoothing_longer_than_the_cropped_spectrum_is_an_error_not_skipped():
+    wl = np.linspace(1500, 1600, 200)
+    y = np.sin(wl / 3)
+    preparo = resolve_spectrum_settings({"lambda_min": "1500", "lambda_max": "1510", "smooth_window": "51"})
+    with pytest.raises(ValueError, match="maior que o espectro"):
+        prepare_spectrum(wl, y, preparo)
+    media = resolve_spectrum_settings({"lambda_max": "1510", "smooth_window": "51", "smooth_method": "moving_average"})
+    with pytest.raises(ValueError, match="maior que o espectro"):
+        prepare_spectrum(wl, y, media)
+
+
+def test_a_savgol_window_not_above_the_order_is_an_error():
+    wl = np.linspace(1500, 1600, 200)
+    with pytest.raises(ValueError, match=r"precisa ser maior que a ordem \(3\)"):
+        prepare_spectrum(wl, np.sin(wl), resolve_spectrum_settings({"smooth_window": "3", "smooth_order": "3"}))

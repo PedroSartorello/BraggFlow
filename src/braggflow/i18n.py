@@ -202,6 +202,10 @@ MESSAGES = {
     "spectra.eventPrefix": {"pt": "[evento {n}] ", "en": "[event {n}] "},
     "spectra.invalidEvent": {"pt": "{prefix}Evento inválido.", "en": "{prefix}Invalid event."},
     "spectra.invalidTime": {"pt": "{prefix}Instante inválido: {value}.", "en": "{prefix}Invalid time: {value}."},
+    "spectra.smoothTooLong": {"pt": "A suavização de {window} pontos é maior que o espectro ({n} pontos, depois do recorte): use uma janela menor.",
+                              "en": "The {window}-point smoothing is longer than the spectrum ({n} points, after cropping): use a smaller window."},
+    "spectra.smoothOrder": {"pt": "A suavização de {window} pontos precisa ser maior que a ordem ({order}).",
+                            "en": "The {window}-point smoothing must be larger than the order ({order})."},
     "spectra.unknownSmoothing": {"pt": "Suavização desconhecida: {method}.", "en": "Unknown smoothing: {method}."},
     "spectra.unknownNormalization": {"pt": "Normalização desconhecida: {mode}.", "en": "Unknown normalization: {mode}."},
     "spectra.unknownOutput": {"pt": "Saída de transmissão desconhecida: {output}.", "en": "Unknown transmission output: {output}."},
@@ -241,6 +245,10 @@ MESSAGES = {
     "figure.yOrder": {"pt": "Y mínimo deve ser menor que Y máximo.", "en": "Y minimum must be below Y maximum."},
     "figure.noChannel": {"pt": "Nenhum canal selecionado.", "en": "No channel selected."},
     "figure.missingChannels": {"pt": "Canais ausentes no CSV: {channels}.", "en": "Channels missing from the CSV: {channels}."},
+    "figure.tooManyTicks": {"pt": "Passo dos ticks {axis} pequeno demais para a faixa do eixo: daria {n} ticks (até {max}). Aumente o passo ou deixe-o vazio.",
+                            "en": "Tick step {axis} too small for the axis range: it would make {n} ticks (up to {max}). Use a larger step or leave it empty."},
+    "figure.tooManyPixels": {"pt": "A figura teria {width} × {height} px a {dpi} dpi, grande demais para exportar em imagem. Use até {max_dpi} dpi, um tamanho menor ou PDF/SVG.",
+                             "en": "The figure would be {width} × {height} px at {dpi} dpi, too large to export as an image. Use up to {max_dpi} dpi, a smaller size or PDF/SVG."},
     "figure.badFormat": {"pt": "Formato não suportado: {format}.", "en": "Unsupported format: {format}."},
 
     # ── Projetos (projects.py) ───────────────────────────────────────────────
