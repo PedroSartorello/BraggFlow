@@ -257,6 +257,29 @@ def test_figure_is_drawn_from_the_processed_csv(app):
     expect(app.locator("#viz-status")).to_contain_text("3 curva(s)")
 
 
+def test_the_processed_csv_and_the_figure_are_downloaded(app, tmp_path):
+    """Os downloads passam por saveBlob (core.js): o link entra na página e o endereço vive o bastante."""
+    novo_projeto(app, "Baixar")
+    adicionar_serie(app, "ensaio_a.asc")
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    with app.expect_download() as baixado:
+        app.click("#btn-download")
+    assert baixado.value.suggested_filename == "ensaio_a_processado.csv"
+    destino = tmp_path / "csv.csv"
+    baixado.value.save_as(destino)
+    assert destino.read_text(encoding="utf-8").startswith("Time [s],CH_1 Sensor_1 [nm]")
+
+    app.click('#tabs .tab[data-tab="viz"]')
+    expect(app.locator("#viz-img")).to_be_visible()
+    with app.expect_download() as figura:
+        app.click("#btn-fig-download")
+    assert figura.value.suggested_filename == "ensaio_a_figura.pdf"
+    figura.value.save_as(tmp_path / "f.pdf")
+    assert (tmp_path / "f.pdf").read_bytes()[:4] == b"%PDF"
+    assert app.locator("a[download]").count() == 0, "o link sai da página depois do clique"
+
+
 def test_a_file_in_a_folder_keeps_its_csv_apart_and_reaches_the_figure(app, data_dir):
     pasta = data_dir / "raw" / "dia1"
     pasta.mkdir()

@@ -3,6 +3,8 @@ import warnings
 import numpy as np
 from typing import Tuple, List, Optional, Literal
 
+from ..i18n import tr
+
 
 def remove_null_values(
     time_array: np.ndarray,
@@ -43,11 +45,10 @@ def remove_null_values(
     """
     valid_strategies = {"remove", "forward", "linear", "constant"}
     if strategy not in valid_strategies:
-        raise ValueError(
-            f"Unknown strategy '{strategy}'. Choose one of: {valid_strategies}."
-        )
+        raise ValueError(tr("lib.unknownOption", what="strategy", value=strategy,
+                            options=", ".join(sorted(valid_strategies))))
     if strategy == "constant" and fill_value is None:
-        raise ValueError("fill_value must be provided when strategy='constant'.")
+        raise ValueError(tr("lib.fillValue"))
 
     time_array = np.asarray(time_array, dtype=float)
     signals_array = np.asarray(signals_array, dtype=float)
@@ -234,12 +235,11 @@ def detect_outliers(
     """
     valid_methods = {"zscore", "iqr", "mad", "rolling"}
     if method not in valid_methods:
-        raise ValueError(
-            f"Unknown method '{method}'. Choose one of: {valid_methods}."
-        )
+        raise ValueError(tr("lib.unknownOption", what="method", value=method,
+                            options=", ".join(sorted(valid_methods))))
     if method == "rolling":
         if window_size <= 0 or window_size % 2 == 0:
-            raise ValueError("window_size must be a positive odd integer.")
+            raise ValueError(tr("lib.oddPositive", name="window_size"))
 
     signals_array = np.asarray(signals_array, dtype=float)
     n_samples, n_channels = signals_array.shape
@@ -411,11 +411,10 @@ def remove_outliers(
     """
     valid_strategies = {"remove", "linear", "forward", "constant"}
     if strategy not in valid_strategies:
-        raise ValueError(
-            f"Unknown strategy '{strategy}'. Choose one of: {valid_strategies}."
-        )
+        raise ValueError(tr("lib.unknownOption", what="strategy", value=strategy,
+                            options=", ".join(sorted(valid_strategies))))
     if strategy == "constant" and fill_value is None:
-        raise ValueError("fill_value must be provided when strategy='constant'.")
+        raise ValueError(tr("lib.fillValue"))
 
     time_array = np.asarray(time_array, dtype=float)
     signals_array = np.asarray(signals_array, dtype=float)

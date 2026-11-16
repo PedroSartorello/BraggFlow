@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from .i18n import tr
 from .paths import write_text_atomic
 
 _UNIT_SUFFIX = re.compile(r"\s*\[[^\[\]]*\]\s*$")
@@ -51,10 +52,7 @@ class Sensor:
         else:
             self.temp_sensitivity = float(self.temp_sensitivity)
             if not self.temp_sensitivity > 0:
-                raise ValueError(
-                    f"Sensor '{self.label}': thermal sensitivity K_T must be > 0 "
-                    f"(got {self.temp_sensitivity})."
-                )
+                raise ValueError(tr("lib.sensorKt", name=self.label, value=self.temp_sensitivity))
 
         # Banda pela metade (um limite vazio) é o mesmo que não ter banda
         if self.band is not None and any(v in ("", None) for v in self.band):
@@ -62,10 +60,7 @@ class Sensor:
         if self.band is not None:
             low, high = (float(v) for v in self.band)
             if not low < high:
-                raise ValueError(
-                    f"Sensor '{self.label}': band minimum must be below maximum "
-                    f"(got {low}, {high})."
-                )
+                raise ValueError(tr("lib.sensorBand", name=self.label, low=low, high=high))
             self.band = (low, high)
 
     @property

@@ -183,8 +183,11 @@ class ResultCache:
                 self._entries.popitem(last=False)
 
 
-# Arquivos do interrogador já lidos (reprocessar não relê o disco)
+# Arquivos do interrogador já lidos (reprocessar não relê o disco). O limite
+# é em bytes: uma concatenação de vários arquivos cabe inteira, em vez de
+# ser relida a cada mudança. 9.000 amostras × 3 canais pesam ~300 kB.
 FILE_CACHE_SIZE = 2
+INTERROGATOR_CACHE_BYTES = 256 * 1024 * 1024
 # Espectros lidos e extremos já medidos: uma evolução com milhares de
 # arquivos é recalculada (outro λ de referência, outro modo, outro preparo)
 # sem reler nada. O limite é em bytes, não em arquivos: os espectros de um
@@ -227,6 +230,12 @@ def _spectrum_bytes(spectra) -> int:
     return sum(s.intensity.nbytes for s in spectra.spectra) + sum(eixos.values())
 
 
+def _interrogator_bytes(entry) -> int:
+    """Memória de um arquivo do interrogador lido: o tempo e os sinais."""
+    dados, _ = entry
+    return int(dados.time.nbytes + dados.signals.nbytes)
+
+
 def _load_processed(path: Path):
     df, units, metadata = read_processed_csv(path)
     return df, units, channel_quantities(metadata)
@@ -243,7 +252,8 @@ def _classify(path: Path) -> str:
 @dataclass
 class AppState:
     data: DataFolder
-    interrogator: FileCache = field(default_factory=lambda: FileCache(load_file, FILE_CACHE_SIZE))
+    interrogator: FileCache = field(default_factory=lambda: FileCache(load_file, INTERROGATOR_CACHE_BYTES,
+                                                                      weigh=_interrogator_bytes))
     processed: FileCache = field(default_factory=lambda: FileCache(_load_processed, FILE_CACHE_SIZE * 3))
     spectra: FileCache = field(default_factory=lambda: FileCache(SharedAxes(), SPECTRA_CACHE_BYTES,
                                                                  weigh=_spectrum_bytes))

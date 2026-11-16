@@ -1201,6 +1201,36 @@ def test_upload_takes_many_files_and_keeps_the_folder(webapp):
     assert {"data/uploads/LMR dia 1/a.txt", "data/uploads/LMR dia 1/sub/b.txt"} <= set(listados)
 
 
+@pytest.mark.parametrize("nome, salvo", [
+    ("###.asc", "data/uploads/upload.asc"),
+    ("ensaio (1).ASC", "data/uploads/ensaio 1.ASC"),
+    ("dia#1/%%.txt", "data/uploads/dia1/upload.txt"),
+])
+def test_an_upload_name_with_only_symbols_keeps_its_extension(webapp, nome, salvo):
+    """"###.asc" virava "asc", sem extensão, e sumia da lista de arquivos."""
+    _, client = webapp
+    resposta = client.post("/api/upload", data={"file": (io.BytesIO(b"0\t1550\n1\t1551\n"), nome)})
+    assert resposta.get_json()["files"] == [salvo]
+    assert salvo in [f["path"] for f in client.get("/api/files").get_json()["files"]]
+
+
+def test_a_join_of_many_files_is_read_from_disk_once(webapp, monkeypatch):
+    """O cache dos arquivos do interrogador é por tamanho: uma junção de 5 não relê tudo a cada mudança."""
+    import braggflow.webapp.state as state
+    dados, client = webapp
+    nomes = []
+    for i in range(5):
+        (dados.raw / f"parte{i}.ASC").write_bytes((dados.raw / "ensaio.ASC").read_bytes())
+        nomes.append(f"data/raw/parte{i}.ASC")
+    lidos = []
+    original = client.application.extensions["braggflow"].interrogator._loader
+    client.application.extensions["braggflow"].interrogator._loader = lambda p: (lidos.append(p.name), original(p))[1]
+    for janela in ("1", "2"):
+        assert _process(client, file=None, files=nomes, save=False,
+                        window={"start": janela, "end": ""}).status_code == 200
+    assert sorted(lidos) == sorted(f"parte{i}.ASC" for i in range(5))
+
+
 def test_upload_with_the_same_name_keeps_the_earlier_file(webapp):
     dados, client = webapp
 

@@ -241,7 +241,10 @@ def parse_markers(raw_markers: Optional[list]) -> List[dict]:
         try:
             t = float(t.replace(",", "."))
         except ValueError:
-            raise ValueError(tr("figure.markerTime", label=m.get("label", ""), value=repr(t))) from None
+            t = math.nan
+        if not math.isfinite(t):        # float() aceita "nan" e "inf"
+            raise ValueError(tr("figure.markerTime", label=m.get("label", ""),
+                                value=repr(str(m.get("time", "")).strip())))
         color = str(m.get("color", "")).strip() or "#4682B4"
         if not mcolors.is_color_like(color):
             raise ValueError(tr("figure.markerColor", label=m.get("label", ""), value=repr(color)))

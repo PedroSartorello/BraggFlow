@@ -1,7 +1,7 @@
 // Estatísticas por intervalo entre marcações, abaixo do gráfico da aba Séries
 // temporais: do sinal processado que está no gráfico, um canal por linha.
 
-import { $, fmtNum, fmtSig, hintHtml, setText, showError, toCsv } from "./core.js";
+import { $, fmtNum, fmtSig, hintHtml, saveBlob, setText, showError, toCsv } from "./core.js";
 import { onLanguageChange, t } from "./i18n.js";
 import { currentPlotOptions, plotRelative } from "./series.js";
 import { collectMarkers } from "./viz.js";
@@ -144,13 +144,7 @@ function analysisCsv() {
 function downloadAnalysis() {
   const csv = analysisCsv();
   if (!csv) { showError(t("stats.calculateFirst")); return; }
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "estatisticas.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "estatisticas.csv");
 }
 
 // O "?" vive dentro do <summary>, então não pode abrir e fechar o cartão

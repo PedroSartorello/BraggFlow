@@ -8,6 +8,7 @@ import numpy as np
 from .io.processed import csv_header, metadata_path_for, write_processed_csv
 from .io.reader import InterrogatorData, file_fingerprint, load_interrogator_file
 from .processing.delimiting import slice_time_window
+from .i18n import tr
 from .sensors import SensorSetup
 
 
@@ -78,7 +79,7 @@ class OpticalPipeline:
         names = setup.names(self.source_channels)
         duplicates = sorted({n for n in names if names.count(n) > 1})
         if duplicates:
-            raise ValueError(f"Duplicate channel names in setup: {duplicates}.")
+            raise ValueError(tr("lib.duplicateNames", names=", ".join(duplicates)))
         self.setup = setup
         self.channels = names
         self._record("apply_setup", "setup", {"setup": setup.name}, None)
@@ -96,7 +97,7 @@ class OpticalPipeline:
             return self
         manter = [i for i, ch in enumerate(self.source_channels) if ch not in fora]
         if not manter:
-            raise ValueError("Dropping these channels would leave no channel.")
+            raise ValueError(tr("lib.noChannelLeft"))
         self.signals_array = self.signals_array[:, manter]
         self.channels = [self.channels[i] for i in manter]
         self.source_channels = [self.source_channels[i] for i in manter]
@@ -128,7 +129,7 @@ class OpticalPipeline:
                 idx = self.channels.index(old_name)
                 self.channels[idx] = new_name
             else:
-                raise ValueError(f"Channel '{old_name}' not found in channels list.")
+                raise ValueError(tr("lib.channelNotFound", channel=old_name, channels=", ".join(self.channels)))
         self._record("rename_channel", "setup", {"rename_map": rename_map}, None)
         return self
 
@@ -203,20 +204,16 @@ class OpticalPipeline:
         self._check_loaded()
         required = getattr(filter_func, "input_quantity", None)
         if required and any(q != required for q in self.quantities):
-            raise ValueError(
-                f"{filter_func.__name__} needs {required} data, but the channels hold "
-                f"{sorted(set(self.quantities))}. Apply to_delta_lambda first."
-            )
+            raise ValueError(tr("lib.needsQuantity", step=filter_func.__name__, required=required,
+                                found=", ".join(sorted(set(self.quantities)))))
         before = self._snapshot()
         recorded = dict(kwargs)
 
         for key, value in kwargs.items():
             if "channel" in key and isinstance(value, str):
                 if value not in self.channels:
-                    raise ValueError(
-                        f"Channel '{value}' (kwarg '{key}') not found in "
-                        f"channels list: {self.channels}"
-                    )
+                    raise ValueError(tr("lib.channelNotFound", channel=value,
+                                        channels=", ".join(self.channels)))
                 kwargs[key] = self.channels.index(value)
 
         self.signals_array = filter_func(self.signals_array, **kwargs)

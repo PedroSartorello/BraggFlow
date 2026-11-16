@@ -407,3 +407,28 @@ itself did not change: the same input gives the same output as before.
   - Spectrum smoothing longer than the (cropped) spectrum, or a
     Savitzky-Golay window not above its order, was skipped without a word;
     it is now an error that says why.
+- The rest of both code reviews of `main`:
+  - Errors raised by the library (pipeline, processing steps, sensors) came
+    in English even with the page in Portuguese. They go through the
+    translations now (`lib.*` in `braggflow.i18n`): Portuguese outside a
+    request, the page's language inside one; parameter names stay as in the
+    code.
+  - An upload named only with symbols ("###.asc") lost its extension and
+    vanished from the file list; name and extension are cleaned apart
+    ("upload.asc").
+  - Interrogator files read are cached by size (256 MB) instead of two at a
+    time, so a join of several files is not read again on every change.
+  - The free-port check uses SO_REUSEADDR like the server (outside
+    Windows), so a BraggFlow restarted right after closing keeps port 5000.
+  - Downloads (CSV, statistics, figure) go through one helper that keeps the
+    link in the page and revokes it later: revoking right after the click
+    cancelled the download in Safari and some Firefox versions.
+  - A spectrum header date with Portuguese month names ("Ter Out 13 …") is
+    read.
+  - Repeated wavelengths no longer make the spectrum resolution zero (and the
+    minimum distance a division by zero).
+  - A source nowhere above the dark noise is an error that says so, instead
+    of absurd transmission values.
+  - A marker time of "nan" or "inf" is refused.
+  - In "todos os do 1º arquivo", two initial extrema at the same wavelength no
+    longer make the automatic maximum jump zero.

@@ -3,7 +3,7 @@
 
 import {
   $, appendReadoutNote, checkFields, fmtNum, fmtSig, hintHtml, markStale, plotSeparators, setBusy,
-  setPlain, setReadout, setText, showError, showFixField, syncCardStyles,
+  saveBlob, setPlain, setReadout, setText, showError, showFixField, syncCardStyles,
 } from "./core.js";
 import { onLanguageChange, t } from "./i18n.js";
 import { baseName, fileKind, projectSeriesPaths, seriesOrder, seriesState, seriesStateFor, shared, shortName } from "./state.js";
@@ -664,13 +664,7 @@ async function downloadCsv() {
       const data = await resp.json();
       throw new Error(data.error || t("series.csvError"));
     }
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = opts.file.split("/").pop().replace(/\.[^.]+$/, "") + "_processado.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(await resp.blob(), opts.file.split("/").pop().replace(/\.[^.]+$/, "") + "_processado.csv");
   } catch (err) {
     showError(err.message);
   }

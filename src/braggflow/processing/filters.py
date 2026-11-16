@@ -21,9 +21,9 @@ def apply_savgol_filter(signals: np.ndarray, window_length: int, polyorder: int)
     from scipy.signal import savgol_filter
     
     if window_length % 2 == 0 or window_length <= 0:
-        raise ValueError("window_length must be a positive odd integer.")
+        raise ValueError(tr("lib.oddPositive", name="window_length"))
     if polyorder >= window_length:
-        raise ValueError("polyorder must be less than window_length.")
+        raise ValueError(tr("lib.orderBelowWindow"))
 
     filtered_signals = np.empty_like(signals, dtype=float)
 
@@ -66,11 +66,11 @@ def savgol_smooth(values: np.ndarray, window_length: int, polyorder: int) -> np.
 
     values = np.asarray(values, dtype=float)
     if window_length % 2 == 0 or window_length <= 0:
-        raise ValueError("window_length must be a positive odd integer.")
+        raise ValueError(tr("lib.oddPositive", name="window_length"))
     if polyorder >= window_length:
-        raise ValueError("polyorder must be less than window_length.")
+        raise ValueError(tr("lib.orderBelowWindow"))
     if window_length > len(values):
-        raise ValueError("window_length must not be greater than the number of samples.")
+        raise ValueError(tr("lib.windowTooLong", name="window_length"))
     coeficientes, inicio, fim = _savgol_kernel(int(window_length), int(polyorder))
     filtrado = convolve1d(values, coeficientes, mode="constant")
     metade = window_length // 2
@@ -100,11 +100,11 @@ def apply_moving_average_filter(signals: np.ndarray, window_size: int) -> np.nda
     - filtered_signals: 2D numpy array of the same shape as input containing the filtered signals.
     """
     if window_size <= 0:
-        raise ValueError("window_size must be a positive integer.")
+        raise ValueError(tr("lib.positiveInteger", name="window_size"))
 
     n_samples = signals.shape[0]
     if window_size > n_samples:
-        raise ValueError("window_size must not be greater than the number of samples.")
+        raise ValueError(tr("lib.windowTooLong", name="window_size"))
 
     # Sums and counts of the valid samples: cumsum[k] = sum of the first k
     values = signals.astype(float)
@@ -131,10 +131,10 @@ def estimate_sampling_rate(time_array: np.ndarray) -> float:
     """
     time_array = np.asarray(time_array, dtype=float)
     if len(time_array) < 2:
-        raise ValueError("At least two samples are needed to estimate fs.")
+        raise ValueError(tr("lib.twoSamples", what="fs"))
     dt = np.median(np.diff(time_array))
     if not np.isfinite(dt) or dt <= 0:
-        raise ValueError("Time axis must be strictly increasing to estimate fs.")
+        raise ValueError(tr("lib.fsIncreasing"))
     return float(1.0 / dt)
 
 
@@ -149,14 +149,12 @@ def _apply_butterworth(
     from scipy.signal import butter, sosfiltfilt
 
     if fs <= 0:
-        raise ValueError("fs must be a positive number.")
+        raise ValueError(tr("lib.positive", name="fs"))
     if order <= 0:
-        raise ValueError("order must be a positive integer.")
+        raise ValueError(tr("lib.positiveInteger", name="order"))
     nyquist = fs / 2.0
     if not (0 < cutoff < nyquist):
-        raise ValueError(
-            f"cutoff must be in (0, fs/2) = (0, {nyquist}). Got {cutoff}."
-        )
+        raise ValueError(tr("lib.cutoffRange", nyquist=f"{nyquist:g}", cutoff=f"{cutoff:g}"))
 
     sos = butter(order, cutoff / nyquist, btype=btype, output="sos")
     filtered_signals = np.empty_like(signals, dtype=float)

@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Optional, Tuple
 
+from ..i18n import tr
 from .filters import estimate_sampling_rate
 
 
@@ -28,7 +29,7 @@ def sort_and_deduplicate(
     signals_array : matching rows.
     """
     if duplicates not in {"mean", "first"}:
-        raise ValueError("duplicates must be 'mean' or 'first'.")
+        raise ValueError(tr("lib.unknownOption", what="duplicates", value=duplicates, options="first, mean"))
 
     time_array = np.asarray(time_array, dtype=float)
     signals_array = np.asarray(signals_array, dtype=float)
@@ -88,15 +89,13 @@ def resample_uniform(
     signals_array = np.asarray(signals_array, dtype=float)
 
     if len(time_array) < 2:
-        raise ValueError("At least two samples are needed to resample.")
+        raise ValueError(tr("lib.twoSamples", what="resample_uniform"))
     if np.any(np.diff(time_array) <= 0):
-        raise ValueError(
-            "time_array must be strictly increasing; apply sort_and_deduplicate first."
-        )
+        raise ValueError(tr("lib.timeIncreasing"))
     if fs is None:
         fs = estimate_sampling_rate(time_array)
     if fs <= 0:
-        raise ValueError("fs must be positive.")
+        raise ValueError(tr("lib.positive", name="fs"))
 
     n_points = int(np.floor((time_array[-1] - time_array[0]) * fs + 1e-9)) + 1
     grid = time_array[0] + np.arange(n_points) / fs

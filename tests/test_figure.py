@@ -338,3 +338,10 @@ def test_a_raster_export_too_large_says_how_many_dpi_fit():
         render(itens, [], grande, "t", "y", fmt="tiff", dpi=2400)
     pdf, _ = render(itens, [], grande, "t", "y", fmt="pdf", dpi=2400)    # vetor: o tamanho não pesa
     assert pdf[:4] == b"%PDF"
+
+
+
+@pytest.mark.parametrize("tempo", ["nan", "inf", "-inf"])
+def test_a_marker_time_must_be_a_finite_number(tempo):
+    with pytest.raises(ValueError, match=f"'{tempo}'"):
+        parse_markers([{"time": tempo, "label": "x"}])

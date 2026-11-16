@@ -2,6 +2,8 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
+from ..i18n import tr
+
 
 def compensation_ratios(
     n_channels: int,
@@ -25,33 +27,22 @@ def compensation_ratios(
         has a K_T but the reference does not (the ratio needs both).
     """
     if not (0 <= temp_channel_idx < n_channels):
-        raise ValueError(
-            f"temp_channel_idx={temp_channel_idx} is out of range "
-            f"for an array with {n_channels} channels."
-        )
+        raise ValueError(tr("lib.refIndex", idx=temp_channel_idx, n=n_channels))
     if not k_coeff > 0:
-        raise ValueError(
-            f"k_coeff must be > 0 (got {k_coeff}): it is the ratio of the thermal "
-            "sensitivities K_T,s / K_T,r."
-        )
+        raise ValueError(tr("lib.kPositive", k=k_coeff))
 
     sens = list(thermal_sensitivities) if thermal_sensitivities is not None else [None] * n_channels
     if len(sens) != n_channels:
-        raise ValueError(
-            f"thermal_sensitivities has {len(sens)} entries for {n_channels} channels."
-        )
+        raise ValueError(tr("lib.entries", name="thermal_sensitivities", n=len(sens), channels=n_channels))
     sens = [None if v is None or (isinstance(v, float) and np.isnan(v)) else float(v) for v in sens]
     for i, v in enumerate(sens):
         if v is not None and not v > 0:
-            raise ValueError(f"Thermal sensitivity of channel {i} must be > 0 (got {v}).")
+            raise ValueError(tr("lib.ktPositive", i=i, value=v))
 
     k_ref = sens[temp_channel_idx]
     others = [v for i, v in enumerate(sens) if i != temp_channel_idx and v is not None]
     if others and k_ref is None:
-        raise ValueError(
-            "The sensing gratings have a thermal sensitivity K_T but the reference "
-            "does not: k = K_T,s / K_T,r needs both."
-        )
+        raise ValueError(tr("lib.refNeedsKt"))
 
     return [
         None if i == temp_channel_idx

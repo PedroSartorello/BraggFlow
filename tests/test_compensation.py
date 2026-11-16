@@ -207,11 +207,11 @@ class TestThermalSensitivities:
         assert compensation_ratios(2, 1, 1.0, [float("nan"), 10.0]) == [1.0, None]
 
     def test_reference_without_sensitivity_raises(self):
-        with pytest.raises(ValueError, match="reference"):
+        with pytest.raises(ValueError, match="referência"):
             compensation_ratios(2, 1, 1.0, [10.0, None])
 
     def test_wrong_length_raises(self):
-        with pytest.raises(ValueError, match="entries"):
+        with pytest.raises(ValueError, match="entradas"):
             compensation_ratios(3, 0, 1.0, [10.0, 10.0])
 
     @pytest.mark.parametrize("valor", [0.0, -5.0])

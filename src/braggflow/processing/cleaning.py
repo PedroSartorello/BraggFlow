@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Optional, Sequence, Tuple
 
+from ..i18n import tr
+
 
 def mark_invalid_peaks(
     time_array: np.ndarray,
@@ -59,9 +61,7 @@ def mark_invalid_peaks(
 
     if bands is not None:
         if len(bands) != n_channels:
-            raise ValueError(
-                f"bands has {len(bands)} entries for {n_channels} channels."
-            )
+            raise ValueError(tr("lib.entries", name="bands", n=len(bands), channels=n_channels))
         for ch, band in enumerate(bands):
             if band is None:
                 continue
@@ -71,7 +71,7 @@ def mark_invalid_peaks(
 
     if jump_threshold is not None:
         if jump_threshold <= 0:
-            raise ValueError("jump_threshold must be positive.")
+            raise ValueError(tr("lib.positive", name="jump_threshold"))
         for ch in range(n_channels):
             mask = _peak_jump_mask(
                 time_array, signals[:, ch], jump_threshold, max_jump_duration
@@ -101,10 +101,7 @@ def _peak_jump_mask(
     # A threshold at noise level is exceeded by a good share of the steps;
     # a few real jumps (each with its return) are not, even in a short series
     if len(jumps) > max(0.05 * len(steps), 6):
-        raise ValueError(
-            f"jump_threshold={threshold} nm is exceeded by {len(jumps)} of "
-            f"{len(steps)} consecutive steps; it must be set above the noise level."
-        )
+        raise ValueError(tr("lib.jumpNoise", threshold=threshold, n=len(jumps), total=len(steps)))
 
     i = 0
     while i < len(jumps):
