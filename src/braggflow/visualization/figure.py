@@ -56,6 +56,14 @@ LEGEND_POSITIONS = (
 GENERIC_FONTS = ("serif", "sans-serif", "monospace")
 EXPORT_FORMATS = ("pdf", "png", "svg", "eps", "tiff")
 TIME_DIVISORS = {"s": 1.0, "min": 60.0, "h": 3600.0}
+# Mais ticks que isso num eixo não se leem, e o matplotlib leva minutos (ou
+# trava) para criar centenas de milhares deles
+MAX_TICKS = 200
+# Exportação em PNG/TIFF: até 100 megapixels (~400 MB em memória) e o limite
+# do Agg, 2^16 px por lado
+MAX_PIXELS = 100e6
+MAX_SIDE_PX = 65535
+RASTER_FORMATS = ("png", "tiff")
 
 PALETTES = {
     "publicacao": list(SENSOR_COLORS),
@@ -461,6 +469,33 @@ def _style_axes(ax, style: dict, tick_size: float) -> None:
     ax.set_axisbelow(True)
 
 
+def _check_tick_steps(ticks: dict, x_range: Tuple[float, float],
+                      y_ranges: List[Tuple[float, float]]) -> None:
+    """Recusa um passo de ticks que daria mais de ``MAX_TICKS`` ticks na faixa do eixo."""
+    for eixo, faixas in (("X", [x_range]), ("Y", y_ranges)):
+        passo = ticks[f"{eixo.lower()}_step"]
+        if not passo:
+            continue
+        n = max(abs(hi - lo) for lo, hi in faixas) / passo
+        if n > MAX_TICKS:
+            raise ValueError(tr("figure.tooManyTicks", axis=eixo, n=f"{n:,.0f}".replace(",", "."),
+                                max=MAX_TICKS))
+
+
+def _check_raster_size(fig: Figure, dpi: float) -> None:
+    """
+    Recusa uma exportação em PNG/TIFF grande demais para a memória (ou para o
+    Agg), dizendo até quantos dpi cabem no tamanho escolhido.
+    """
+    w_in, h_in = fig.get_size_inches()
+    w_px, h_px = w_in * dpi, h_in * dpi
+    if w_px * h_px <= MAX_PIXELS and max(w_px, h_px) <= MAX_SIDE_PX:
+        return
+    cabe = min(dpi * math.sqrt(MAX_PIXELS / (w_px * h_px)), MAX_SIDE_PX / max(w_in, h_in))
+    raise ValueError(tr("figure.tooManyPixels", width=int(w_px), height=int(h_px),
+                        dpi=int(dpi), max_dpi=int(cabe)))
+
+
 def _draw_markers(axes: list, markers: List[dict], divisor: float,
                   x_range: Tuple[float, float], mk: dict, font_size: float) -> None:
     """Faixas alternadas, linhas verticais e rótulos das marcações."""
@@ -573,6 +608,7 @@ def _build_curves_figure(curves: List[Curve], markers: List[dict], style: dict,
     if data_s["y_min"] is not None or data_s["y_max"] is not None:
         for ax in axes:
             ax.set_ylim(bottom=data_s["y_min"], top=data_s["y_max"])
+    _check_tick_steps(style["ticks"], (x_lo, x_hi), [ax.get_ylim() for ax in axes])
 
     if markers:
         _draw_markers(axes, markers, divisor, (x_lo, x_hi), style["markers"], font_size)
@@ -710,6 +746,8 @@ def _render(make_figure, style: dict, fmt: Optional[str],
     with style_context(style):
         fig = make_figure()
         kwargs = save_kwargs(style, dpi)
+        if fmt in RASTER_FORMATS:
+            _check_raster_size(fig, kwargs["dpi"])
         buf = io.BytesIO()
         fig.savefig(buf, format=fmt, **kwargs)
 

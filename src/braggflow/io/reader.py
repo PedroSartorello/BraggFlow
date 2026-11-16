@@ -396,6 +396,12 @@ def read_table(path, fmt: Optional[TextFormat] = None, nrows: Optional[int] = No
     except Exception as e:
         raise IOError(f"Erro ao ler o arquivo: {e}") from e
 
+    # O decimal veio das primeiras linhas; uma coluna que só tem vírgula
+    # decimal mais adiante ("0" no começo, "0,5" depois) chega como texto e
+    # perderia esses valores. Vale a vírgula quando é o único decimal dela.
+    if fmt.decimal == "." and fmt.sep != "," and any(
+            _comma_decimal(df[c]) for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])):
+        fmt = replace(fmt, decimal=",")
     preenchidas = df.notna().to_numpy().any(axis=0)
     if not preenchidas.all():
         df = df.loc[:, preenchidas]        # colunas vazias (separador sobrando no fim da linha)
@@ -411,6 +417,13 @@ def read_table(path, fmt: Optional[TextFormat] = None, nrows: Optional[int] = No
 # ─────────────────────────────────────────────────────────────────────────────
 # Classificação do conteúdo
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _comma_decimal(column: pd.Series) -> bool:
+    """Se a coluna de texto tem números com vírgula decimal e nenhum com ponto."""
+    texto = column.dropna().astype(str).str.strip()
+    return bool(texto.str.fullmatch(r"[-+]?\d+,\d+(?:[eE][-+]?\d+)?").any()
+                and not texto.str.contains(r"\d\.\d").any())
+
 
 def _to_float(column: pd.Series, decimal: str) -> np.ndarray:
     """Coluna como float; textos (ex.: 'N/A') viram NaN."""
