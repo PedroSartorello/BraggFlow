@@ -126,7 +126,7 @@ class TestRemoveNullValues:
 
     def test_unknown_strategy_raises(self, clean_data):
         time, signals = clean_data
-        with pytest.raises(ValueError, match="Unknown strategy"):
+        with pytest.raises(ValueError, match="strategy desconhecido"):
             remove_null_values(time, signals, strategy="invalid")
 
     def test_output_shape_preserved_inplace_strategies(self, data_with_nans):

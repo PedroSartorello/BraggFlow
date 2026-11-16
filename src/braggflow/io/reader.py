@@ -725,6 +725,9 @@ def _spectra_from_table(df: pd.DataFrame, fmt: TextFormat, source: str) -> Spect
 
 _MONTHS = {m: i for i, m in enumerate(
     ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1)}
+# Sistemas em português: fev, abr, mai, ago, set, out, dez (os outros coincidem)
+_MONTHS.update({m: i for i, m in enumerate(
+    ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"), start=1)})
 # "Mon Mar 02 09:30:15 BRT 2026" (OceanView/SpectraSuite); o fuso é ignorado
 _HEADER_DATE = re.compile(
     r"^(?:\w{3}\s+)?(\w{3})\s+(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})(?:\s+[A-Za-z][\w+:-]*)?\s+(\d{4})$")

@@ -59,3 +59,35 @@ def test_main_without_browser(subida, tmp_path):
     webapp.main(["--data-dir", str(tmp_path), "--port", "5200", "--no-browser"])
     assert subida["run"]["port"] == 5200
     assert "browser" not in subida
+
+
+
+def test_port_check_uses_reuseaddr_like_the_server_outside_windows(monkeypatch):
+    """Fora do Windows, conexões em TIME_WAIT não podem tirar a porta (o servidor a pegaria)."""
+    import os
+    opcoes = []
+
+    class SocketFalso:
+        def __init__(self, *a):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def setsockopt(self, nivel, opcao, valor):
+            opcoes.append(opcao)
+
+        def bind(self, endereco):
+            pass
+
+    monkeypatch.setattr(socket, "socket", SocketFalso)
+    monkeypatch.setattr(os, "name", "posix")
+    assert webapp._port_free(5000)
+    assert opcoes == [socket.SO_REUSEADDR]
+    opcoes.clear()
+    monkeypatch.setattr(os, "name", "nt")
+    assert webapp._port_free(5000)
+    assert opcoes == [], "no Windows a opção deixaria dois programas na mesma porta"

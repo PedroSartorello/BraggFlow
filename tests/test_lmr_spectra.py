@@ -424,3 +424,43 @@ def test_tracks_are_matched_to_the_nearest_extrema_one_to_one():
         tolerancia = float(rng.choice([0.5, 3.0, 20.0, np.inf]))
         assert _match_nearest(trilhas, achados, tolerancia) == _pares_um_a_um(trilhas, achados, tolerancia)
     assert _match_nearest([600.0, 610.0], [609.0], 5.0) == {1: 0}
+
+
+
+@pytest.mark.parametrize("texto, esperado", [
+    ("Ter Out 13 09:30:15 BRT 2026", datetime(2026, 10, 13, 9, 30, 15)),
+    ("Sáb Fev 07 23:01:02 2026", datetime(2026, 2, 7, 23, 1, 2)),
+    ("Tue Oct 13 09:30:15 BRT 2026", datetime(2026, 10, 13, 9, 30, 15)),
+])
+def test_header_date_in_portuguese_or_english(texto, esperado):
+    assert acquisition_time("a.txt", {"Date": texto}) == (esperado, "header")
+
+
+def test_repeated_wavelengths_do_not_divide_the_minimum_distance_by_zero():
+    """λ gravado com poucas casas: cada valor repete; a resolução vem dos passos não nulos."""
+    wl = np.repeat(np.arange(800.0, 900.0, 0.5), 3)
+    y = 1.0 - 0.5 * np.exp(-((wl - 850.0) / 3.0) ** 2)
+    preparo = resolve_spectrum_settings({"find_min": True, "min_distance": "2"})
+    resultado = analyse_spectrum(wl, y, preparo)
+    assert resultado["summary"]["resolution"] == pytest.approx(0.5)
+    assert resultado["extrema"][0]["wavelength"] == pytest.approx(850.0, abs=0.5)
+
+
+def test_a_source_nowhere_above_the_dark_is_an_error_not_huge_values():
+    wl = np.linspace(800.0, 900.0, 200)
+    fundo = (wl, np.full_like(wl, 100.0))
+    fonte = (wl, np.full_like(wl, 90.0))                  # abaixo do fundo em todo ponto
+    with pytest.raises(ValueError, match="A fonte não passa do ruído de fundo"):
+        to_transmission(wl, np.full_like(wl, 95.0), reference=fonte, dark=fundo)
+
+
+def test_follow_tolerance_ignores_two_initial_extrema_at_the_same_wavelength():
+    def vale(lam):
+        return {"type": "min", "wavelength": lam, "intensity": -1.0, "prominence": 1.0, "fwhm": 30.0}
+    entradas = [
+        {"key": "a", "acquired": None, "extrema": [vale(600), vale(600), vale(700)]},
+        {"key": "b", "acquired": None, "extrema": [vale(602), vale(705)]},
+    ]
+    ev = spectra_evolution(entradas, kind="min", mode="follow")
+    assert ev["tolerance"] == pytest.approx(50.0)
+    assert sum(p is not None for t in ev["tracks"] for p in t["points"][1:]) == 2

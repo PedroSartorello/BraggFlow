@@ -545,13 +545,7 @@ function spectraCsv() {
 }
 
 function baixarCsv(csv, nome) {
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), nome);
 }
 
 $("btn-spectra-csv").addEventListener("click", () => {

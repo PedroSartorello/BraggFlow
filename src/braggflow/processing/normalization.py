@@ -1,4 +1,6 @@
-import numpy as np 
+import numpy as np
+
+from ..i18n import tr
 
 def to_delta_lambda(signals: np.ndarray, baseline_samples: int = 50) -> np.ndarray:
     """
@@ -13,16 +15,13 @@ def to_delta_lambda(signals: np.ndarray, baseline_samples: int = 50) -> np.ndarr
     - A 2D numpy array of shape (n_samples, n_channels) containing the signals in Δλ format.
     """
     if baseline_samples <= 0 or baseline_samples > signals.shape[0]:
-        raise ValueError("baseline_samples must be a positive integer less than or equal to the number of samples in signals.")
+        raise ValueError(tr("lib.baselineSamples"))
     
     # Baseline per channel: mean of the first `baseline_samples` samples,
     # ignoring missing values so a single NaN does not invalidate the channel
     baseline = signals[:baseline_samples, :]
     if np.isnan(baseline).all(axis=0).any():
-        raise ValueError(
-            "A channel has no valid samples in the baseline window; remove "
-            "null values or increase baseline_samples."
-        )
+        raise ValueError(tr("lib.baselineEmpty"))
     baseline_values = np.nanmean(baseline, axis=0)
 
     # Shift each signal by its baseline value

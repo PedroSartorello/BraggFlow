@@ -245,7 +245,12 @@ def to_transmission(wavelength: np.ndarray, sample: np.ndarray,
         return s - d
 
     base = na_grade(reference) - d
-    limite = MIN_REFERENCE_FRACTION * np.nanmax(base) if np.any(np.isfinite(base)) else np.inf
+    maximo = np.nanmax(base) if np.any(np.isfinite(base)) else np.nan
+    if not maximo > 0:
+        # Fonte nunca acima do fundo (arquivos trocados, fonte desligada): a
+        # divisão daria transmissões absurdas, não um espectro
+        raise ValueError(tr("spectra.referenceBelowDark"))
+    limite = MIN_REFERENCE_FRACTION * maximo
     with np.errstate(divide="ignore", invalid="ignore"):
         t = np.where(base > limite, (s - d) / base, np.nan)
         if output == "percent":
@@ -527,7 +532,11 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
     if len(y) < 5:
         return {"extrema": [], "summary": summary}
 
-    summary["resolution"] = float(np.median(np.diff(wl)))
+    # Passo da grade: λ repetidos (poucas casas no arquivo) não contam, senão
+    # a mediana pode dar zero e a distância mínima dividiria por ele
+    passos = np.abs(np.diff(wl))
+    passos = passos[passos > 0]
+    summary["resolution"] = float(np.median(passos)) if len(passos) else None
     i_max, i_min = int(np.argmax(y)), int(np.argmin(y))
     summary["global_max"] = {"wavelength": float(wl[i_max]), "intensity": float(y[i_max])}
     summary["global_min"] = {"wavelength": float(wl[i_min]), "intensity": float(y[i_min])}
@@ -542,7 +551,7 @@ def analyse_spectrum(wavelength: np.ndarray, intensity: np.ndarray,
         prominencia = AUTO_PROMINENCE * faixa
     summary["prominence"] = float(prominencia)
     distancia = None
-    if settings["min_distance"]:
+    if settings["min_distance"] and summary["resolution"]:
         distancia = max(1, int(round(settings["min_distance"] / abs(summary["resolution"]))))
 
     db = settings["intensity_scale"] == "db"
@@ -745,7 +754,9 @@ def spectra_evolution(entries: Sequence[dict], kind: str = "min", mode: str = "p
         if not iniciais:
             raise ValueError(tr("spectra.firstHasNone", kind=exibido))
         if tolerance is None:
+            # Dois extremos no mesmo λ não podem zerar o salto máximo
             espacos = np.diff([x["wavelength"] for x in iniciais])
+            espacos = espacos[espacos > 0]
             tolerance = 0.5 * float(espacos.min()) if len(espacos) else np.inf
         posicoes = [x["wavelength"] for x in iniciais]
         trilhas = [{"key": f"{nome} {i + 1}",

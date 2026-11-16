@@ -52,15 +52,15 @@ class TestDetectOutliers:
             assert not mask.any()
 
     def test_unknown_method_raises(self):
-        with pytest.raises(ValueError, match="Unknown method"):
+        with pytest.raises(ValueError, match="method desconhecido"):
             detect_outliers(np.ones((10, 2)), method="bad_method")
 
     def test_rolling_even_window_raises(self):
-        with pytest.raises(ValueError, match="positive odd integer"):
+        with pytest.raises(ValueError, match="ímpar positivo"):
             detect_outliers(np.ones((20, 2)), method="rolling", window_size=10)
 
     def test_rolling_zero_window_raises(self):
-        with pytest.raises(ValueError, match="positive odd integer"):
+        with pytest.raises(ValueError, match="ímpar positivo"):
             detect_outliers(np.ones((20, 2)), method="rolling", window_size=0)
 
     def test_output_shape(self):
@@ -157,7 +157,7 @@ class TestRemoveOutliers:
 
     def test_unknown_strategy_raises(self, spiked_data):
         time, signals = spiked_data
-        with pytest.raises(ValueError, match="Unknown strategy"):
+        with pytest.raises(ValueError, match="strategy desconhecido"):
             remove_outliers(time, signals, strategy="bad")
 
     def test_no_outliers_returns_copy(self):

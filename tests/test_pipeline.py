@@ -63,7 +63,7 @@ def test_setup_renames_and_provides_bands(asc_file):
 def test_setup_with_duplicate_names_raises(asc_file):
     setup = SensorSetup(sensors=[Sensor("CH_1 Sensor_1 [nm]", "X"),
                                  Sensor("CH_2 Sensor_1 [nm]", "X")])
-    with pytest.raises(ValueError, match="Duplicate"):
+    with pytest.raises(ValueError, match="repetidos"):
         OpticalPipeline(str(asc_file)).load_data().apply_setup(setup)
 
 
@@ -160,7 +160,7 @@ def test_drop_channels_removes_columns_as_if_absent(asc_file):
     assert pipeline.history[-1] == {"step": "drop_channels", "kind": "setup",
                                     "params": {"channels": ["CH_2 Sensor_1 [nm]"]}}
     assert pipeline.csv_header() == "Time [s],S1 [nm]"
-    with pytest.raises(ValueError, match="no channel"):
+    with pytest.raises(ValueError, match="nenhum canal"):
         pipeline.drop_channels(["CH_1 Sensor_1 [nm]"])
 
 
@@ -175,3 +175,14 @@ def test_a_sensor_name_with_a_comma_stays_one_column(tmp_path):
     assert list(df.columns) == ["Time", "FBG 1, ref", 'Ref "A"']
     assert df["FBG 1, ref"].tolist() == [1.0, 3.0]
     assert units == {"FBG 1, ref": "nm", 'Ref "A"': "nm"}
+
+
+def test_library_errors_follow_the_language_of_the_request():
+    """A página em inglês recebe o erro da biblioteca em inglês; fora de um pedido, português."""
+    from braggflow.i18n import use_language
+    from braggflow.processing import apply_moving_average_filter
+    sinal = np.ones((5, 1))
+    with pytest.raises(ValueError, match="não pode passar do número de amostras"):
+        apply_moving_average_filter(sinal, 10)
+    with use_language("en"), pytest.raises(ValueError, match="must not be greater than the number of samples"):
+        apply_moving_average_filter(sinal, 10)

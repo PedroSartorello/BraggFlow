@@ -1257,11 +1257,12 @@ def _upload_destination(filename: str) -> Path:
     subpastas, até ``MAX_UPLOAD_DEPTH``. Cada parte passa por ``_safe_name``
     (sem ``..`` nem caminhos absolutos).
     """
-    partes = [_safe_name(parte) for parte in re.split(r"[\\/]", filename or "")]
-    partes = [parte for parte in partes if parte]
-    suffix = Path(filename or "").suffix.lower()
-    nome = partes[-1] if partes else f"upload{suffix}"
-    pastas = partes[:-1][-MAX_UPLOAD_DEPTH:]
+    partes = [parte for parte in re.split(r"[\\/]", filename or "") if parte]
+    original = Path(partes[-1]) if partes else Path("")
+    # Nome e extensão limpos à parte: "###.asc" não pode virar "asc"
+    extensao = "." + "".join(c for c in original.suffix[1:] if c.isalnum()) if original.suffix else ""
+    nome = (_safe_name(original.stem) or "upload") + (extensao if extensao != "." else "")
+    pastas = [p for p in (_safe_name(parte) for parte in partes[:-1]) if p][-MAX_UPLOAD_DEPTH:]
     return _data().uploads.joinpath(*pastas, nome)
 
 
@@ -1489,9 +1490,15 @@ DEFAULT_PORT = 5000
 
 def _port_free(port: int) -> bool:
     """Se dá para escutar em 127.0.0.1:``port`` agora."""
+    import os
     import socket
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        # Como o servidor (SO_REUSEADDR): conexões em TIME_WAIT de um BraggFlow
+        # que acabou de fechar não tiram a porta. No Windows a opção deixaria
+        # dois programas na mesma porta, e o servidor também não a usa lá.
+        if os.name != "nt":
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(("127.0.0.1", port))
         except OSError:

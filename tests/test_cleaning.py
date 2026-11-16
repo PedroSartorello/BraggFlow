@@ -90,7 +90,7 @@ def test_jump_detection_skips_missing_samples():
 
 def test_threshold_below_noise_raises():
     t, s = _series()
-    with pytest.raises(ValueError, match="noise"):
+    with pytest.raises(ValueError, match="nível do ruído"):
         mark_invalid_peaks(t, s, jump_threshold=0.0005)
 
 
@@ -107,5 +107,5 @@ def test_one_jump_in_a_short_series_is_marked_not_refused():
 def test_a_threshold_at_noise_level_is_still_refused_in_a_short_series():
     rng = np.random.default_rng(1)
     y = 1550.0 + rng.normal(0, 0.01, 30)
-    with pytest.raises(ValueError, match="above the noise level"):
+    with pytest.raises(ValueError, match="acima do nível do ruído"):
         mark_invalid_peaks(np.arange(30.0), y[:, None], jump_threshold=0.001)

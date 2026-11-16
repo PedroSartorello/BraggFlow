@@ -314,6 +314,21 @@ export function syncCardStyles() {
 // Separadores dos números nos gráficos do Plotly (decimal, milhar), no idioma da interface
 export const plotSeparators = () => (getLanguage() === "en" ? ".," : ",.");
 
+// Baixa um arquivo gerado na página. O link entra no documento e o endereço
+// só é revogado depois: revogar logo após o clique cancela o download no
+// Safari e em versões do Firefox.
+export function saveBlob(blob, nome) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 // CSV para planilha, no idioma da interface: ponto e vírgula e vírgula
 // decimal (o que o Excel em português abre) ou vírgula e ponto decimal. As
 // células vêm como aparecem na tela; "—" (sem valor) fica vazio.

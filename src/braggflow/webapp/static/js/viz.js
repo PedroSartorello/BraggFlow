@@ -1,7 +1,7 @@
 // Aba Figura: fontes de dados, estilo por canal, estilos salvos,
 // marcações, geração e download da figura.
 
-import { $, fmtNum, hintHtml, icon, setPlain, setText, showError } from "./core.js";
+import { $, fmtNum, hintHtml, icon, saveBlob, setPlain, setText, showError } from "./core.js";
 import { onLanguageChange, t } from "./i18n.js";
 import { baseName, projectSeriesPaths, projectSpectraPaths, shared, shortName, spectrumSettingsFor } from "./state.js";
 import { makeInput, plotDecorations } from "./series.js";
@@ -931,15 +931,9 @@ async function downloadFigure() {
       const data = await resp.json();
       throw new Error(data.error || t("viz.figureError"));
     }
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
     const first = opts.source === "evolution" ? "evolucao" : (opts.spectra || opts.series)[0].file;
     const base = first.split("/").pop().replace(/\.[^.]+$/, "").replace(/_processado$/, "");
-    a.download = `${base}_figura.${format}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(await resp.blob(), `${base}_figura.${format}`);
     setText($("viz-status"), "viz.exported", { format: format.toUpperCase() });
   } catch (err) {
     showError(err.message);

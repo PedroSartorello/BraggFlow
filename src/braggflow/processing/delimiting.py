@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Tuple
 
+from ..i18n import tr
+
 def slice_time_window(time_array: np.ndarray, signals_array: np.ndarray, start_time: float = None, end_time: float = None) -> Tuple[np.ndarray, np.ndarray]:
     """
     Slices the time and signal arrays based on the specified start and end times.
@@ -22,7 +24,7 @@ def slice_time_window(time_array: np.ndarray, signals_array: np.ndarray, start_t
         end_time = np.nanmax(time_array)
         
     if start_time >= end_time:
-        raise ValueError("start_time must be less than end_time.")
+        raise ValueError(tr("lib.windowOrder"))
         
     # Create a boolean mask for the specified time window
     mask = (time_array >= start_time) & (time_array <= end_time)
@@ -32,9 +34,7 @@ def slice_time_window(time_array: np.ndarray, signals_array: np.ndarray, start_t
     sliced_signals_array = signals_array[mask]
 
     if len(sliced_time_array) == 0:
-        raise ValueError(
-            f"No samples between {start_time} and {end_time} "
-            f"(data spans {np.nanmin(time_array)} to {np.nanmax(time_array)})."
-        )
+        raise ValueError(tr("lib.windowEmpty", start=f"{start_time:g}", end=f"{end_time:g}",
+                            low=f"{np.nanmin(time_array):g}", high=f"{np.nanmax(time_array):g}"))
     
     return sliced_time_array, sliced_signals_array
