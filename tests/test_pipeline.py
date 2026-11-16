@@ -162,3 +162,16 @@ def test_drop_channels_removes_columns_as_if_absent(asc_file):
     assert pipeline.csv_header() == "Time [s],S1 [nm]"
     with pytest.raises(ValueError, match="no channel"):
         pipeline.drop_channels(["CH_1 Sensor_1 [nm]"])
+
+
+def test_a_sensor_name_with_a_comma_stays_one_column(tmp_path):
+    """O cabeçalho põe entre aspas o nome com vírgula ou aspas: a releitura não desalinha."""
+    from braggflow.io.processed import write_processed_csv
+    caminho = tmp_path / "x_processado.csv"
+    t = np.array([0.0, 1.0])
+    write_processed_csv(caminho, t, np.array([[1.0, 2.0], [3.0, 4.0]]),
+                        ["FBG 1, ref", 'Ref "A"'], ["nm", "nm"])
+    df, units, _ = read_processed_csv(caminho)
+    assert list(df.columns) == ["Time", "FBG 1, ref", 'Ref "A"']
+    assert df["FBG 1, ref"].tolist() == [1.0, 3.0]
+    assert units == {"FBG 1, ref": "nm", 'Ref "A"': "nm"}

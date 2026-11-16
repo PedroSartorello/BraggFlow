@@ -245,3 +245,20 @@ class TestRealResponsePreserved:
         mask = detect_outliers(signals, method="rolling", threshold=3.5, window_size=21)
         np.testing.assert_array_equal(mask[:, 0], _rolling_reference(col, 21, 3.5))
         assert not mask[:, 1].any()
+
+
+# ── apoio da substituição ────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("strategy", ["linear", "forward"])
+def test_a_spike_next_to_a_missing_reading_is_replaced_from_valid_neighbours(strategy):
+    y = np.concatenate([np.full(30, 1.0), [50.0], [np.nan], np.full(30, 1.0)])[:, None]
+    _, limpo = remove_outliers(np.arange(len(y), dtype=float), y, strategy=strategy)
+    assert limpo[30, 0] == pytest.approx(1.0)
+    assert np.isnan(limpo[31, 0]), "a leitura que faltava fica para a remoção de nulos"
+
+
+def test_linear_replacement_of_an_outlier_follows_the_time():
+    t = np.concatenate([np.arange(30.0), [30.0], 100.0 + np.arange(30.0)])
+    y = np.concatenate([np.arange(30.0), [500.0], 100.0 + np.arange(30.0)])[:, None]   # reta y = t
+    _, limpo = remove_outliers(t, y, strategy="linear")
+    assert limpo[30, 0] == pytest.approx(30.0)

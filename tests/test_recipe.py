@@ -252,3 +252,17 @@ def test_a_unit_in_the_header_is_reported_and_dates_are_left_alone(tmp_path):
     pipeline, _, messages = run_recipe([datas], {"time_unit": "h"})
     np.testing.assert_allclose(pipeline.time_array, [0, 2])
     assert messages["warnings"] == ["O tempo de datas.csv vem de datas e horas: a unidade escolhida não se aplica."]
+
+
+
+@pytest.mark.parametrize("etapa, nome", [("nulls", "Remoção de nulos"), ("outliers", "Remoção de outliers")])
+def test_constant_strategy_without_a_value_names_the_step(etapa, nome):
+    with pytest.raises(ValueError, match=f"^{nome}: com a estratégia constant"):
+        run_recipe([EXAMPLE], {etapa: {"enabled": True, "strategy": "constant", "fill_value": ""}})
+
+
+def test_outliers_constant_strategy_uses_its_value():
+    pipeline, _, _ = run_recipe([EXAMPLE], {"outliers": {
+        "enabled": True, "method": "rolling", "threshold": "3.5", "window_size": "51",
+        "strategy": "constant", "fill_value": "0"}})
+    assert pipeline.history[-1]["params"]["fill_value"] == 0.0

@@ -560,6 +560,7 @@ export default {
   "error.seeTerminal": {"pt": "Veja o erro no terminal onde o servidor está rodando.", "en": "See the error in the terminal where the server is running."},
   "error.oldServer": {"pt": "Esta página é mais nova que o servidor ({build} ≠ {expected}). Reinicie o servidor: Ctrl+C no terminal e braggflow-web.", "en": "This page is newer than the server ({build} ≠ {expected}). Restart the server: Ctrl+C in the terminal, then braggflow-web."},
   "error.previousVersion": {"pt": "versão anterior", "en": "earlier version"},
+  "field.fillRequired": {"pt": "Com a estratégia constant, informe o valor.", "en": "With the constant strategy, give the value."},
   "field.oddWindow": {"pt": "Use um número ímpar a partir de 3.", "en": "Use an odd number, 3 or more."},
   "field.windowOverOrder": {"pt": "A janela precisa ser maior que a ordem ({order}).", "en": "The window must be larger than the order ({order})."},
   "field.positiveOrEmpty": {"pt": "Use um valor maior que zero, ou deixe vazio para não limitar.", "en": "Use a value above zero, or leave it empty for no limit."},

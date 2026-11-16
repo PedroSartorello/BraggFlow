@@ -92,3 +92,20 @@ def test_threshold_below_noise_raises():
     t, s = _series()
     with pytest.raises(ValueError, match="noise"):
         mark_invalid_peaks(t, s, jump_threshold=0.0005)
+
+
+
+def test_one_jump_in_a_short_series_is_marked_not_refused():
+    """Em 30 amostras, a ida e a volta de um salto são 7% dos passos: ainda é um salto, não ruído."""
+    t = np.arange(30.0)
+    y = np.full(30, 1550.0)
+    y[10:13] += 1.0
+    _, marcado = mark_invalid_peaks(t, y[:, None], jump_threshold=0.5)
+    assert np.flatnonzero(np.isnan(marcado[:, 0])).tolist() == [10, 11, 12]
+
+
+def test_a_threshold_at_noise_level_is_still_refused_in_a_short_series():
+    rng = np.random.default_rng(1)
+    y = 1550.0 + rng.normal(0, 0.01, 30)
+    with pytest.raises(ValueError, match="above the noise level"):
+        mark_invalid_peaks(np.arange(30.0), y[:, None], jump_threshold=0.001)

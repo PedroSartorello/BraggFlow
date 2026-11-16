@@ -179,3 +179,20 @@ class TestReportNullSummary:
         ])
         summary = report_null_summary(signals)
         assert summary["CH0"]["pct_bad"] == pytest.approx(40.0)
+
+
+# ── interpolação pelo tempo ──────────────────────────────────────────────────
+
+def test_linear_fill_follows_the_time_not_the_sample_index():
+    """Com uma pausa na aquisição, o valor preenchido fica na reta entre os vizinhos no tempo."""
+    t = np.array([0.0, 1.0, 2.0, 100.0])
+    y = np.array([[0.0], [1.0], [np.nan], [100.0]])
+    _, cheio = remove_null_values(t, y, strategy="linear")
+    assert cheio[2, 0] == pytest.approx(2.0)
+
+
+def test_linear_fill_falls_back_to_the_index_when_time_is_not_increasing():
+    t = np.array([0.0, 2.0, 1.0, 3.0])            # fora de ordem: o tempo não serve de abscissa
+    y = np.array([[0.0], [np.nan], [2.0], [3.0]])
+    _, cheio = remove_null_values(t, y, strategy="linear")
+    assert cheio[1, 0] == pytest.approx(1.0)
