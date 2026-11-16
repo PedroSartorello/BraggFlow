@@ -21,7 +21,9 @@ def remove_null_values(
         * 'remove'  – drop every row that contains at least one NaN or Inf value
                       (default, safest option for time-series data).
         * 'forward' – propagate the last valid value forward (forward fill).
-        * 'linear'  – linearly interpolate between surrounding valid values.
+        * 'linear'  – linearly interpolate between surrounding valid values,
+                      in time (by sample index if the time axis is not
+                      strictly increasing).
         * 'constant'– replace nulls with `fill_value` (requires fill_value != None).
     - fill_value: float, value used when strategy='constant'. Ignored otherwise.
 
@@ -81,6 +83,7 @@ def remove_null_values(
 
     # Signals: apply the strategy per channel so that valid readings in other
     # channels of the same row are preserved.
+    eixo = _interp_axis(clean_time)
     for ch in range(signals_array.shape[1]):
         col = signals_array[:, ch]
         col_bad = ~np.isfinite(col)
@@ -96,10 +99,23 @@ def remove_null_values(
 
         elif strategy == "linear":
             clean_signals[col_bad, ch] = np.interp(
-                indices[col_bad], indices[valid_ch], col[valid_ch]
+                eixo[col_bad], eixo[valid_ch], col[valid_ch]
             )
 
     return clean_time, clean_signals
+
+
+def _interp_axis(time_array: np.ndarray) -> np.ndarray:
+    """
+    Abscissa of the 'linear' strategy: the time itself when it is finite and
+    strictly increasing, so a filled sample lies on the line between its
+    neighbours *in time* (an acquisition with pauses or jitter is not
+    distorted); otherwise (unsorted or repeated timestamps) the sample index.
+    """
+    t = np.asarray(time_array, dtype=float)
+    if len(t) > 1 and np.all(np.isfinite(t)) and np.all(np.diff(t) > 0):
+        return t
+    return np.arange(len(t), dtype=float)
 
 
 def _forward_fill(col: np.ndarray, valid: np.ndarray) -> np.ndarray:
@@ -427,11 +443,13 @@ def remove_outliers(
     clean_signals = signals_array.copy()
 
     # Replace only the flagged samples of each channel, preserving clean
-    # readings in the other channels of the same row.
-    indices = np.arange(len(bad_rows))
+    # readings in the other channels of the same row. Missing readings (NaN)
+    # are not outliers but are no support for the replacement either: they
+    # stay as they are, for remove_null_values.
+    eixo = _interp_axis(time_array)
     for ch in range(signals_array.shape[1]):
         bad_ch = outlier_mask[:, ch]
-        valid_ch = ~bad_ch
+        valid_ch = ~bad_ch & np.isfinite(signals_array[:, ch])
         if not bad_ch.any() or not valid_ch.any():
             continue
 
@@ -439,11 +457,11 @@ def remove_outliers(
             clean_signals[bad_ch, ch] = fill_value
 
         elif strategy == "forward":
-            clean_signals[:, ch] = _forward_fill(signals_array[:, ch], valid_ch)
+            clean_signals[bad_ch, ch] = _forward_fill(signals_array[:, ch], valid_ch)[bad_ch]
 
         elif strategy == "linear":
             clean_signals[bad_ch, ch] = np.interp(
-                indices[bad_ch], indices[valid_ch], signals_array[valid_ch, ch]
+                eixo[bad_ch], eixo[valid_ch], signals_array[valid_ch, ch]
             )
 
     return clean_time, clean_signals

@@ -1171,6 +1171,23 @@ def test_an_invalid_field_is_marked_where_it_is_and_nothing_is_sent(app, server)
     assert server.erros == []
 
 
+def test_outliers_constant_strategy_asks_for_its_value(app, server):
+    novo_projeto(app, "Constante")
+    adicionar_serie(app, "ensaio_a.asc")
+    ligar_etapas(app, "outliers")
+    abrir_etapa(app, "outliers")
+    app.select_option("#outliers-strategy", "constant")
+    app.click("#btn-process")
+    expect(app.locator("#outliers-fill")).to_have_attribute("aria-invalid", "true")
+    expect(app.locator(".field-error")).to_contain_text("informe o valor")
+
+    app.fill("#outliers-fill", "0")
+    expect(app.locator(".field-error")).to_have_count(0)
+    app.click("#btn-process")
+    expect(app.locator("#status-text")).to_contain_text("CSV salvo")
+    assert server.erros == []
+
+
 def test_project_dialog_keeps_focus_and_tabs_answer_to_arrows(app):
     gate = app.locator("#project-gate")
     expect(gate).to_have_attribute("role", "dialog")

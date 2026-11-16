@@ -197,7 +197,7 @@ def run_recipe(files: Sequence[Path], options: dict, *,
         pipeline.preprocess(
             remove_null_values,
             strategy=nulls.get("strategy", "linear"),
-            fill_value=as_float(nulls.get("fill_value")),
+            fill_value=_fill_value(nulls, "recipe.stepNulls"),
         )
 
     outliers = options.get("outliers") or {}
@@ -208,7 +208,7 @@ def run_recipe(files: Sequence[Path], options: dict, *,
             threshold=as_float(outliers.get("threshold"), 3.5),
             window_size=int(as_float(outliers.get("window_size"), 51)),
             strategy=outliers.get("strategy", "linear"),
-            fill_value=as_float(outliers.get("fill_value")),
+            fill_value=_fill_value(outliers, "recipe.stepOutliers"),
         )
 
     # Etapas que supõem amostragem uniforme e dados completos: avisa sobre
@@ -280,6 +280,14 @@ def run_recipe(files: Sequence[Path], options: dict, *,
     raw_signals = _align_raw(raw_signals, pipeline.signals_array, linha_de_base,
                              highpass.get("enabled") or tempcomp.get("enabled"), messages)
     return pipeline, (raw_time, raw_signals), messages
+
+
+def _fill_value(section: dict, step: str) -> Optional[float]:
+    """Valor da estratégia "constant"; sem ele, a mensagem diz qual etapa."""
+    valor = as_float(section.get("fill_value"))
+    if section.get("strategy") == "constant" and valor is None:
+        raise ValueError(tr("recipe.fillRequired", step=tr(step)))
+    return valor
 
 
 def _compensate_temperature(pipeline: OpticalPipeline, tempcomp: dict, messages: dict) -> None:

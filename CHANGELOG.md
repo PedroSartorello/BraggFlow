@@ -288,6 +288,28 @@ itself did not change: the same input gives the same output as before.
 
 ### Fixed
 
+- Code review of `main`:
+  - A sensor name with a comma (or quotes) split the processed CSV header
+    into one column too many, so the Figura tab showed each channel under
+    its neighbour's name. The header now quotes such names (`csv_header`).
+  - The `linear` strategy of null and outlier removal interpolated over the
+    sample index: next to a pause in the acquisition, the filled value was
+    off (50.5 instead of 2.0 in the test). It now interpolates over time, and
+    over the index only when the time axis is not strictly increasing.
+  - Outlier removal used missing readings (NaN) as support for the
+    replacement, so a spike next to one became NaN; now only valid
+    neighbours count, and the missing reading stays for null removal.
+  - Outlier removal offered the `constant` strategy with no field for the
+    value, so it always failed. The step has its "Fill value" field, marked
+    when empty, and the server names the step in the message
+    (`recipe.fillRequired`), for null removal too.
+  - An upload at the root of `data/uploads` with the name of a file at the
+    root of `data/raw` wrote the same `<name>_processado.csv` in the project,
+    and one overwrote the other. Such an upload is saved as `name (2).ext`.
+  - Peak-jump detection refused a series shorter than about 40 samples with
+    a single jump, since its two steps passed 5% of all steps; the noise
+    guard now also needs more than six steps above the threshold.
+
 - The quick start in the README failed on other computers. It is now one
   block for Windows and one for Linux and macOS, run line by line, that
   creates `.venv` and calls its Python directly, so it no longer depends on:

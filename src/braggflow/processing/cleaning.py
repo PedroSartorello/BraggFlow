@@ -98,7 +98,9 @@ def _peak_jump_mask(
     steps = np.diff(values)
     jumps = np.flatnonzero(np.abs(steps) > threshold)
 
-    if len(jumps) > 0.05 * len(steps):
+    # A threshold at noise level is exceeded by a good share of the steps;
+    # a few real jumps (each with its return) are not, even in a short series
+    if len(jumps) > max(0.05 * len(steps), 6):
         raise ValueError(
             f"jump_threshold={threshold} nm is exceeded by {len(jumps)} of "
             f"{len(steps)} consecutive steps; it must be set above the noise level."

@@ -1213,6 +1213,15 @@ def test_upload_with_the_same_name_keeps_the_earlier_file(webapp):
     assert (dados.uploads / "ensaio.txt").read_bytes() == b"500\t1\n"
 
 
+def test_an_upload_named_like_a_file_in_raw_gets_its_own_name(webapp):
+    """data/raw/ensaio.ASC e data/uploads/ensaio.ASC gravariam o mesmo ensaio_processado.csv."""
+    dados, client = webapp
+    resposta = client.post("/api/upload", data={"file": (io.BytesIO(b"0\t1550\n1\t1551\n"), "ensaio.ASC")})
+    assert resposta.get_json()["files"] == ["data/uploads/ensaio (2).ASC"]
+    pasta = client.post("/api/upload", data={"file": (io.BytesIO(b"0\t1550\n"), "dia1/ensaio.ASC")})
+    assert pasta.get_json()["files"] == ["data/uploads/dia1/ensaio.ASC"], "numa pasta, o CSV leva a pasta"
+
+
 def test_files_with_the_same_name_in_different_folders_get_their_own_csv(webapp):
     dados, client = webapp
     for pasta in ("dia1", "dia2"):

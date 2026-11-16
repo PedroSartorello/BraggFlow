@@ -1265,6 +1265,11 @@ def _upload_destination(filename: str) -> Path:
     return _data().uploads.joinpath(*pastas, nome)
 
 
+def _named_like_raw(dest: Path) -> bool:
+    """Envio na raiz de data/uploads com o nome de um arquivo da raiz de data/raw."""
+    return dest.parent == _data().uploads and (_data().raw / dest.name).is_file()
+
+
 def _save_upload(file) -> str:
     """Valida e grava um arquivo enviado; devolve o caminho ``data/...``."""
     nome = Path(file.filename.replace("\\", "/")).name
@@ -1278,10 +1283,12 @@ def _save_upload(file) -> str:
         raise ValueError(tr("app.badExtension", name=nome, suffix=suffix or tr("app.noExtension"),
                             accepted=", ".join(sorted(RAW_EXTENSIONS))))
     # Um arquivo com o mesmo nome e outro conteúdo não substitui o que já
-    # está lá (um projeto pode usá-lo): vai como "nome (2).ext"
+    # está lá (um projeto pode usá-lo): vai como "nome (2).ext". Na raiz,
+    # também não leva o nome de um arquivo da raiz de data/raw: os dois
+    # gravariam o mesmo <nome>_processado.csv (ver _processed_name)
     dest, dados = _upload_destination(file.filename), file.read()
     original, n = dest, 1
-    while dest.is_file() and dest.read_bytes() != dados:
+    while (dest.is_file() and dest.read_bytes() != dados) or _named_like_raw(dest):
         n += 1
         dest = original.with_name(f"{original.stem} ({n}){original.suffix}")
     if not dest.is_file():

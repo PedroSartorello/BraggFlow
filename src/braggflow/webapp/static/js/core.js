@@ -177,7 +177,14 @@ const FIELD_RULES = {
   },
   "evo-window": (el) => (el.value.trim() !== "" && !(Number(el.value) > 0)
     ? t("field.positiveOrEmpty") : ""),
+  // Estratégia "constant": sem o valor, não há com o que preencher
+  "nulls-fill": (el) => fillRequired(el, "nulls-strategy"),
+  "outliers-fill": (el) => fillRequired(el, "outliers-strategy"),
 };
+
+function fillRequired(el, estrategia) {
+  return $(estrategia).value === "constant" && el.value.trim() === "" ? t("field.fillRequired") : "";
+}
 
 export function fieldProblem(el) {
   if (el.disabled || el.closest("label")?.classList.contains("hidden")) return "";
@@ -247,6 +254,11 @@ document.addEventListener("input", (e) => {
   if (e.target.id === "savgol-poly" && $("savgol-window").getAttribute("aria-invalid")) {
     markField($("savgol-window"), fieldProblem($("savgol-window")));
   }
+});
+// Outra estratégia: o aviso do valor de preenchimento sai ou volta
+document.addEventListener("change", (e) => {
+  const campo = { "nulls-strategy": "nulls-fill", "outliers-strategy": "outliers-fill" }[e.target.id];
+  if (campo && $(campo).getAttribute("aria-invalid")) markField($(campo), fieldProblem($(campo)));
 });
 
 export function setBusy(busy) {

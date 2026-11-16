@@ -6,6 +6,8 @@ each header carrying its unit (``EFBG1 [nm]``). An optional JSON sidecar with
 the same stem (``file.json``) records how the data was produced.
 """
 
+import csv
+import io
 import json
 import re
 from pathlib import Path
@@ -32,10 +34,15 @@ def format_column(name: str, unit: Optional[str]) -> str:
 
 
 def csv_header(channels, units) -> str:
-    """CSV header with units: ``Time [s],EFBG1 [nm],...``."""
+    """
+    CSV header with units: ``Time [s],EFBG1 [nm],...``. A name with a comma
+    or a quote is quoted (``"FBG 1, ref [nm]"``), so it stays one column.
+    """
     columns = [format_column("Time", "s")]
     columns += [format_column(ch, unit) for ch, unit in zip(channels, units)]
-    return ",".join(columns)
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow(columns)
+    return buf.getvalue()
 
 
 def write_processed_csv(target, time, signals, channels, units) -> None:
